@@ -1,0 +1,25 @@
+name: Tester
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  unittest:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.11", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      # Endast python-docx behövs i CI (DOCX-roundtrip-testet).
+      # UI-testerna behöver PyQt6 och hoppas över automatiskt utan den.
+      - name: Installera testberoenden
+        run: pip install python-docx==1.1.2
+      - name: Kompilera alla Python-filer
+        run: python -m compileall -q main.pyw core ui script tests
+      - name: Kör enhetstester
+        run: python -m unittest discover -s tests -v

@@ -250,8 +250,15 @@ if str(_PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(_PROJECT_ROOT))
 
 # third-party
-from PyQt6.QtCore import QPoint, Qt, QThread, QTimer, pyqtSignal, pyqtSlot
-from PyQt6.QtGui import QAction, QClipboard, QFont, QKeySequence, QShortcut
+from PyQt6.QtCore import QPoint, Qt, QThread, QTimer, QUrl, pyqtSignal, pyqtSlot
+from PyQt6.QtGui import (
+    QAction,
+    QClipboard,
+    QDesktopServices,
+    QFont,
+    QKeySequence,
+    QShortcut,
+)
 from PyQt6.QtWidgets import (
     QAbstractItemView,
     QApplication,
@@ -272,6 +279,7 @@ from PyQt6.QtWidgets import (
     QMenu,
     QMessageBox,
     QPlainTextEdit,
+    QProgressDialog,
     QPushButton,
     QScrollArea,
     QStatusBar,
@@ -287,9 +295,15 @@ from PyQt6.QtWidgets import (
 
 # local
 from core.email_sender import SendResult, send_email, test_smtp_connection
+from core.i18n import get_language as i18n_get_language
+from core.i18n import normalize_language
+from core.i18n import set_language as i18n_set_language
+from core.i18n import tr
 from core.logger import get_log_file_path
 from core.recovery_manager import RecoveryManager
 from core.settings_manager import SettingsManager
+from core.version import GITHUB_REPO_URL
+from core.version import __version__ as APP_VERSION
 
 try:
     from core.event_bus import EventBus
@@ -481,6 +495,18 @@ _PLACEHOLDER_VALUE_EN: Dict[str, Dict[str, str]] = {
 
 # Platshållare som bara hör till [en]-mailet (UI + sändning)
 EN_ONLY_PLACEHOLDERS = frozenset({"vin"})
+
+# (v5.4) Flikalias för select_tab(): nyckel + SV/EN-namn ger samma flik
+# oavsett UI-språk (tray.py anropar fortfarande med svenskt namn).
+_TAB_ALIASES: Dict[str, str] = {
+    "send": "send", "skicka": "send",
+    "contacts": "contacts", "kontakter": "contacts",
+    "templates": "templates", "mallar": "templates",
+    "preview": "preview", "förhandsgranskning": "preview",
+    "history": "history", "historik": "history",
+    "logs": "logs", "loggar": "logs", "logg": "logs",
+    "settings": "settings", "inställningar": "settings",
+}
 
 
 def vin_required_missing(
@@ -849,6 +875,46 @@ class SendWorker(QThread):
             self.error.emit(str(exc))
 
 
+class UpdateWorker(QThread):
+    """(v5.4) GitHub-uppdatering i bakgrunden: "check" eller "install".
+
+    Samma mönster som SendWorker (QThread + pyqtSignal) så att UI:t
+    aldrig fryser under nätverk/nedladdning.
+    """
+
+    checked = pyqtSignal(object)    # core.github_update.UpdateInfo
+    installed = pyqtSignal(object)  # dict från apply_github_update
+    failed = pyqtSignal(str)
+
+    def __init__(
+        self,
+        mode: str,
+        info: Any = None,
+        base_dir: Optional[Path] = None,
+    ) -> None:
+        super().__init__()
+        self._mode = str(mode or "check")
+        self._info = info
+        self._base_dir = base_dir
+
+    def run(self) -> None:
+        try:
+            from core.github_update import apply_github_update, check_for_update
+
+            if self._mode == "install":
+                result = apply_github_update(
+                    self._info, Path(self._base_dir or _PROJECT_ROOT)
+                )
+                self.installed.emit(result)
+            else:
+                self.checked.emit(check_for_update())
+        except Exception as exc:
+            log.warning(
+                "UpdateWorker (%s) misslyckades", self._mode, exc_info=True
+            )
+            self.failed.emit(str(exc))
+
+
 # ═══════════════════════════════════════════════════════════════════════════
 # MainWindow
 # ═══════════════════════════════════════════════════════════════════════════
@@ -877,6 +943,13 @@ class MainWindow(QMainWindow):
         self._view_actions: List[QAction] = []
         self._history_rows: List[Dict[str, Any]] = []
         self._settings_widgets: Dict[str, QWidget] = {}
+        # (v5.4) Språkoberoende fliknycklar i tab-ordning (se _load_tabs)
+        self._tab_keys: List[str] = []
+        # (v5.4) GitHub-uppdatering (bakgrundstråd + pending-info)
+        self._update_worker: Optional[UpdateWorker] = None
+        self._update_check_manual = False
+        self._pending_update_info: Any = None
+        self._update_progress: Optional[QProgressDialog] = None
 
         self._style = StyleEngine(settings, event_bus)
         self._style.apply()
@@ -904,10 +977,26 @@ class MainWindow(QMainWindow):
                 )
                 self._contact_store = None
 
+        # (v5.4) UI-språket (sv/en) måste sättas INNAN UI:t byggs –
+        # alla tr()-anrop under _build_ui använder valt språk.
+        try:
+            _lang = (
+                settings.get_ui_language()
+                if hasattr(settings, "get_ui_language")
+                else str(settings.get("language", "sv") or "sv")
+            )
+        except Exception:
+            _lang = "sv"
+        i18n_set_language(_lang)
+
         self._build_ui()
         self._install_shortcuts()
         self._bind_events()
         self._restore_geo()
+
+        # (v5.4) Tyst GitHub-uppdateringssökning strax efter start
+        # (respekterar auto_update_check + max 1 gång/dygn).
+        QTimer.singleShot(4000, self._maybe_auto_check_update)
 
         # (v5.5) Muskjulsskydd – idempotent (main.pyw installerar normalt)
         try:
@@ -944,7 +1033,7 @@ class MainWindow(QMainWindow):
     # ────────────────────────────────────────────────────────────────
 
     def _build_ui(self) -> None:
-        self.setWindowTitle("📧 E-postofferten – Skicka steg för steg")
+        self.setWindowTitle(tr("app.window_title"))
         self.setMinimumSize(1080, 760)
 
         central = QWidget()
@@ -987,18 +1076,27 @@ class MainWindow(QMainWindow):
         )
         toolbar.addWidget(title)
 
-        subtitle = QLabel(
-            "1. Mall  →  2. Bilagor/Bilder  →  3. Mottagare  →  4. Skicka mail"
-        )
+        subtitle = QLabel(tr("app.tagline_steps"))
         subtitle.setStyleSheet(
             "background: transparent; color: #FFFFFF; font-weight: bold;"
         )
         toolbar.addWidget(subtitle, stretch=1)
 
-        self.btn_send = QPushButton("📤 Skicka")
+        self.btn_send = QPushButton(tr("toolbar.send"))
         self.btn_send.setProperty("cssClass", "send")
         self.btn_send.clicked.connect(self._send)
         toolbar.addWidget(self.btn_send)
+
+        # (v5.4) Mall-wizard + donation direkt i verktygsraden
+        btn_wizard = QPushButton(tr("toolbar.new_template"))
+        btn_wizard.setProperty("cssClass", "back")
+        btn_wizard.clicked.connect(self._open_template_wizard)
+        toolbar.addWidget(btn_wizard)
+
+        btn_donate = QPushButton(tr("toolbar.donate"))
+        btn_donate.setProperty("cssClass", "back")
+        btn_donate.clicked.connect(self._open_donate)
+        toolbar.addWidget(btn_donate)
 
         self.btn_theme = QPushButton()
         self.btn_theme.setProperty("cssClass", "back")
@@ -1006,7 +1104,7 @@ class MainWindow(QMainWindow):
         self._update_theme_button()
         toolbar.addWidget(self.btn_theme)
 
-        btn_settings = QPushButton("⚙️ Inställningar")
+        btn_settings = QPushButton(tr("toolbar.settings"))
         btn_settings.setProperty("cssClass", "back")
         btn_settings.clicked.connect(self._open_settings)
         toolbar.addWidget(btn_settings)
@@ -1016,54 +1114,73 @@ class MainWindow(QMainWindow):
     def _build_menubar(self) -> None:
         bar = self.menuBar()
 
-        file_menu = bar.addMenu("Arkiv")
-        act_send = file_menu.addAction("📤 Skicka e-post")
+        file_menu = bar.addMenu(tr("menu.file"))
+        act_send = file_menu.addAction(tr("menu.send_mail"))
         act_send.setShortcut(QKeySequence("Ctrl+Return"))
         act_send.triggered.connect(self._send)
-        file_menu.addAction("💾 Spara mall").triggered.connect(self._save_tpl)
+        # (v5.4) Skapa ny mall steg för steg
         file_menu.addAction(
-            "📦 Säkerhetskopiera adresslistor…"
+            tr("menu.new_template_wizard")
+        ).triggered.connect(self._open_template_wizard)
+        file_menu.addAction(tr("menu.save_template")).triggered.connect(self._save_tpl)
+        file_menu.addAction(
+            tr("menu.backup_lists")
         ).triggered.connect(self._backup_lists_dialog)
+        file_menu.addSeparator()
+        # (v5.4) Manuell uppdateringssökning mot GitHub Releases
         file_menu.addAction(
-            "⬇️ Uppdatera app från mapp…"
+            tr("menu.check_updates")
+        ).triggered.connect(lambda: self._check_updates(manual=True))
+        file_menu.addAction(
+            tr("menu.update_from_folder")
         ).triggered.connect(self._update_from_folder_dialog)
         file_menu.addSeparator()
-        act_quit = file_menu.addAction("❌ Avsluta")
+        act_quit = file_menu.addAction(tr("menu.quit"))
         act_quit.setShortcut(QKeySequence("Ctrl+Q"))
         act_quit.triggered.connect(self._quit_app)
 
-        self._view_menu = bar.addMenu("Visa")
+        self._view_menu = bar.addMenu(tr("menu.view"))
 
-        theme_menu = bar.addMenu("Tema")
+        theme_menu = bar.addMenu(tr("menu.theme"))
         for label, mode in (
-            ("🌙 Mörkt", "dark"),
-            ("☀️ Ljust", "light"),
-            ("💻 System", "system"),
+            (tr("menu.theme_dark"), "dark"),
+            (tr("menu.theme_light"), "light"),
+            (tr("menu.theme_system"), "system"),
         ):
             action = theme_menu.addAction(label)
             action.triggered.connect(
                 lambda checked=False, selected=mode: self._set_theme(selected)
             )
 
-        help_menu = bar.addMenu("Hjälp")
-        help_menu.addAction("📖 Leveransbarhets-guide").triggered.connect(
+        # (v5.4) UI-språk sv/en (omstart erbjuds vid byte)
+        language_menu = bar.addMenu(tr("menu.language"))
+        for label, code in (
+            (tr("language.sv"), "sv"),
+            (tr("language.en"), "en"),
+        ):
+            action = language_menu.addAction(label)
+            action.setCheckable(True)
+            action.setChecked(i18n_get_language() == code)
+            action.triggered.connect(
+                lambda checked=False, lang=code: self._set_ui_language(lang)
+            )
+
+        help_menu = bar.addMenu(tr("menu.help"))
+        help_menu.addAction(tr("menu.deliverability")).triggered.connect(
             self._open_deliverability_guide
         )
-        help_menu.addAction("ℹ️ Om E-postofferten").triggered.connect(
-            lambda: QMessageBox.information(
-                self,
-                "Om E-postofferten",
-                "📧 E-postofferten\nPyQt6 + Python 3.10+\n\n"
-                "4-stegs wizard utan CC.\n"
-                "Mallar, offertförfrågan, To/Bcc.",
-            )
+        help_menu.addAction(tr("menu.check_updates")).triggered.connect(
+            lambda: self._check_updates(manual=True)
         )
+        help_menu.addAction(tr("menu.donate")).triggered.connect(self._open_donate)
+        help_menu.addSeparator()
+        help_menu.addAction(tr("menu.about")).triggered.connect(self._show_about)
 
     def _build_statusbar(self) -> None:
         self._sb = QStatusBar()
         self.setStatusBar(self._sb)
 
-        self._sb_label = QLabel("✅ Redo")
+        self._sb_label = QLabel(tr("app.ready"))
         self._sb_label.setStyleSheet(
             "color: #FFFFFF; font-weight: bold; font-size: 10pt;"
         )
@@ -1079,9 +1196,16 @@ class MainWindow(QMainWindow):
         self._status_reset()
 
     def _load_tabs(self) -> None:
-        self.tabs.addTab(self._build_send_wizard_tab(), "📤 Skicka")
-        self.tabs.addTab(self._build_contacts_tab(), "👥 Kontakter")
-        self.tabs.addTab(self._build_template_tools_tab(), "📝 Mallar")
+        # (v5.4) _tab_keys[i] = språkoberoende nyckel för flik i –
+        # används av select_tab/_on_tab_changed i stället för synlig
+        # (översatt) fliktext. ORDNINGEN måste matcha addTab nedan.
+        self._tab_keys = [
+            "send", "contacts", "templates", "preview",
+            "history", "logs", "settings",
+        ]
+        self.tabs.addTab(self._build_send_wizard_tab(), tr("tab.send"))
+        self.tabs.addTab(self._build_contacts_tab(), tr("tab.contacts"))
+        self.tabs.addTab(self._build_template_tools_tab(), tr("tab.templates"))
 
         if PreviewTab is not None:
             try:
@@ -1096,11 +1220,11 @@ class MainWindow(QMainWindow):
                 self.preview_tab = _FallbackPreviewTab()
         else:
             self.preview_tab = _FallbackPreviewTab()
-        self.tabs.addTab(self.preview_tab, "👁️ Preview")
+        self.tabs.addTab(self.preview_tab, tr("tab.preview"))
 
-        self.tabs.addTab(self._build_history_tab(), "📨 Historik")
-        self.tabs.addTab(self._build_log_tab(), "📜 Loggar")
-        self.tabs.addTab(self._build_settings_tab(), "⚙️ Inställningar")
+        self.tabs.addTab(self._build_history_tab(), tr("tab.history"))
+        self.tabs.addTab(self._build_log_tab(), tr("tab.logs"))
+        self.tabs.addTab(self._build_settings_tab(), tr("tab.settings"))
 
         self._build_view_menu()
 
@@ -1119,7 +1243,7 @@ class MainWindow(QMainWindow):
             )
             self._view_actions.append(action)
         self._view_menu.addSeparator()
-        self._view_menu.addAction("↩️ Visa alla").triggered.connect(
+        self._view_menu.addAction(tr("menu.show_all_tabs")).triggered.connect(
             self._restore_tabs
         )
 
@@ -1162,16 +1286,29 @@ class MainWindow(QMainWindow):
         if index < 0:
             return
         menu = QMenu(self)
-        action = menu.addAction("🙈 Dölj denna tab")
+        action = menu.addAction(tr("menu.hide_tab"))
         action.triggered.connect(
             lambda: self._set_tab_visible(index, False)
         )
         menu.exec(self.tabs.tabBar().mapToGlobal(pos))
 
     def select_tab(self, name: str) -> None:
-        needle = name.lower()
+        """Välj flik via nyckel ("send"), SV-namn eller EN-namn.
+
+        (v5.4) Språkoberoende: fliktexterna är översatta, så matchning
+        sker först mot _TAB_ALIASES + _tab_keys och först därefter mot
+        synlig text (bakåtkompatibilitet, t.ex. tray.py:s svenska anrop).
+        """
+        needle = str(name or "").strip().lower()
+        key = _TAB_ALIASES.get(needle)
+        keys = getattr(self, "_tab_keys", []) or []
+        if key is not None and key in keys:
+            index = keys.index(key)
+            if index < self.tabs.count():
+                self.tabs.setCurrentIndex(index)
+                return
         for index in range(self.tabs.count()):
-            if needle in self.tabs.tabText(index).lower():
+            if needle and needle in self.tabs.tabText(index).lower():
                 self.tabs.setCurrentIndex(index)
                 return
 
@@ -1180,7 +1317,7 @@ class MainWindow(QMainWindow):
         pairs = [
             ("Ctrl+Return", self._send),
             ("Ctrl+Enter", self._send),
-            ("F5", lambda: (self.select_tab("Preview"), self._refresh_preview())),
+            ("F5", lambda: (self.select_tab("preview"), self._refresh_preview())),
             ("Ctrl+S", self._save_tpl),
             ("Ctrl+K", self._focus_contact_search),
             ("Ctrl+1", lambda: self._jump_wizard_step(0)),
@@ -1200,7 +1337,7 @@ class MainWindow(QMainWindow):
                 log.debug("Kunde inte binda %s", seq, exc_info=True)
 
     def _jump_wizard_step(self, index: int) -> None:
-        self.select_tab("Skicka")
+        self.select_tab("send")
         steps = getattr(self, "_wizard_steps", []) or []
         if index < 0 or index >= len(steps):
             return
@@ -1217,7 +1354,7 @@ class MainWindow(QMainWindow):
             pass
 
     def _focus_contact_search(self) -> None:
-        self.select_tab("Kontakter")
+        self.select_tab("contacts")
         line = getattr(self, "_contacts_search", None)
         if line is None:
             tab = getattr(self, "_contacts_tab", None)
@@ -1302,15 +1439,382 @@ class MainWindow(QMainWindow):
             QMessageBox.information(self, "Uppdatering", msg)
         self._status("⬇️ App-uppdatering klar (%d filer)" % copied, "success")
 
+    # ────────────────────────────────────────────────────────────────
+    # (v5.4) Mall-wizard
+    # ────────────────────────────────────────────────────────────────
+
+    def _templates_dir(self) -> Path:
+        """Mallmappen enligt inställningen template_dir."""
+        return self._base_dir() / str(
+            self.settings.get("template_dir", "Mallar")
+        )
+
+    def _open_template_wizard(self) -> None:
+        """Öppna wizarden för att skapa en ny mall (ui/template_wizard)."""
+        try:
+            from ui.template_wizard import TemplateWizard
+        except Exception:
+            log.warning("Mall-wizarden kunde inte laddas", exc_info=True)
+            QMessageBox.warning(self, tr("wizard.title"), tr("wizard.error.title"))
+            return
+        wizard = TemplateWizard(
+            self,
+            templates_dir=self._templates_dir(),
+            existing_names=self._template_names(),
+            translate_func=_translate,
+        )
+        if wizard.exec() != QDialog.DialogCode.Accepted or not wizard.created_path:
+            return
+        created = wizard.created_path
+        self._scan_tpls()
+        self._refresh_default_template_combo()
+        self._refresh_template_tools_list()
+        if wizard.set_as_default:
+            try:
+                if hasattr(self.settings, "set_default_template"):
+                    self.settings.set_default_template(created.name)
+                else:
+                    self.settings.set("default_template", created.name)
+                self.settings.save()
+                self._refresh_default_template_combo()
+            except Exception:
+                log.debug(
+                    "Kunde inte sätta standardmall efter wizarden", exc_info=True
+                )
+        if wizard.select_after and hasattr(self, "_tpl_combo"):
+            idx = self._tpl_combo.findText(created.name)
+            if idx >= 0:
+                self._tpl_combo.setCurrentIndex(idx)
+                self._on_tpl_sel(created.name)
+            self.select_tab("send")
+        self._status(tr("wizard.created_status", name=created.name), "success")
+
+    # ────────────────────────────────────────────────────────────────
+    # (v5.4) Uppdatering från GitHub Releases (auto + manuellt)
+    # ────────────────────────────────────────────────────────────────
+
+    def _maybe_auto_check_update(self) -> None:
+        """Tyst autosökning vid start – max 1 gång/dygn, bara om aktiverad."""
+        try:
+            if not bool(self.settings.get("auto_update_check", True)):
+                return
+            from core.github_update import should_auto_check
+
+            if not should_auto_check(self.settings.get("last_update_check", "")):
+                return
+        except Exception:
+            log.debug("Autosökning av uppdatering hoppades över", exc_info=True)
+            return
+        self._check_updates(manual=False)
+
+    def _check_updates(self, manual: bool = True) -> None:
+        """Starta uppdateringssökning i bakgrunden (knapp/meny = manual)."""
+        if self._update_worker is not None and self._update_worker.isRunning():
+            return
+        self._update_check_manual = bool(manual)
+        self._set_last_update_check_now()
+        if manual:
+            QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
+            self._status(tr("update.checking"), "info")
+        worker = UpdateWorker("check")
+        worker.checked.connect(self._on_update_checked)
+        worker.failed.connect(self._on_update_failed)
+        worker.finished.connect(worker.deleteLater)
+        self._update_worker = worker
+        worker.start()
+
+    def _set_last_update_check_now(self) -> None:
+        try:
+            from core.github_update import now_iso
+
+            self.settings.set("last_update_check", now_iso())
+            self.settings.save()
+        except Exception:
+            log.debug("Kunde inte spara last_update_check", exc_info=True)
+        self._refresh_last_check_label()
+
+    def _refresh_last_check_label(self) -> None:
+        label = getattr(self, "_lbl_last_check", None)
+        if label is None:
+            return
+        raw = str(self.settings.get("last_update_check", "") or "").strip()
+        if raw:
+            label.setText(
+                tr("update.last_check", when=raw.replace("T", " ")[:16])
+            )
+        else:
+            label.setText(tr("update.last_check_never"))
+
+    def _restore_update_cursor(self) -> None:
+        try:
+            while QApplication.overrideCursor() is not None:
+                QApplication.restoreOverrideCursor()
+        except Exception:
+            pass
+
+    def _on_update_checked(self, info: Any) -> None:
+        self._restore_update_cursor()
+        self._update_worker = None
+        manual = self._update_check_manual
+        if getattr(info, "available", False):
+            self._pending_update_info = info
+            self._status(
+                tr("update.status_available", latest=info.latest_version),
+                "success",
+            )
+            notes = (info.notes or "").strip() or info.name or info.tag
+            if len(notes) > 700:
+                notes = notes[:700] + "…"
+            box = QMessageBox(self)
+            box.setWindowTitle(tr("update.available_title"))
+            box.setText(
+                tr(
+                    "update.available_text",
+                    latest=info.latest_version,
+                    current=APP_VERSION,
+                    notes=notes,
+                )
+            )
+            btn_install = box.addButton(
+                tr("update.install"), QMessageBox.ButtonRole.AcceptRole
+            )
+            btn_page = box.addButton(
+                tr("update.release_page"), QMessageBox.ButtonRole.ActionRole
+            )
+            box.addButton(tr("update.later"), QMessageBox.ButtonRole.RejectRole)
+            box.exec()
+            clicked = box.clickedButton()
+            if clicked is btn_install:
+                self._install_update(info)
+            elif clicked is btn_page:
+                self._open_url(info.html_url or f"{GITHUB_REPO_URL}/releases")
+            return
+        self._status_reset()
+        if getattr(info, "no_releases", False):
+            if manual:
+                QMessageBox.information(
+                    self,
+                    tr("update.title"),
+                    tr("update.no_releases", repo_url=GITHUB_REPO_URL),
+                )
+        elif getattr(info, "error", ""):
+            if manual:
+                QMessageBox.warning(
+                    self,
+                    tr("update.title"),
+                    tr("update.check_failed", error=info.error),
+                )
+            else:
+                log.info("Autosökning: %s", info.error)
+        elif manual:
+            QMessageBox.information(
+                self,
+                tr("update.title"),
+                tr("update.up_to_date", current=APP_VERSION),
+            )
+
+    def _install_update(self, info: Any) -> None:
+        """Ladda ner + installerad vald release i bakgrunden."""
+        if self._update_worker is not None and self._update_worker.isRunning():
+            return
+        progress = QProgressDialog(
+            tr("update.downloading", latest=getattr(info, "latest_version", "")),
+            None, 0, 0, self,
+        )
+        progress.setWindowTitle(tr("update.title"))
+        progress.setWindowModality(Qt.WindowModality.WindowModal)
+        progress.setMinimumDuration(0)
+        progress.setCancelButton(None)
+        progress.show()
+        self._update_progress = progress
+        worker = UpdateWorker("install", info=info, base_dir=self._base_dir())
+        worker.installed.connect(self._on_update_installed)
+        worker.failed.connect(self._on_update_failed)
+        worker.finished.connect(worker.deleteLater)
+        self._update_worker = worker
+        worker.start()
+
+    def _close_update_progress(self) -> None:
+        if self._update_progress is not None:
+            try:
+                self._update_progress.close()
+            except Exception:
+                pass
+            self._update_progress = None
+
+    def _on_update_installed(self, result: Any) -> None:
+        self._close_update_progress()
+        self._update_worker = None
+        result = result if isinstance(result, dict) else {}
+        copied = len(result.get("copied") or [])
+        errors = result.get("errors") or []
+        if copied == 0 and errors:
+            QMessageBox.warning(
+                self,
+                tr("update.title"),
+                tr(
+                    "update.install_failed",
+                    error="\n".join(str(e) for e in errors[:8]),
+                ),
+            )
+            return
+        self._status(tr("update.installed_title"), "success")
+        reply = QMessageBox.question(
+            self,
+            tr("update.installed_title"),
+            tr("update.installed", count=copied),
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.Yes,
+        )
+        if reply == QMessageBox.StandardButton.Yes:
+            self._restart_app()
+
+    def _on_update_failed(self, message: str) -> None:
+        was_install = self._update_progress is not None
+        self._close_update_progress()
+        self._restore_update_cursor()
+        self._update_worker = None
+        if was_install:
+            QMessageBox.warning(
+                self, tr("update.title"),
+                tr("update.install_failed", error=str(message)),
+            )
+        elif self._update_check_manual:
+            QMessageBox.warning(
+                self, tr("update.title"),
+                tr("update.check_failed", error=str(message)),
+            )
+        else:
+            log.info("Autosökning misslyckades: %s", message)
+
+    # ────────────────────────────────────────────────────────────────
+    # (v5.4) Donation, språkbyte, omstart, Om-dialog
+    # ────────────────────────────────────────────────────────────────
+
+    def _open_url(self, url: str) -> bool:
+        """Öppna URL i webbläsaren (via ui.donate-hjälparen)."""
+        try:
+            from ui.donate import open_url_in_browser
+
+            return open_url_in_browser(str(url))
+        except Exception:
+            try:
+                return bool(QDesktopServices.openUrl(QUrl(str(url))))
+            except Exception:
+                log.warning("Kunde inte öppna URL: %s", url, exc_info=True)
+                return False
+
+    def _donation_url_setting(self) -> str:
+        if hasattr(self.settings, "get_donation_url"):
+            return self.settings.get_donation_url()
+        return str(self.settings.get("donation_url", "") or "")
+
+    def _open_donate(self) -> None:
+        """❤️ Donationsdialogen (Ko-fi-länken från inställningarna)."""
+        try:
+            from ui.donate import DonateDialog
+        except Exception:
+            log.warning("Donationsdialogen kunde inte laddas", exc_info=True)
+            return
+        DonateDialog(self, donation_url=self._donation_url_setting()).exec()
+
+    def _open_donation_page(self) -> None:
+        """Öppna donationssidan direkt – fältets aktuella text vinner."""
+        raw = self._donation_url_setting()
+        widget = self._settings_widgets.get("donation_url")
+        if isinstance(widget, QLineEdit) and widget.text().strip():
+            raw = widget.text()
+        try:
+            from core.donate import configured_donation_url
+
+            url = configured_donation_url(raw)
+        except Exception:
+            url = None
+        if url:
+            self._open_url(url)
+        else:
+            self._open_donate()
+
+    def _set_ui_language(self, language: str) -> None:
+        """Byt UI-språk (sv/en), spara och erbjud omstart."""
+        lang = normalize_language(language)
+        current_setting = normalize_language(self.settings.get("language", "sv"))
+        if lang == i18n_get_language() and lang == current_setting:
+            return
+        self.settings.set("language", lang)
+        try:
+            self.settings.save()
+        except Exception:
+            log.debug("Kunde inte spara språkvalet", exc_info=True)
+        i18n_set_language(lang)
+        self._prompt_restart_for_language(lang)
+
+    def _prompt_restart_for_language(self, lang: str) -> None:
+        name = tr("language.en") if lang == "en" else tr("language.sv")
+        reply = QMessageBox.question(
+            self,
+            tr("language.changed_title"),
+            tr("language.changed_text", language=name),
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.Yes,
+        )
+        if reply == QMessageBox.StandardButton.Yes:
+            self._restart_app()
+
+    def _restart_app(self) -> None:
+        """Be main.pyw starta en ny instans EFTER att denna stängt rent.
+
+        Sätter EMAILAPP_RELAUNCH=1 och avslutar event-loopen; städning
+        (settings, tray, single-instance-låset) sker i main.pyw:s
+        finally – först därefter spawnas ersättaren, så låset aldrig
+        krockar med den nya instansen.
+        """
+        app = QApplication.instance()
+        if app is None:
+            QMessageBox.warning(self, tr("app.window_title"), tr("restart.failed"))
+            return
+        os.environ["EMAILAPP_RELAUNCH"] = "1"
+        log.info("Omstart begärd (EMAILAPP_RELAUNCH=1) – avslutar instansen.")
+        app.exit(0)
+
+    def _show_about(self) -> None:
+        """Om-dialog med version + genvägar till GitHub och donation."""
+        box = QMessageBox(self)
+        box.setWindowTitle(tr("about.title"))
+        box.setText(
+            tr("about.text", version=APP_VERSION, repo_url=GITHUB_REPO_URL)
+        )
+        btn_donate = box.addButton(
+            tr("toolbar.donate"), QMessageBox.ButtonRole.ActionRole
+        )
+        btn_github = box.addButton(
+            tr("donate.github_btn"), QMessageBox.ButtonRole.ActionRole
+        )
+        box.addButton(QMessageBox.StandardButton.Ok)
+        box.exec()
+        clicked = box.clickedButton()
+        if clicked is btn_donate:
+            self._open_donate()
+        elif clicked is btn_github:
+            self._open_url(GITHUB_REPO_URL)
+
     def _on_tab_changed(self, index: int) -> None:
         self._sync_view_menu()
-        text = self.tabs.tabText(index).lower()
-        if "kontakter" in text:
+        # (v5.4) Nyckelbaserat (språkoberoende) i stället för svensk
+        # fliktext – med text-fallback om nycklarna saknas.
+        keys = getattr(self, "_tab_keys", []) or []
+        key = keys[index] if 0 <= index < len(keys) else ""
+        if not key:
+            text = self.tabs.tabText(index).lower()
+            key = _TAB_ALIASES.get(text.split()[-1] if text.split() else "", "")
+        if key == "contacts":
             self._reload_contacts_tab()
-        elif "historik" in text:
+        elif key == "history":
             self._refresh_history()
-        elif "logg" in text:
+        elif key == "logs":
             self._refresh_log()
+        elif key == "templates":
+            self._refresh_template_tools_list()
 
     # ────────────────────────────────────────────────────────────────
     # 4-STEGS WIZARD
@@ -1332,7 +1836,7 @@ class MainWindow(QMainWindow):
         self._wizard_steps: List[QWidget] = []
 
         self._add_step(
-            layout, "①", "📝", "Mall", "Välj mall och fyll i uppgifter.",
+            layout, "①", "📝", tr("step1.title"), tr("step1.hint"),
             "step-blue",
         )
         step1 = self._build_step_mail()
@@ -1343,8 +1847,8 @@ class MainWindow(QMainWindow):
             layout,
             "②",
             "🖼️",
-            "Bilagor/Bilder",
-            "Lägg till bilder, PDF:er eller andra filer. Drag & drop stöds här.",
+            tr("step2.title"),
+            tr("step2.hint"),
             "step-orange",
         )
         step2 = self._build_step_attachments()
@@ -1355,8 +1859,8 @@ class MainWindow(QMainWindow):
             layout,
             "③",
             "📬",
-            "Mottagare",
-            "Lägg till To och Bcc. Ingen CC används.",
+            tr("step3.title"),
+            tr("step3.hint"),
             "step-green",
         )
         step3 = self._build_step_recipients()
@@ -1367,8 +1871,8 @@ class MainWindow(QMainWindow):
             layout,
             "④",
             "🚀",
-            "Skicka mail",
-            "Förhandsgranska, bekräfta och skicka.",
+            tr("step4.title"),
+            tr("step4.hint"),
             "step-red",
         )
         step4 = self._build_step_send()
@@ -1691,7 +2195,7 @@ class MainWindow(QMainWindow):
         buttons = QHBoxLayout()
         btn_preview = QPushButton("👁️ Visa preview-tab")
         btn_preview.setProperty("cssClass", "purple")
-        btn_preview.clicked.connect(lambda: self.select_tab("Preview"))
+        btn_preview.clicked.connect(lambda: self.select_tab("preview"))
         buttons.addWidget(btn_preview)
 
         buttons.addStretch()
@@ -3384,7 +3888,7 @@ class MainWindow(QMainWindow):
             missing_attachments = len(item.get("attachments", []) or [])
 
         # 8. Visa Skicka-fliken + uppdatera
-        self.select_tab("Skicka")
+        self.select_tab("send")
         self._refresh_preview()
         self._update_send_summary()
 
@@ -3499,6 +4003,8 @@ class MainWindow(QMainWindow):
         layout.addWidget(self._build_settings_group_images())
         layout.addWidget(self._build_settings_group_deliverability())
         layout.addWidget(self._build_settings_group_logging())
+        layout.addWidget(self._build_settings_group_updates())
+        layout.addWidget(self._build_settings_group_support())
 
         buttons = QHBoxLayout()
         btn_reload = QPushButton("🔄 Läs om")
@@ -3581,16 +4087,6 @@ class MainWindow(QMainWindow):
         btn_backup.setProperty("cssClass", "accent")
         btn_backup.clicked.connect(self._backup_lists_dialog)
         form.addRow("", btn_backup)
-        btn_upd = QPushButton("⬇️ Uppdatera app från mapp…")
-        btn_upd.clicked.connect(self._update_from_folder_dialog)
-        form.addRow("", btn_upd)
-        hint = QLabel(
-            "Uppdatering kopierar bara kod. JSON, adresslistor och "
-            "inställningar lämnas orörda."
-        )
-        hint.setWordWrap(True)
-        hint.setProperty("cssClass", "muted")
-        form.addRow("", hint)
         return group
 
     def _build_settings_group_templates(self) -> QGroupBox:
@@ -3646,10 +4142,10 @@ class MainWindow(QMainWindow):
         combo.blockSignals(False)
 
     def _build_settings_group_ui(self) -> QGroupBox:
-        group = QGroupBox("🎨 UI & Beteende")
+        group = QGroupBox(tr("settings.ui_group"))
         form = QFormLayout(group)
         form.addRow("Tema", self._make_settings_combo("theme", ["system", "dark", "light"]))
-        form.addRow("Språk", self._make_settings_combo("language", ["sv", "en"]))
+        form.addRow(tr("settings.language_row"), self._make_settings_combo("language", ["sv", "en"]))
         form.addRow("Start minimerat", self._make_settings_checkbox("start_minimized", "Start minimerat"))
         form.addRow("Close to tray", self._make_settings_checkbox("close_to_tray", "Stäng till tray"))
         form.addRow("Autostart", self._make_settings_checkbox("autostart", "Starta med systemet"))
@@ -3748,6 +4244,65 @@ class MainWindow(QMainWindow):
         form.addRow("Smart cache", self._make_settings_checkbox("smart_cache", "Smart cache"))
         return group
 
+    def _build_settings_group_updates(self) -> QGroupBox:
+        """(v5.4) GitHub-uppdateringar: autosökning + manuell knapp."""
+        group = QGroupBox(tr("update.group"))
+        layout = QVBoxLayout(group)
+        layout.setSpacing(8)
+
+        version_label = QLabel(
+            f"<b>{tr('update.current_version', version=APP_VERSION)}</b>"
+        )
+        layout.addWidget(version_label)
+
+        layout.addWidget(
+            self._make_settings_checkbox("auto_update_check", tr("update.auto_check"))
+        )
+
+        self._lbl_last_check = QLabel("")
+        self._lbl_last_check.setProperty("cssClass", "muted")
+        layout.addWidget(self._lbl_last_check)
+        self._refresh_last_check_label()
+
+        row = QHBoxLayout()
+        btn_check = QPushButton(tr("update.check_now_btn"))
+        btn_check.setProperty("cssClass", "accent")
+        btn_check.clicked.connect(lambda: self._check_updates(manual=True))
+        row.addWidget(btn_check)
+        btn_folder = QPushButton(tr("update.from_folder_btn"))
+        btn_folder.clicked.connect(self._update_from_folder_dialog)
+        row.addWidget(btn_folder)
+        row.addStretch()
+        layout.addLayout(row)
+
+        hint = QLabel(tr("update.folder_hint"))
+        hint.setWordWrap(True)
+        hint.setProperty("cssClass", "muted")
+        layout.addWidget(hint)
+        return group
+
+    def _build_settings_group_support(self) -> QGroupBox:
+        """(v5.4) Donation (Ko-fi) + projektlänkar."""
+        group = QGroupBox(tr("donate.group"))
+        form = QFormLayout(group)
+
+        donation_line = self._make_settings_line("donation_url", "donation_url")
+        donation_line.setPlaceholderText(tr("donate.url_placeholder"))
+        form.addRow(tr("donate.url_label"), donation_line)
+
+        row_widget = QWidget()
+        row = QHBoxLayout(row_widget)
+        row.setContentsMargins(0, 0, 0, 0)
+        btn_donate = QPushButton(tr("donate.open_settings_btn"))
+        btn_donate.clicked.connect(self._open_donation_page)
+        row.addWidget(btn_donate)
+        btn_github = QPushButton(tr("donate.github_btn"))
+        btn_github.clicked.connect(lambda: self._open_url(GITHUB_REPO_URL))
+        row.addWidget(btn_github)
+        row.addStretch()
+        form.addRow("", row_widget)
+        return group
+
     def _reload_settings_form(self) -> None:
         data = (
             self.settings.get_all(redact_secrets=False)
@@ -3812,6 +4367,16 @@ class MainWindow(QMainWindow):
 
     def _save_settings_form(self) -> None:
         values = self._collect_settings_form()
+        # (v5.4) "ko-fi.com/namn" eller bara "namn" → fullständig URL
+        if "donation_url" in values:
+            try:
+                from core.donate import normalize_donation_url
+
+                values["donation_url"] = normalize_donation_url(
+                    values.get("donation_url")
+                )
+            except Exception:
+                log.debug("Kunde inte normalisera donation_url", exc_info=True)
         if hasattr(self.settings, "update_from_dict"):
             self.settings.update_from_dict(values)
         else:
@@ -3830,6 +4395,13 @@ class MainWindow(QMainWindow):
             # (v5.1) Applicera standardmallen direkt om den ändrades
             if "default_template" in values:
                 self._apply_default_template()
+            # (v5.4) Språkbyte via formuläret → erbjud omstart
+            if values.get("language"):
+                new_lang = normalize_language(values.get("language"))
+                if new_lang != i18n_get_language():
+                    i18n_set_language(new_lang)
+                    self._prompt_restart_for_language(new_lang)
+            self._refresh_last_check_label()
             self._refresh_preview()
         else:
             QMessageBox.critical(
@@ -3876,41 +4448,105 @@ class MainWindow(QMainWindow):
             self._status("⚠️ SMTP-test misslyckades", "warning")
 
     def _open_settings(self) -> None:
-        self.select_tab("Inställningar")
+        self.select_tab("settings")
 
     # ────────────────────────────────────────────────────────────────
     # Mallverktyg
     # ────────────────────────────────────────────────────────────────
 
     def _build_template_tools_tab(self) -> QWidget:
+        """(v5.4) Mall-fliken: wizard-start + klickbar mallista."""
         widget = QWidget()
         layout = QVBoxLayout(widget)
-        layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.setContentsMargins(16, 14, 16, 14)
         layout.setSpacing(10)
 
         icon = QLabel("📝")
-        icon.setStyleSheet("font-size: 54pt;")
+        icon.setStyleSheet("font-size: 40pt;")
         icon.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(icon)
 
-        heading = QLabel("Mallar")
+        heading = QLabel(tr("templates_tab.heading"))
         heading.setStyleSheet("font-size: 16pt; font-weight: bold;")
         heading.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(heading)
 
-        text = QLabel(
-            "Redigera mallar direkt i Skicka-flödet. "
-            "Fler mallverktyg kan anslutas här."
-        )
+        text = QLabel(tr("templates_tab.text"))
         text.setAlignment(Qt.AlignmentFlag.AlignCenter)
         text.setWordWrap(True)
         layout.addWidget(text)
 
-        btn_open_dir = QPushButton("📂 Öppna mallmapp")
-        btn_open_dir.setProperty("cssClass", "accent")
+        btn_wizard = QPushButton(tr("templates_tab.wizard_btn"))
+        btn_wizard.setProperty("cssClass", "accent")
+        btn_wizard.clicked.connect(self._open_template_wizard)
+        layout.addWidget(btn_wizard, alignment=Qt.AlignmentFlag.AlignCenter)
+
+        row = QHBoxLayout()
+        btn_open_dir = QPushButton(tr("templates_tab.open_folder"))
         btn_open_dir.clicked.connect(self._open_tpl_dir)
-        layout.addWidget(btn_open_dir, alignment=Qt.AlignmentFlag.AlignCenter)
+        row.addWidget(btn_open_dir)
+        btn_refresh = QPushButton(tr("templates_tab.refresh"))
+        btn_refresh.clicked.connect(self._refresh_template_tools_list)
+        row.addWidget(btn_refresh)
+        row.addStretch()
+        self._tpl_tools_count = QLabel("")
+        self._tpl_tools_count.setProperty("cssClass", "subtext")
+        row.addWidget(self._tpl_tools_count)
+        layout.addLayout(row)
+
+        self._tpl_tools_list = QListWidget()
+        self._tpl_tools_list.itemDoubleClicked.connect(
+            self._on_template_tool_activated
+        )
+        layout.addWidget(self._tpl_tools_list, stretch=1)
+
+        hint = QLabel(tr("templates_tab.use_hint"))
+        hint.setProperty("cssClass", "subtext")
+        hint.setWordWrap(True)
+        layout.addWidget(hint)
+
+        self._refresh_template_tools_list()
         return widget
+
+    def _refresh_template_tools_list(self) -> None:
+        """Uppdatera mallistan på Mall-fliken (tål att anropas tidigt)."""
+        lst = getattr(self, "_tpl_tools_list", None)
+        if lst is None:
+            return
+        names = self._template_names()
+        lst.clear()
+        lst.addItems(names)
+        label = getattr(self, "_tpl_tools_count", None)
+        if label is not None:
+            if names:
+                label.setText(
+                    tr(
+                        "templates_tab.count",
+                        count=len(names),
+                        folder=str(self._templates_dir()),
+                    )
+                )
+            else:
+                label.setText(tr("templates_tab.empty"))
+        if self._last_tpl is not None:
+            matches = lst.findItems(
+                self._last_tpl.name, Qt.MatchFlag.MatchExactly
+            )
+            if matches:
+                lst.setCurrentItem(matches[0])
+
+    def _on_template_tool_activated(self, item: Any) -> None:
+        """Dubbelklick i mallistan → använd mallen i Skicka-fliken."""
+        name = item.text() if item is not None else ""
+        if not name:
+            return
+        self._scan_tpls()
+        if hasattr(self, "_tpl_combo"):
+            idx = self._tpl_combo.findText(name)
+            if idx >= 0:
+                self._tpl_combo.setCurrentIndex(idx)
+        self._on_tpl_sel(name)
+        self.select_tab("send")
 
     # ────────────────────────────────────────────────────────────────
     # Event / tema / status
@@ -4124,7 +4760,7 @@ class MainWindow(QMainWindow):
                 "Inga mottagare",
                 "Lägg till minst en mottagare i steg ③.",
             )
-            self.select_tab("Skicka")
+            self.select_tab("send")
             return
 
         invalid = [
@@ -4151,7 +4787,7 @@ class MainWindow(QMainWindow):
                 "engelsk mottagare [EN].\n\n"
                 "Fyll i fältet 🔢 VIN (obligatoriskt för EN) i steg ①.",
             )
-            self.select_tab("Skicka")
+            self.select_tab("send")
             return
 
         if not self._confirm_send(params, total):
@@ -4185,7 +4821,7 @@ class MainWindow(QMainWindow):
                 )  # type: ignore[misc]
                 action = dialog.show()
                 if action == "preview":
-                    self.select_tab("Preview")
+                    self.select_tab("preview")
                     return False
                 if action == "send":
                     # v5.0 – hämta dialogens val (kvittocheckboxen)

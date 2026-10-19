@@ -360,6 +360,90 @@ def validate_template(path: Any) -> Tuple[bool, List[str]]:
     return not errors, errors
 
 
+# ── Mall-wizardhjälpare (v3.7 – används av ui/template_wizard.py) ────
+
+_ILLEGAL_FILENAME_CHARS = '<>:"/\\|?*'
+_WINDOWS_RESERVED_NAMES = frozenset(
+    {"CON", "PRN", "AUX", "NUL"}
+    | {f"COM{i}" for i in range(1, 10)}
+    | {f"LPT{i}" for i in range(1, 10)}
+)
+
+
+def find_placeholders_in_text(text: str) -> List[str]:
+    """Unika placeholder-nycklar i en textsträng (ordningen behålls).
+
+    Samma grammatik och avdubblettering (case-insensitiv) som
+    ``list_placeholders`` för filer – men för text i minnet, så att
+    wizarden kan förhandsgranska innan mallen sparats.
+    """
+    keys: List[str] = []
+    seen: set = set()
+    for key in _iter_placeholder_matches(text or ""):
+        low = key.lower()
+        if low not in seen:
+            seen.add(low)
+            keys.append(key)
+    return keys
+
+
+def build_template_body(swedish_body: str, english_body: str = "") -> str:
+    """Bygg mallbrödtext med valfritt [en]-block av SV- och EN-text.
+
+    Resultatet följer samma split-modell som ``_strip_language_blocks``
+    läser: svensk del först, sedan ``[en]…[/en]``. Tom engelska →
+    bara den svenska texten.
+    """
+    sv_text = str(swedish_body or "").strip()
+    en_text = str(english_body or "").strip()
+    if not en_text:
+        return sv_text
+    if not sv_text:
+        return f"[en]\n{en_text}\n[/en]"
+    return f"{sv_text}\n\n[en]\n{en_text}\n[/en]"
+
+
+def sanitize_template_filename(name: str, extension: str = ".txt") -> str:
+    """Gör ett användarnamn till ett säkert mallfilnamn.
+
+    - Filändelsen tvingas till ``extension`` (stödda: .txt/.html/.htm/
+      .docx – annat faller tillbaka på .txt).
+    - Ogiltiga Windows-tecken (``<>:"/\\|?*`` + kontrolltecken) tas
+      bort, dubbla mellanslag slås ihop, avslutande punkter/mellanslag
+      trimmas (Windows-krav) och reserverade namn (CON, PRN, …) får
+      prefixet "_".
+    - ÅÄÖ och mellanslag behålls – mallnamn ska vara läsbara.
+    - Tomt/osanerbart namn → "" (anroparen validerar).
+    """
+    ext = str(extension or ".txt").strip().lower()
+    if not ext.startswith("."):
+        ext = "." + ext
+    if ext not in SUPPORTED_EXTENSIONS:
+        ext = ".txt"
+
+    base = str(name or "").strip()
+    lowered = base.lower()
+    for known in SUPPORTED_EXTENSIONS:
+        if lowered.endswith(known):
+            base = base[: -len(known)]
+            break
+
+    cleaned = "".join(
+        ch
+        for ch in base
+        if ch not in _ILLEGAL_FILENAME_CHARS and ord(ch) >= 32
+    )
+    cleaned = re.sub(r"\s+", " ", cleaned).strip().rstrip(". ")
+    if not cleaned:
+        return ""
+    if cleaned.upper() in _WINDOWS_RESERVED_NAMES:
+        cleaned = "_" + cleaned
+    cleaned = cleaned[:100].rstrip(". ")
+    if not cleaned:
+        return ""
+    return f"{cleaned}{ext}"
+
+
 @dataclass
 class TemplateVersion:
     """Versionsinfo för en mallfil."""
@@ -521,6 +605,9 @@ __all__ = [
     "apply_placeholders",
     "list_placeholders",
     "find_placeholders_in_file",
+    "find_placeholders_in_text",
+    "build_template_body",
+    "sanitize_template_filename",
     "validate_template",
     "scan_templates_dir",
     "clear_scan_cache",

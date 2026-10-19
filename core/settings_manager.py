@@ -182,7 +182,18 @@ def get_defaults() -> Dict[str, Any]:
 
         # Utseende
         "theme": "system",
+        # UI-språk (sv/en) – styr core/i18n (v5.4: hela app-skalet)
         "language": "sv",
+
+        # Uppdateringar från GitHub Releases (v5.4) – schema oförändrad
+        # (24), defaults-merge täcker gamla filer precis som tidigare
+        # nycklar (request_receipts m.fl.).
+        "auto_update_check": True,
+        "last_update_check": "",
+
+        # Donation (v5.4) – Ko-fi-länk, tom = ej konfigurerad.
+        # Klistras in under Inställningar → ❤️ Stöd & om.
+        "donation_url": "",
 
         # Fönster
         "window_geometry": "",
@@ -523,6 +534,8 @@ class SettingsManager:
             "preserve_image_sharpness",
             # v24.4 – leverans-/läskvitto
             "request_receipts",
+            # v5.4 – autosökning av GitHub-uppdateringar
+            "auto_update_check",
         ]
         for key in bool_fields:
             try:
@@ -660,6 +673,9 @@ class SettingsManager:
             "archive_copy_email",
             # v24.5 – standardmall (filnamn i Mallar/)
             "default_template",
+            # v5.4 – GitHub-uppdatering + donation
+            "last_update_check",
+            "donation_url",
         ]
         for key in str_fields:
             if d.get(key) is None:
@@ -733,6 +749,22 @@ class SettingsManager:
 
     def set_archive_copy_email(self, email: str) -> None:
         self.set("archive_copy_email", (email or "").strip())
+
+    # ------------------------------------------------------------------
+    # UI-språk / GitHub-uppdatering / donation (v5.4)
+    # ------------------------------------------------------------------
+
+    def get_ui_language(self) -> str:
+        """Valt UI-språk som garanterat "sv" eller "en"."""
+        language = str(self.get("language", "sv") or "sv").strip().lower()
+        return language if language in VALID_LANGUAGES else "sv"
+
+    def get_donation_url(self) -> str:
+        """Inlagd donationslänk (Ko-fi), tom sträng om ej satt."""
+        return str(self.get("donation_url", "") or "").strip()
+
+    def set_donation_url(self, url: str) -> None:
+        self.set("donation_url", (url or "").strip())
 
     def get_default_to(self) -> List[str]:
         """Returnera standard-To-adresser (v24.3)."""

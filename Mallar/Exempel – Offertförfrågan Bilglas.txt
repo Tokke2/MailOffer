@@ -1,0 +1,29 @@
+ÄMNE: Offertförfrågan ::ruta:: – ::modell:: (::reg::)
+
+INNEHÅLL:
+Hej,
+
+Vi önskar pris och leveranstid på följande glas:
+
+Bilmodell: ::modell::
+Reg.nr: ::reg::
+Glastyp: ::ruta::
+
+Kommentar: ::kommentar::
+
+Tack på förhand!
+
+[en]
+Hello,
+
+Please quote price and delivery time for the following glass:
+
+Car model: ::modell::
+Reg. no.: ::reg::
+Glass type: ::ruta::
+VIN: ::vin::
+
+Comment: ::kommentar::
+
+Thank you in advance!
+[/en]

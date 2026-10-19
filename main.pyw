@@ -3,7 +3,20 @@
 """
 main.pyw – EmailApp Entry Point (PyQt6)
 
-Version: 5.0 – AUTOSTART v2 + DUBBELKLICK (stale_console + --background)
+Version: 5.4 – MALL-WIZARD + SV/EN-UI + GITHUB-UPDATE + DONATION
+(tidigare: 5.0 – AUTOSTART v2 + DUBBELKLICK (stale_console + --background))
+
+Nytt i 5.4:
+- ✅ MALL-WIZARD (ui/template_wizard): skapa mallar steg för steg
+    (TXT/HTML/DOCX, SV + valfritt [en]-block, förhandsgranskning)
+- ✅ APPEN PÅ SV/EN (core/i18n): skal, menyer, flikar, wizard,
+    uppdatering och donation via tr(); språkbyte i Språk-menyn
+- ✅ AUTOUPDATE FRÅN GITHUB RELEASES (core/github_update): tyst
+    sökning vid start (max 1/dygn) + manuell sökknapp; mallar, JSON
+    och inställningar rörs aldrig (Mallar/ skyddas nu också)
+- ✅ DONATION via Ko-fi: ❤️-knapp/dialog, länk i Inställningar
+- ✅ core/version.py = enda versionskällan; EMAILAPP_RELAUNCH ger
+    ren omstart (låset släpps först) efter språkbyte/uppdatering
 
 Fixar mot v4.8:
 - ✅ MUSHJULSSKYDD (ui/wheel_guard v1.0): mushjulet ändrar ALDRIG
@@ -107,7 +120,12 @@ from PyQt6.QtWidgets import QApplication, QMessageBox
 from core.logger import get_logger, setup_logging
 
 APP_NAME = "E-postofferten"
-APP_VERSION = "5.3.0"
+# (v5.4) Versionen bor i core/version.py – enda sanningskällan
+# (GitHub-uppdateraren jämför release-taggar mot samma värde).
+try:
+    from core.version import __version__ as APP_VERSION
+except Exception:  # pragma: no cover – nödfall om core/version saknas
+    APP_VERSION = "5.4.0"
 IS_WINDOWS = sys.platform.startswith("win")
 IS_MACOS = sys.platform == "darwin"
 BACKGROUND_FLAGS = frozenset({"--background", "--minimized", "-background"})
@@ -459,6 +477,18 @@ def main() -> None:
 
         # Settings
         settings = SettingsManager(BASE_DIR)
+        # (v5.4) Sätt UI-språket (sv/en) så tidigt att även eventuella
+        # startdialoger använder rätt språk (MainWindow sätter det igen).
+        try:
+            from core.i18n import set_language as _set_ui_language
+
+            _set_ui_language(
+                settings.get_ui_language()
+                if hasattr(settings, "get_ui_language")
+                else settings.get("language", "sv")
+            )
+        except Exception:
+            log.debug("i18n-språkinit hoppades över", exc_info=True)
         try:
             from core.user_backup import backup_address_lists, backup_settings
 
@@ -670,6 +700,26 @@ def main() -> None:
                 log.debug("Single instance lock frigjord.")
             except Exception as exc:
                 log.debug("instance.release() fel: %s", exc)
+
+        # (v5.4) Omstart begärd inifrån appen (språkbyte eller
+        # GitHub-uppdatering): starta ersättaren FÖRST NU, när
+        # single-instance-låset ovan är släppt och allt är sparat.
+        if os.environ.pop("EMAILAPP_RELAUNCH", "") == "1":
+            try:
+                script = Path(__file__).resolve()
+                exe = (_find_pythonw() if IS_WINDOWS else None) or sys.executable
+                relaunch_kwargs: dict = {
+                    "cwd": str(BASE_DIR),
+                    "close_fds": True,
+                    "stdin": subprocess.DEVNULL,
+                    "stdout": subprocess.DEVNULL,
+                    "stderr": subprocess.DEVNULL,
+                }
+                if IS_WINDOWS:
+                    relaunch_kwargs["creationflags"] = CREATE_NO_WINDOW
+                subprocess.Popen([exe, str(script)], **relaunch_kwargs)
+            except Exception:
+                pass
 
         try:
             log.info("✅ %s avslutad.", APP_NAME)

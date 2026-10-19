@@ -20,6 +20,12 @@
 # V5.9: REGEL – 50000% bättre på BÅDE kod och design
 # V5.9: OMGÅNG 6 – 15 forskningsbaserade förslag (liknande appar)
 # V6.0: AUTOSTART v2 – stale_console-reparation, verify-after-write, --background, bättre dubbelklick
+# V6.3 (APP 5.4.0): MALL-WIZARD (ui/template_wizard) – skapa TXT/HTML/DOCX steg för steg, SV + [en]
+# V6.3: APPEN PÅ SV/EN (core/i18n tr()) – skal/menyer/flikar/wizard/update/donation; resten migreras stegvis
+# V6.3: AUTOUPDATE GITHUB RELEASES (core/github_update) – auto 1/dygn + manuell knapp; endast Releases (aldrig main)
+#       Mallar/ + JSON + settings skyddade användardata (update_protect); version i core/version.py; omstart via EMAILAPP_RELAUNCH
+# V6.3: DONATION KO-FI (core/donate + ui/donate) – ❤️-knapp/dialog, redigerbar länk i Inställningar
+# V6.3: KÄNDA LUCKOR samlade i docs/VAD-SAKNAS.md (första release, Ko-fi-länk, LICENSE, klartextlösenord …)
 # V6.2: VIN ENDAST I [en] – fält syns/skickas bara till EN-mottagare
 # V6.1: KOMMANDE VALDA (2026-09-16) – To/Bcc-dubblett, historik öppna, bild-thumbnails,
 #       bättre autostart, saknade tillägg vid dubbelklick → fråga om installera

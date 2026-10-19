@@ -11,10 +11,15 @@ from pathlib import Path
 from typing import Iterable
 
 # Relativa mappar/filer under projektroten som uppdatering FÅR INTE röra
+# "Mallar" (v5.4): användarens egna mallar – inkl. wizard-skapade – är
+# användardata och får aldrig skrivas över av en GitHub-release.
+# Nackdel: nya exempelmallar i en release når inte befintliga
+# installationer automatiskt (medvetet val – dataskydd går först).
 PROTECTED_DIRS = (
     "adresslistor",
     ".data",
     "logs",
+    "Mallar",
 )
 PROTECTED_NAMES = (
     "email_settings.json",
@@ -51,7 +56,7 @@ def is_protected(path: Path, base_dir: Path) -> bool:
     if rel_s in CODE_JSON_OK:
         return False
     parts = rel.parts
-    if parts and parts[0] in PROTECTED_DIRS:
+    if parts and parts[0].lower() in {d.lower() for d in PROTECTED_DIRS}:
         return True
     if rel.name.lower() in {n.lower() for n in PROTECTED_NAMES}:
         return True
