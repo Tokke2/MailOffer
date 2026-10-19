@@ -1562,32 +1562,12 @@ class MainWindow(QMainWindow):
                 tr("update.status_available", latest=info.latest_version),
                 "success",
             )
-            notes = (info.notes or "").strip() or info.name or info.tag
-            if len(notes) > 700:
-                notes = notes[:700] + "…"
-            box = QMessageBox(self)
-            box.setWindowTitle(tr("update.available_title"))
-            box.setText(
-                tr(
-                    "update.available_text",
-                    latest=info.latest_version,
-                    current=APP_VERSION,
-                    notes=notes,
-                )
-            )
-            btn_install = box.addButton(
-                tr("update.install"), QMessageBox.ButtonRole.AcceptRole
-            )
-            btn_page = box.addButton(
-                tr("update.release_page"), QMessageBox.ButtonRole.ActionRole
-            )
-            box.addButton(tr("update.later"), QMessageBox.ButtonRole.RejectRole)
-            box.exec()
-            clicked = box.clickedButton()
-            if clicked is btn_install:
-                self._install_update(info)
-            elif clicked is btn_page:
-                self._open_url(info.html_url or f"{GITHUB_REPO_URL}/releases")
+            if manual or self.isVisible():
+                self._prompt_update_install(info)
+            else:
+                # Appen startade minimerad i trayen: notis nu –
+                # installationsfrågan visas när fönstret öppnas (show()).
+                self._notify_update_via_tray(info)
             return
         self._status_reset()
         if getattr(info, "no_releases", False):
@@ -1612,6 +1592,63 @@ class MainWindow(QMainWindow):
                 tr("update.title"),
                 tr("update.up_to_date", current=APP_VERSION),
             )
+
+    def _prompt_update_install(self, info: Any) -> None:
+        """Fråga om en hittad uppdatering ska installeras nu."""
+        self._pending_update_info = None
+        notes = (info.notes or "").strip() or info.name or info.tag
+        if len(notes) > 700:
+            notes = notes[:700] + "…"
+        box = QMessageBox(self)
+        box.setWindowTitle(tr("update.available_title"))
+        box.setText(
+            tr(
+                "update.available_text",
+                latest=info.latest_version,
+                current=APP_VERSION,
+                notes=notes,
+            )
+        )
+        btn_install = box.addButton(
+            tr("update.install"), QMessageBox.ButtonRole.AcceptRole
+        )
+        btn_page = box.addButton(
+            tr("update.release_page"), QMessageBox.ButtonRole.ActionRole
+        )
+        box.addButton(tr("update.later"), QMessageBox.ButtonRole.RejectRole)
+        box.exec()
+        clicked = box.clickedButton()
+        if clicked is btn_install:
+            self._install_update(info)
+        elif clicked is btn_page:
+            self._open_url(info.html_url or f"{GITHUB_REPO_URL}/releases")
+
+    def _notify_update_via_tray(self, info: Any) -> None:
+        """Tray-notis om ny version (när fönstret är dolt i trayen)."""
+        tray = getattr(self, "_tray_ref", None)
+        notify = getattr(tray, "show_notification", None)
+        if callable(notify):
+            try:
+                notify(
+                    tr("update.tray_title"),
+                    tr(
+                        "update.tray_text",
+                        latest=getattr(info, "latest_version", ""),
+                    ),
+                )
+                return
+            except Exception:
+                log.debug("Tray-notis om uppdatering misslyckades", exc_info=True)
+        log.info(
+            "Ny version %s tillgänglig (visas vid nästa fönsteröppning).",
+            getattr(info, "latest_version", "?"),
+        )
+
+    def _maybe_prompt_pending_update(self) -> None:
+        """Visa uppskjuten installationsfråga när fönstret blivit synligt."""
+        info = self._pending_update_info
+        if info is not None and self.isVisible():
+            self._prompt_update_install(info)
 
     def _install_update(self, info: Any) -> None:
         """Ladda ner + installerad vald release i bakgrunden."""
@@ -1710,26 +1747,31 @@ class MainWindow(QMainWindow):
         return str(self.settings.get("donation_url", "") or "")
 
     def _open_donate(self) -> None:
-        """❤️ Donationsdialogen (Ko-fi-länken från inställningarna)."""
+        """❤️ Stöd projektet-sidan (Ko-fi, PayPal, Swish-QR)."""
         try:
             from ui.donate import DonateDialog
         except Exception:
             log.warning("Donationsdialogen kunde inte laddas", exc_info=True)
             return
-        DonateDialog(self, donation_url=self._donation_url_setting()).exec()
+        DonateDialog(
+            self,
+            kofi_url=self._donation_url_setting(),
+            paypal_url=str(self.settings.get("donation_paypal_url", "") or ""),
+            swish_number=str(self.settings.get("donation_swish", "") or ""),
+        ).exec()
 
     def _open_donation_page(self) -> None:
-        """Öppna donationssidan direkt – fältets aktuella text vinner."""
+        """Öppna Ko-fi-sidan direkt – fältets aktuella text vinner."""
         raw = self._donation_url_setting()
         widget = self._settings_widgets.get("donation_url")
         if isinstance(widget, QLineEdit) and widget.text().strip():
             raw = widget.text()
         try:
-            from core.donate import configured_donation_url
+            from core.donate import resolve_donation_links
 
-            url = configured_donation_url(raw)
+            url = resolve_donation_links(raw, "")[0]
         except Exception:
-            url = None
+            url = ""
         if url:
             self._open_url(url)
         else:
@@ -4282,13 +4324,28 @@ class MainWindow(QMainWindow):
         return group
 
     def _build_settings_group_support(self) -> QGroupBox:
-        """(v5.4) Donation (Ko-fi) + projektlänkar."""
+        """(v5.4) Donation (Ko-fi/PayPal/Swish) + projektlänkar."""
         group = QGroupBox(tr("donate.group"))
         form = QFormLayout(group)
 
         donation_line = self._make_settings_line("donation_url", "donation_url")
         donation_line.setPlaceholderText(tr("donate.url_placeholder"))
         form.addRow(tr("donate.url_label"), donation_line)
+
+        paypal_line = self._make_settings_line(
+            "donation_paypal_url", "donation_paypal_url"
+        )
+        paypal_line.setPlaceholderText(tr("donate.paypal_placeholder"))
+        form.addRow(tr("donate.paypal_label"), paypal_line)
+
+        swish_line = self._make_settings_line("donation_swish", "donation_swish")
+        swish_line.setPlaceholderText(tr("donate.swish_placeholder"))
+        form.addRow(tr("donate.swish_label"), swish_line)
+
+        defaults_hint = QLabel(tr("donate.defaults_hint"))
+        defaults_hint.setProperty("cssClass", "muted")
+        defaults_hint.setWordWrap(True)
+        form.addRow("", defaults_hint)
 
         row_widget = QWidget()
         row = QHBoxLayout(row_widget)
@@ -4367,16 +4424,28 @@ class MainWindow(QMainWindow):
 
     def _save_settings_form(self) -> None:
         values = self._collect_settings_form()
-        # (v5.4) "ko-fi.com/namn" eller bara "namn" → fullständig URL
-        if "donation_url" in values:
-            try:
-                from core.donate import normalize_donation_url
+        # (v5.4) "ko-fi.com/namn" eller bara "namn" → fullständig URL;
+        # Swish-numret normaliseras till nationellt sifferformat.
+        try:
+            from core.donate import (
+                normalize_donation_url,
+                normalize_swish_number,
+            )
 
+            if "donation_url" in values:
                 values["donation_url"] = normalize_donation_url(
-                    values.get("donation_url")
+                    values.get("donation_url"), "ko-fi"
                 )
-            except Exception:
-                log.debug("Kunde inte normalisera donation_url", exc_info=True)
+            if "donation_paypal_url" in values:
+                values["donation_paypal_url"] = normalize_donation_url(
+                    values.get("donation_paypal_url"), "paypal"
+                )
+            if "donation_swish" in values:
+                values["donation_swish"] = normalize_swish_number(
+                    values.get("donation_swish")
+                )
+        except Exception:
+            log.debug("Kunde inte normalisera donationsfält", exc_info=True)
         if hasattr(self.settings, "update_from_dict"):
             self.settings.update_from_dict(values)
         else:
@@ -5084,6 +5153,9 @@ class MainWindow(QMainWindow):
         self.raise_()
         self.activateWindow()
         self.bus.publish("ui.window_shown", {})
+        # (v5.4) Uppdatering funnen medan appen låg i trayen? Fråga nu.
+        if self._pending_update_info is not None:
+            QTimer.singleShot(400, self._maybe_prompt_pending_update)
 
     def hide(self) -> None:  # type: ignore[override]
         super().hide()

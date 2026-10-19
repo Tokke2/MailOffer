@@ -127,9 +127,110 @@ class TestDonateDialogUi(unittest.TestCase):
             self.assertEqual(clipboard.text(), "https://ko-fi.com/exempel")
         dialog.close()
 
+        # Tomma inställningar -> inbyggda standardlänkar (ägarens riktiga)
         empty = DonateDialog(None, donation_url="")
-        self.assertEqual(empty._url, "")
+        self.assertEqual(empty._url, "https://ko-fi.com/tokke2")
+        self.assertEqual(empty._paypal_url, "https://paypal.me/Rickard3dPrint")
+        self.assertEqual(empty._swish_payload, "")  # inget nummer inställt
         empty.close()
+
+    def test_dialog_paypal_and_swish(self) -> None:
+        from ui.donate import DonateDialog
+
+        dialog = DonateDialog(
+            None, paypal_url="mittnamn", swish_number="070-123 45 67"
+        )
+        self.assertEqual(dialog._paypal_url, "https://paypal.me/mittnamn")
+        self.assertEqual(dialog._swish_payload, "C0701234567;;E-postofferten;6")
+        dialog._copy_swish()
+        clipboard = QApplication.clipboard()
+        if clipboard is not None:
+            self.assertEqual(clipboard.text(), "0701234567")
+        try:
+            import qrcode  # noqa: F401
+
+            self.assertIsNotNone(dialog._qr_pixmap)
+            self.assertFalse(dialog._qr_pixmap.isNull())
+        except ImportError:
+            self.assertIsNone(dialog._qr_pixmap)  # fail-soft utan QR-paket
+        dialog.close()
+
+
+
+
+@unittest.skipUnless(HAS_QT, "PyQt6 saknas – hoppar UI-tester")
+class TestUpdateDeferralUi(unittest.TestCase):
+    """Autouppdatering i tray-läge: notis direkt, fråga när fönstret öppnas."""
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.app = QApplication.instance() or QApplication(sys.argv[:1])
+        try:
+            from ui.main_window import MainWindow  # noqa: F401
+        except Exception as exc:  # saknade deps i lätt miljö
+            raise unittest.SkipTest(f"MainWindow otillgänglig: {exc}")
+
+    def _make_window(self):
+        import tempfile
+
+        from core.event_bus import EventBus
+        from core.recovery_manager import RecoveryManager
+        from core.settings_manager import SettingsManager
+        from ui.main_window import MainWindow
+
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        settings = SettingsManager(Path(tmp.name))
+        settings.set("auto_update_check", False)
+        settings.set("ui_language", "sv")
+        settings.set("close_to_tray", False)
+        bus = EventBus()
+        win = MainWindow(settings, bus, RecoveryManager(bus))
+        self.addCleanup(win.close)
+        return win
+
+    @staticmethod
+    def _info():
+        from core.github_update import UpdateInfo
+
+        return UpdateInfo(
+            available=True,
+            latest_version="9.9.9",
+            tag="v9.9.9",
+            download_url="https://example.invalid/x.zip",
+        )
+
+    def test_tray_defers_prompt_until_shown(self) -> None:
+        win = self._make_window()
+        self.assertFalse(win.isVisible())
+        prompted: list = []
+        win._prompt_update_install = lambda info: prompted.append(info)  # type: ignore[method-assign]
+        notices: list = []
+
+        class FakeTray:
+            def show_notification(self, title, message):
+                notices.append((title, message))
+
+        win._tray_ref = FakeTray()
+        info = self._info()
+        win._update_check_manual = False
+        win._on_update_checked(info)
+        self.assertEqual(prompted, [])                 # ingen modal i tray-läge
+        self.assertEqual(len(notices), 1)              # tray-notis i stället
+        self.assertIs(win._pending_update_info, info)  # frågan är uppskjuten
+        win.show()
+        QApplication.processEvents()
+        win._maybe_prompt_pending_update()  # samma anrop som timern i show()
+        self.assertEqual(prompted, [info])
+
+    def test_manual_check_prompts_immediately(self) -> None:
+        win = self._make_window()
+        prompted: list = []
+        win._prompt_update_install = lambda info: prompted.append(info)  # type: ignore[method-assign]
+        info = self._info()
+        win._update_check_manual = True
+        win._on_update_checked(info)
+        self.assertEqual(prompted, [info])
 
 
 if __name__ == "__main__":

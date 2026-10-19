@@ -39,6 +39,8 @@ REQUIRED: List[Tuple[str, str, str]] = [
 OPTIONAL: List[Tuple[str, str, str]] = [
     ("Pillow", "PIL", "10.4.0"),
     ("beautifulsoup4", "bs4", "4.12.3"),
+    # Swish-QR i donationsdialogen (fail-soft: numret visas ändå)
+    ("qrcode", "qrcode", "7.4.2"),
 ]
 
 ProgressCb = Callable[[int, int, str], None]

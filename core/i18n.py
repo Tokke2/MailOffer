@@ -262,6 +262,45 @@ _SV: Dict[str, str] = {
     # Inställningar (nya/ändrade rader)
     "settings.language_row": "Språk / Language",
     "settings.ui_group": "🎨 UI & Beteende",
+    "donate.badges": "✨ GRATIS • UTAN REKLAM • PORTABEL",
+    "donate.secure_line": "🔒 Säker betalning via PayPal, Ko-fi & Swish • ingen inloggning i appen",
+    "donate.intro": (
+        "E-postofferten gör offertmailen åt dig — välj mall, fyll i "
+        "modell/reg/ruta och skicka på svenska och engelska. Inga "
+        "prenumerationer. Ingen reklam. Din donation är det som gör "
+        "att appen kan fortsätta — och bli ännu bättre."
+    ),
+    "donate.paypal_btn": "💙 Stöd via PayPal →",
+    "donate.kofi_btn": "☕ Bjud på en kaffe (Ko-fi)",
+    "donate.monthly_hint": "På Ko-fi kan du även bli månadsgivare — valfritt belopp, avsluta när du vill.",
+    "donate.swish_title": "📱 Swish",
+    "donate.swish_scan_hint": "Öppna Swish-appen, tryck Skanna och rikta kameran mot koden — fyll sedan i valfritt belopp.",
+    "donate.swish_missing_lib": "QR-koden kunde inte ritas (paketet qrcode saknas) — swisha till numret ovan i stället.",
+    "donate.swish_not_configured": "Inget Swish-nummer är inlagt ännu. Lägg in det under Inställningar → ❤️ Stöd & om så ritas QR-koden här direkt.",
+    "donate.swish_number_copied": "Swish-numret kopierat! 📋",
+    "donate.why1_title": "🧲 Rätt uppgifter varje gång",
+    "donate.why1_body": "Modell, reg.nr och glastyp blir rätt ifyllda — offerten går iväg utan handpåläggning.",
+    "donate.why2_title": "🛡️ Alltid uppdaterad",
+    "donate.why2_body": "Buggfixar och nya funktioner löpande. Din donation = tid för underhåll.",
+    "donate.why3_title": "💝 För alla — gratis",
+    "donate.why3_body": "Ingen betalvägg. Donationer håller appen gratis för småföretag, verkstäder och kontor.",
+    "donate.faq_title": "Vanliga frågor — lugnt & tryggt",
+    "donate.faq1_q": "💳 Hur betalar jag säkert?",
+    "donate.faq1_a": "Knapparna går direkt till paypal.me, ko-fi.com och Swish (HTTPS, krypterat). Varken appen eller utvecklaren ser ditt kortnummer. Kvitto kommer direkt från betaltjänsten.",
+    "donate.faq2_q": "🔁 Kan jag bli månadsgivare?",
+    "donate.faq2_a": "Ja! På Ko-fi kan du välja månadsvis (valfritt belopp, avsluta när du vill). På PayPal och Swish skickar du valfritt belopp när du vill — ingen bindning.",
+    "donate.faq3_q": "🇸🇪 Fungerar Swish?",
+    "donate.faq3_a": "Ja — när ett Swish-nummer är inlagt i appen (Inställningar → ❤️ Stöd & om) ritas QR-koden här direkt. Skanna den i Swish-appen och välj belopp själv.",
+    "donate.faq4_q": "🎁 Vad får jag som tack?",
+    "donate.faq4_a": "Evig tacksamhet, prioriterad återkoppling och känslan av att hålla appen gratis för alla. Ingen funktion låses bakom donation.",
+    "donate.footer": "Byggd med ♥ i Sverige • Portabel • Ingen spårning",
+    "donate.paypal_label": "Donationslänk (PayPal)",
+    "donate.paypal_placeholder": "https://paypal.me/dittnamn",
+    "donate.swish_label": "Swish-nummer (för QR-kod)",
+    "donate.swish_placeholder": "070-123 45 67",
+    "donate.defaults_hint": "Tomt fält = projektets standardlänk används.",
+    "update.tray_title": "⬇️ Ny version av E-postofferten",
+    "update.tray_text": "Version {latest} finns på GitHub. Öppna appen för att installera.",
 }
 
 _EN: Dict[str, str] = {
@@ -459,6 +498,45 @@ _EN: Dict[str, str] = {
     # Settings (new/changed rows)
     "settings.language_row": "Språk / Language",
     "settings.ui_group": "🎨 UI & behaviour",
+    "donate.badges": "✨ FREE • NO ADS • PORTABLE",
+    "donate.secure_line": "🔒 Secure payment via PayPal, Ko-fi & Swish • no login in the app",
+    "donate.intro": (
+        "E-postofferten writes your quote e-mails for you — pick a "
+        "template, fill in model/reg/glass and send in Swedish and "
+        "English. No subscriptions. No ads. Your donation keeps the "
+        "app going — and makes it even better."
+    ),
+    "donate.paypal_btn": "💙 Support via PayPal →",
+    "donate.kofi_btn": "☕ Buy me a coffee (Ko-fi)",
+    "donate.monthly_hint": "On Ko-fi you can also give monthly — any amount, cancel anytime.",
+    "donate.swish_title": "📱 Swish",
+    "donate.swish_scan_hint": "Open the Swish app, tap Scan and point the camera at the code — then enter any amount.",
+    "donate.swish_missing_lib": "The QR code could not be drawn (package qrcode missing) — please Swish the number above instead.",
+    "donate.swish_not_configured": "No Swish number has been added yet. Add it under Settings → ❤️ Support & about and the QR code will appear here.",
+    "donate.swish_number_copied": "Swish number copied! 📋",
+    "donate.why1_title": "🧲 Right details every time",
+    "donate.why1_body": "Model, reg no. and glass type filled in correctly — the quote goes out with no manual fiddling.",
+    "donate.why2_title": "🛡️ Always up to date",
+    "donate.why2_body": "Bug fixes and new features on a rolling basis. Your donation = maintenance time.",
+    "donate.why3_title": "💝 For everyone — free",
+    "donate.why3_body": "No paywall. Donations keep the app free for small businesses, workshops and offices.",
+    "donate.faq_title": "FAQ — safe & simple",
+    "donate.faq1_q": "💳 How do I pay securely?",
+    "donate.faq1_a": "The buttons go straight to paypal.me, ko-fi.com and Swish (HTTPS, encrypted). Neither the app nor the developer sees your card number. The receipt comes directly from the payment service.",
+    "donate.faq2_q": "🔁 Can I give monthly?",
+    "donate.faq2_a": "Yes! On Ko-fi you can choose monthly (any amount, cancel anytime). With PayPal and Swish you send any amount whenever you like — no commitment.",
+    "donate.faq3_q": "🇸🇪 Does Swish work?",
+    "donate.faq3_a": "Yes — once a Swish number is added in the app (Settings → ❤️ Support & about) the QR code is drawn right here. Scan it in the Swish app and choose the amount yourself.",
+    "donate.faq4_q": "🎁 What do I get in return?",
+    "donate.faq4_a": "Eternal gratitude, priority feedback, and the feeling of keeping the app free for everyone. No feature is locked behind a donation.",
+    "donate.footer": "Built with ♥ in Sweden • Portable • No tracking",
+    "donate.paypal_label": "Donation link (PayPal)",
+    "donate.paypal_placeholder": "https://paypal.me/yourname",
+    "donate.swish_label": "Swish number (for QR code)",
+    "donate.swish_placeholder": "070-123 45 67",
+    "donate.defaults_hint": "Empty field = the project's default link is used.",
+    "update.tray_title": "⬇️ New E-postofferten version",
+    "update.tray_text": "Version {latest} is on GitHub. Open the app to install.",
 }
 
 STRINGS: Dict[str, Dict[str, str]] = {"sv": _SV, "en": _EN}

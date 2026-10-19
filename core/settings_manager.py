@@ -191,9 +191,12 @@ def get_defaults() -> Dict[str, Any]:
         "auto_update_check": True,
         "last_update_check": "",
 
-        # Donation (v5.4) – Ko-fi-länk, tom = ej konfigurerad.
-        # Klistras in under Inställningar → ❤️ Stöd & om.
+        # Donation (v5.4) – tom = projektets standardlänkar i
+        # core/donate.py används. Redigeras under
+        # Inställningar → ❤️ Stöd & om.
         "donation_url": "",
+        "donation_paypal_url": "",
+        "donation_swish": "",
 
         # Fönster
         "window_geometry": "",
@@ -676,6 +679,8 @@ class SettingsManager:
             # v5.4 – GitHub-uppdatering + donation
             "last_update_check",
             "donation_url",
+            "donation_paypal_url",
+            "donation_swish",
         ]
         for key in str_fields:
             if d.get(key) is None:

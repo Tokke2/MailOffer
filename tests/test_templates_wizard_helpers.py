@@ -167,5 +167,32 @@ class TestCreateFormatsRoundtrip(unittest.TestCase):
         self._roundtrip("a.docx")
 
 
+class TestHtmlEscapeRoundtrip(unittest.TestCase):
+    """(5.4-uppföljning) <, >, & och citattecken i malltexten överlever
+    HTML-skapande + inläsning (escape vid skrivning, unescape vid läsning)."""
+
+    def test_special_chars_survive(self):
+        from script.templates import create_template, parse_subject_and_body
+        with tempfile.TemporaryDirectory() as td:
+            path = Path(td) / "special.html"
+            create_template(
+                path,
+                'Pris <100> & moms "avtal" ::modell::',
+                "Glas & pris < 5000 kr > 0\nRad 2 ::ruta:: & klar",
+            )
+            raw = path.read_text(encoding="utf-8")
+            self.assertIn("&lt;100&gt;", raw)
+            self.assertIn("&amp;", raw)
+            self.assertNotIn("<p>Glas & pris <", raw)
+            subject, body = parse_subject_and_body(
+                path,
+                {"modell": "XC60", "ruta": "Vindruta"},
+                keep_unknown=True,
+            )
+            self.assertEqual(subject, 'Pris <100> & moms "avtal" XC60')
+            self.assertIn("Glas & pris < 5000 kr > 0", body)
+            self.assertIn("Rad 2 Vindruta & klar", body)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -130,6 +130,8 @@ IS_WINDOWS = sys.platform.startswith("win")
 IS_MACOS = sys.platform == "darwin"
 BACKGROUND_FLAGS = frozenset({"--background", "--minimized", "-background"})
 CREATE_NO_WINDOW = 0x08000000
+MIN_PYTHON_VERSION = (3, 10)
+PYTHON_INSTALLER_BAT = "Installera_Python.bat"
 
 
 def setup_qt_runtime() -> None:
@@ -251,6 +253,42 @@ def _ensure_pythonw() -> None:
         except Exception:
             pass
         return
+
+
+def _python_supported(version_info: Any = None) -> bool:
+    """True om tolken uppfyller minimikravet (Python 3.10+)."""
+    info = version_info or sys.version_info
+    try:
+        return tuple(info[:2]) >= MIN_PYTHON_VERSION
+    except Exception:
+        return False
+
+
+def _launch_python_installer_silent() -> bool:
+    """Kör Installera_Python.bat /silent UTAN konsolfönster (Windows).
+
+    Nödbroms när appen startats med för gammal Python. Normalfallet –
+    Python saknas helt – hanteras före appstart av Starta EmailApp.vbs,
+    som kör samma .bat dolt och väntar tills den är klar.
+    """
+    if not IS_WINDOWS:
+        return False
+    bat = BASE_DIR / PYTHON_INSTALLER_BAT
+    if not bat.is_file():
+        return False
+    try:
+        subprocess.Popen(
+            ["cmd", "/c", str(bat), "/silent"],
+            cwd=str(BASE_DIR),
+            close_fds=True,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            creationflags=CREATE_NO_WINDOW,
+        )
+        return True
+    except Exception:
+        return False
 
 
 def _safe_show_critical(title: str, message: str) -> None:
@@ -415,6 +453,18 @@ def main() -> None:
     """Tunn bootstrapper – ingen affärslogik."""
     # (v4.8/v5.0) Först av allt: garantera pythonw (ingen terminal) på Windows
     _ensure_pythonw()
+    # (v5.4) För gammal Python: starta 3.12-installationen tyst i
+    # bakgrunden och avsluta snällt i stället för att krascha i imports.
+    if not _python_supported():
+        _launch_python_installer_silent()
+        _safe_show_critical(
+            APP_NAME,
+            "E-postofferten kräver Python 3.10 eller nyare.\n\n"
+            "Installation av Python 3.12 har startats i bakgrunden "
+            "(Installera_Python.bat). Vänta någon minut och starta "
+            "sedan appen igen via Starta EmailApp.vbs.",
+        )
+        return
     background_start = _consume_background_flag(sys.argv)
 
     setup_qt_runtime()

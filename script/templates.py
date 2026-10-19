@@ -20,6 +20,7 @@ FIL: script/templates.py
 
 from __future__ import annotations
 
+import html as _html
 import logging
 import os
 import re
@@ -202,7 +203,7 @@ def _parse_html(path: Path) -> Tuple[str, str]:
     title_match = re.search(
         r"<title>(.*?)</title>", raw, re.I | re.DOTALL
     )
-    subject = title_match.group(1).strip() if title_match else ""
+    subject = _html.unescape(title_match.group(1).strip()) if title_match else ""
     body_match = re.search(
         r"<body[^>]*>(.*?)</body>", raw, re.I | re.DOTALL
     )
@@ -210,7 +211,7 @@ def _parse_html(path: Path) -> Tuple[str, str]:
     body = re.sub(r"<br\s*/?>", "\n", body_html, flags=re.I)
     body = re.sub(r"</?p[^>]*>", "\n", body, flags=re.I)
     body = re.sub(r"<[^>]+>", "", body)
-    return subject, body.strip()
+    return subject, _html.unescape(body).strip()
 
 
 def _parse_docx(path: Path) -> Tuple[str, str]:
@@ -576,18 +577,18 @@ def create_template(
             document.add_paragraph(line)
         document.save(str(file_path))
     elif suffix in (".html", ".htm"):
-        escaped_subject = (
-            str(subject).replace("&", "&amp;").replace("<", "&lt;")
-        )
-        html = (
+        # (v3.8) Escapa både ämne och brödtext – annars bryter <, > och &
+        # i användartexten HTML-strukturen (placeholders påverkas inte).
+        escaped_subject = _html.escape(str(subject), quote=False)
+        html_text = (
             "<!DOCTYPE html>\n<html lang=\"sv\">\n<head>\n"
             f"<meta charset=\"utf-8\">\n<title>{escaped_subject}</title>\n"
             "</head>\n<body>\n"
         )
         for line in (body or "").split("\n"):
-            html += f"<p>{line}</p>\n"
-        html += "</body>\n</html>\n"
-        file_path.write_text(html, encoding="utf-8")
+            html_text += f"<p>{_html.escape(line, quote=False)}</p>\n"
+        html_text += "</body>\n</html>\n"
+        file_path.write_text(html_text, encoding="utf-8")
     else:
         file_path.write_text(
             f"ÄMNE: {subject}\n\nINNEHÅLL:\n{body}\n",

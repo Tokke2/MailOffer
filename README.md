@@ -36,9 +36,13 @@ pip install -r requirements.txt
 python main.pyw
 ```
 
-På Windows kan du dubbelklicka `main.pyw` (appen startar om sig själv med
-`pythonw.exe` så ingen terminal syns). En exempelmall finns i `Mallar/` –
-skapa egna med **🧙 Ny mall**-knappen.
+**Enklast på Windows:** dubbelklicka **`Starta EmailApp.vbs`** – den
+startar appen helt utan konsolfönster. Saknas Python kör den först
+`Installera_Python.bat` (installerar senaste Python 3.12) dolt i
+bakgrunden och startar sedan appen. (`main.pyw` går också att
+dubbelklicka – appen startar om sig själv med `pythonw.exe`.)
+En exempelmall finns i `Mallar/` – skapa egna med
+**🧙 Ny mall**-knappen.
 
 ## 🧙 Skapa en mall
 
@@ -77,10 +81,17 @@ Så publicerar du en ny version:
 
 ## ❤️ Donera
 
-Appen är gratis. Vill du stödja den: **Ko-fi** – _ägarens länk läggs in
-här_: `https://ko-fi.com/DITT_NAMN` (och i appens
-*Inställningar → ❤️ Stöd & om* samt `.github/FUNDING.yml` för
-Sponsor-knappen på GitHub).
+Appen är gratis och alltid öppen för alla. Vill du stödja
+utvecklingen finns en komplett **Stöd projektet**-sida i appen
+(*❤️ Stöd projektet* i sidofältet) med:
+
+- ☕ **Ko-fi:** <https://ko-fi.com/tokke2>
+- 💳 **PayPal:** <https://paypal.me/Rickard3dPrint>
+- 📱 **Swish** med QR-kod – numret fylls i under
+  *Inställningar → ❤️ Stöd & om* (QR-koden ritas automatiskt)
+
+Länkarna kan bytas i samma inställningsgrupp; `.github/FUNDING.yml`
+ger Sponsor-knappen här på GitHub.
 
 ## 🧪 Tester
 

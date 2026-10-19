@@ -28,10 +28,12 @@
    Steg finns i `README.md` (”Uppdateringar & att publicera en release”):
    `gh release create v5.4.0 --title "E-postofferten 5.4.0" --generate-notes`
    – gör det när 5.4-koden mergats till `main`.
-2. **Fyll i Ko-fi-länken** på tre ställen: appens *Inställningar →
-   ❤️ Stöd & om*, `.github/FUNDING.yml` (Sponsor-knappen) och
-   `README.md` (”❤️ Donera”). Tills dess visar donationsdialogen en
-   förklaring i stället för en död länk.
+2. ~~**Fyll i Ko-fi-länken**~~ ✅ KLAR (5.4-uppföljning):
+   ko-fi.com/tokke2 + paypal.me/Rickard3dPrint är inbyggda
+   standardlänkar (kan bytas i *Inställningar → ❤️ Stöd & om*) och
+   står i `README.md` + `.github/FUNDING.yml`. Kvar för ägaren:
+   fyll i **Swish-numret** i inställningarna så dyker QR-koden upp
+   på appens Stöd projektet-sida.
 3. **LICENSE saknas.** Utan licens får andra juridiskt inte använda eller
    bidra till koden. Välj t.ex. MIT (tillåtande) eller GPL (copyleft) och
    lägg till filen `LICENSE`.
@@ -57,9 +59,9 @@
 8. **Release-integritet**: uppdateraren verifierar att zip:en innehåller
    `main.pyw`, men ingen checksumma/signatur kontrolleras. Publicera
    SHA256 per release och verifiera i `github_update.py`.
-9. **HTML-mallar escapas inte**: `create_template` för `.html` skriver
-   brödtext rakt in i `<p>`-taggar – `<`, `>` och `&` i texten kan bryta
-   mailet. Escapa texten (ämnet escapas redan).
+9. ~~**HTML-mallar escapas inte**~~ ✅ ÅTGÄRDAD (5.4-uppföljning):
+   `create_template` escaper nu ämne + brödtext och `_parse_html`
+   unescaper vid inläsning – roundtrip-test finns i testsuite.
 10. **Dokumentations-/koddrift**: `spec.md` säger version 6.2 medan appen
     är 5.4.0; `SendConfirmDialog` finns i två kopior (`ui/dialogs.py`
     kanonisk, `ui/editors.py` för API-kompatibilitet) och
