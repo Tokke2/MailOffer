@@ -1,0 +1,35 @@
+{
+  "manifest_version": 2,
+  "name": "E-postofferten – spara avsändare",
+  "version": "2.0.0",
+  "description": "Högerklicka på ett mail i Thunderbird och spara avsändaren i E-postofferten.",
+  "author": "E-postofferten",
+  "background": {
+    "scripts": ["background.js"]
+  },
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "kontakter@e-postofferten.local",
+      "strict_min_version": "91.0"
+    }
+  },
+  "permissions": [
+    "menus",
+    "messagesRead",
+    "accountsRead",
+    "nativeMessaging",
+    "notifications"
+  ],
+  "browser_action": {
+    "default_title": "E-postofferten",
+    "default_popup": "popup.html",
+    "default_icon": {
+      "48": "icon.png",
+      "96": "icon.png"
+    }
+  },
+  "icons": {
+    "48": "icon.png",
+    "96": "icon.png"
+  }
+}
