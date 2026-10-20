@@ -14,6 +14,14 @@ _English summary below._
 - 🧙 **Mall-wizard** (nytt i 5.4) – skapa nya mallar steg för steg:
   namn/format → svensk text → valfri engelsk text (autoöversättning) →
   förhandsgranskning med testvärden → spara
+- 👤 **Avsändarprofiler** (nytt i 5.5) – spara flera avsändarkonton
+  (SMTP-server, avsändare, svar-till, egen kopia/arkiv) under
+  *Inställningar → 📡 SMTP & Avsändare* och välj konto direkt i
+  steg 4 **Skicka mail** i stället för att ändra inställningarna
+- 🧪 **Testläge & förhandskontroll** (nytt i 5.5) – **🔎 Förhandskontroll**
+  visar exakt slutantal (inkl. egen kopia/standard-Bcc), överlapp
+  To/Bcc, ogiltiga adresser, SV/EN-fördelning och bilagestorlek;
+  **🧪 Skicka testmail** skickar bara till din egen testadress
 - 👥 **Kontakter & grupper** med språk per mottagare – EN får alltid
   engelsk version, SV alltid svensk (VIN skickas bara i EN-mailet).
   **E-postlistor** kan importeras från TXT/CSV/TSV eller klistras in
@@ -158,6 +166,9 @@ versions of the same template), attachments and To/Bcc batch sending.
 New in 5.4: a step-by-step **template wizard** (TXT/HTML/DOCX), a **Swedish/
 English UI** (Language menu), **auto-update from GitHub Releases** (silent
 daily check + manual button; user templates/JSON/settings are never
-overwritten) and **Ko-fi donations**. Version number lives in
+overwritten) and **Ko-fi donations**. New in 5.5: **sender profiles** (pick the
+sending account per send) plus a **preflight check & test mode**
+(final recipient counts, To/Bcc overlaps, attachment sizes; test
+mail goes only to your own test address). Version number lives in
 `core/version.py`. Run with `pip install -r requirements.txt` +
 `python main.pyw`; tests with `python -m unittest discover -s tests -v`.

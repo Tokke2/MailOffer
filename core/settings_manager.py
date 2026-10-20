@@ -144,6 +144,21 @@ except ImportError:
     plistlib = None  # type: ignore
     HAS_PLISTLIB = False
 
+try:
+    from core.sender_profiles import (
+        SENDER_PROFILE_FIELDS,
+        normalize_sender_profile,
+        normalize_sender_profiles,
+        profile_from_settings,
+    )
+except Exception:  # pragma: no cover - direktimport av core-paketet i tester
+    from sender_profiles import (  # type: ignore
+        SENDER_PROFILE_FIELDS,
+        normalize_sender_profile,
+        normalize_sender_profiles,
+        profile_from_settings,
+    )
+
 log = logging.getLogger(__name__)
 
 SETTINGS_FILE_NAME = "email_settings.json"
@@ -213,6 +228,11 @@ def get_defaults() -> Dict[str, Any]:
             "tab_logs": True,
             "tab_history": True,
         },
+
+        # Avsändarprofiler (v5.5) – de platta SMTP-fälten nedan är
+        # alltid en spegel av den aktiva profilen.
+        "sender_profiles": [],
+        "active_sender_profile_id": "",
 
         # SMTP
         "smtp_server": "",
@@ -688,6 +708,26 @@ class SettingsManager:
             else:
                 d[key] = str(d.get(key))
 
+        # Avsändarprofiler: normalisera listan och spegla de platta
+        # SMTP-fälten in i aktiv profil. Då fungerar även äldre kod
+        # som bara uppdaterar sender_email/smtp_server direkt.
+        try:
+            profiles, active_profile_id = normalize_sender_profiles(
+                d.get("sender_profiles"),
+                d,
+                d.get("active_sender_profile_id", ""),
+                sync_active_from_flat=True,
+            )
+        except Exception:
+            log.warning(
+                "Kunde inte normalisera avsändarprofiler – skapar standard",
+                exc_info=True,
+            )
+            fallback = profile_from_settings(d)
+            profiles, active_profile_id = [fallback], str(fallback["id"])
+        d["sender_profiles"] = profiles
+        d["active_sender_profile_id"] = active_profile_id
+
         return d
 
     # ------------------------------------------------------------------
@@ -727,8 +767,19 @@ class SettingsManager:
 
     def get_all(self, *, redact_secrets: bool = False) -> Dict[str, Any]:
         data = dict(self._data)
-        if redact_secrets and "password" in data:
-            data["password"] = "***"
+        if redact_secrets:
+            if "password" in data:
+                data["password"] = "***"
+            profiles = data.get("sender_profiles")
+            if isinstance(profiles, list):
+                redacted_profiles = []
+                for profile in profiles:
+                    if isinstance(profile, dict):
+                        profile = dict(profile)
+                        if "password" in profile:
+                            profile["password"] = "***"
+                    redacted_profiles.append(profile)
+                data["sender_profiles"] = redacted_profiles
         return data
 
     # ------------------------------------------------------------------
@@ -754,6 +805,199 @@ class SettingsManager:
 
     def set_archive_copy_email(self, email: str) -> None:
         self.set("archive_copy_email", (email or "").strip())
+
+    # ------------------------------------------------------------------
+    # Avsändarprofiler (v5.5)
+    # ------------------------------------------------------------------
+
+    def get_sender_profiles(self) -> List[Dict[str, Any]]:
+        """Alla avsändarprofiler (aktiv profil speglad från platta fält)."""
+        profiles, _active = normalize_sender_profiles(
+            self.get("sender_profiles", []),
+            self._data,
+            self.get("active_sender_profile_id", ""),
+            sync_active_from_flat=True,
+        )
+        return [dict(profile) for profile in profiles]
+
+    def get_active_sender_profile_id(self) -> str:
+        profiles, active_id = normalize_sender_profiles(
+            self.get("sender_profiles", []),
+            self._data,
+            self.get("active_sender_profile_id", ""),
+            sync_active_from_flat=True,
+        )
+        return active_id if profiles else ""
+
+    def get_sender_profile(
+        self, profile_id: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """Hämta en profil på id, eller den aktiva om id saknas."""
+        profiles = self.get_sender_profiles()
+        wanted = str(profile_id or "").strip()
+        if wanted:
+            for profile in profiles:
+                if str(profile.get("id")) == wanted:
+                    return dict(profile)
+        active_id = self.get_active_sender_profile_id()
+        for profile in profiles:
+            if str(profile.get("id")) == active_id:
+                return dict(profile)
+        return dict(profiles[0]) if profiles else profile_from_settings(self._data)
+
+    def get_active_sender_profile(self) -> Dict[str, Any]:
+        return self.get_sender_profile(None)
+
+    def upsert_sender_profile(
+        self,
+        profile: Dict[str, Any],
+        *,
+        make_active: bool = False,
+        save: bool = False,
+    ) -> Dict[str, Any]:
+        """Skapa/uppdatera en avsändarprofil och returnera den sparade."""
+        with self._lock:
+            profiles = self.get_sender_profiles()
+            active_id = self.get_active_sender_profile_id()
+            candidate = normalize_sender_profile(profile)
+
+            match_index = -1
+            for index, existing in enumerate(profiles):
+                if str(existing.get("id")) == str(candidate.get("id")):
+                    match_index = index
+                    break
+            if match_index < 0 and not str((profile or {}).get("id") or "").strip():
+                wanted_name = str(candidate.get("name") or "").strip().lower()
+                for index, existing in enumerate(profiles):
+                    if str(existing.get("name") or "").strip().lower() == wanted_name:
+                        candidate["id"] = existing.get("id")
+                        match_index = index
+                        break
+            if match_index >= 0:
+                profiles[match_index] = candidate
+            else:
+                existing_ids = [str(item.get("id") or "") for item in profiles]
+                if str(candidate.get("id")) in existing_ids:
+                    candidate = normalize_sender_profile(
+                        {**candidate, "id": ""}, existing_ids=existing_ids
+                    )
+                profiles.append(candidate)
+
+            should_activate = bool(
+                make_active or str(candidate.get("id")) == active_id
+            )
+            values: Dict[str, Any] = {
+                "sender_profiles": profiles,
+                "active_sender_profile_id": (
+                    str(candidate.get("id")) if should_activate else active_id
+                ),
+            }
+            if should_activate:
+                for field in SENDER_PROFILE_FIELDS:
+                    values[field] = candidate.get(field)
+            self.update_from_dict(values)
+            if save:
+                self.save()
+            return self.get_sender_profile(str(candidate.get("id")))
+
+    def set_active_sender_profile(
+        self, profile_id: str, *, save: bool = False
+    ) -> Optional[Dict[str, Any]]:
+        """Gör en profil aktiv och spegla dess fält till platta nycklar."""
+        with self._lock:
+            profiles = self.get_sender_profiles()
+            target = next(
+                (
+                    profile
+                    for profile in profiles
+                    if str(profile.get("id")) == str(profile_id or "").strip()
+                ),
+                None,
+            )
+            if target is None:
+                return None
+            values: Dict[str, Any] = {
+                "sender_profiles": profiles,
+                "active_sender_profile_id": str(target.get("id")),
+            }
+            for field in SENDER_PROFILE_FIELDS:
+                values[field] = target.get(field)
+            self.update_from_dict(values)
+            if save:
+                self.save()
+            return self.get_sender_profile(str(target.get("id")))
+
+    def delete_sender_profile(
+        self, profile_id: str, *, save: bool = False
+    ) -> bool:
+        """Ta bort en profil. Minst en profil behålls alltid."""
+        with self._lock:
+            profiles = self.get_sender_profiles()
+            if len(profiles) <= 1:
+                return False
+            wanted = str(profile_id or "").strip()
+            remaining = [
+                profile
+                for profile in profiles
+                if str(profile.get("id")) != wanted
+            ]
+            if len(remaining) == len(profiles):
+                return False
+            active_id = self.get_active_sender_profile_id()
+            target = next(
+                (
+                    profile
+                    for profile in remaining
+                    if str(profile.get("id")) == active_id
+                ),
+                remaining[0],
+            )
+            values: Dict[str, Any] = {
+                "sender_profiles": remaining,
+                "active_sender_profile_id": str(target.get("id")),
+            }
+            for field in SENDER_PROFILE_FIELDS:
+                values[field] = target.get(field)
+            self.update_from_dict(values)
+            if save:
+                self.save()
+            return True
+
+    def sync_active_sender_profile_from_settings(
+        self,
+        *,
+        profile_id: Optional[str] = None,
+        name: Optional[str] = None,
+        save: bool = False,
+    ) -> Dict[str, Any]:
+        """Spara nuvarande platta SMTP-fält i vald/aktiv profil."""
+        with self._lock:
+            target_id = str(
+                profile_id or self.get_active_sender_profile_id() or ""
+            ).strip()
+            existing = None
+            if target_id:
+                existing = next(
+                    (
+                        profile
+                        for profile in self.get_sender_profiles()
+                        if str(profile.get("id")) == target_id
+                    ),
+                    None,
+                )
+            target_name = str(
+                name
+                or (existing.get("name") if existing else "")
+                or ""
+            ).strip()
+            candidate = profile_from_settings(
+                self._data,
+                profile_id=target_id,
+                name=target_name,
+            )
+            return self.upsert_sender_profile(
+                candidate, make_active=True, save=save
+            )
 
     # ------------------------------------------------------------------
     # UI-språk / GitHub-uppdatering / donation (v5.4)

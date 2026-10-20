@@ -183,11 +183,20 @@ class SendConfirmDialog(QDialog):
         # v4.8 – språk per mottagare (från main_window v5.2)
         self._to_lang = dict(params.get("recipients_to_lang", {}) or {})
         self._bcc_lang = dict(params.get("recipients_bcc_lang", {}) or {})
+        self._sender_profile_name = str(
+            params.get("sender_profile_name", "") or ""
+        )
+        self._sender_email = str(params.get("sender_email", "") or "")
+        self._test_mode = bool(params.get("test_mode", False))
+        self._test_recipient = str(params.get("test_recipient", "") or "")
+        self._preflight_text = str(params.get("preflight_text", "") or "")
 
         # Ingen CC: total = To + Bcc. Eventuell legacy recipients_cc ignoreras.
         self._total = len(self._to) + len(self._bcc)
 
-        self.setWindowTitle("📤 Bekräfta e-postsändning")
+        self.setWindowTitle(
+            "🧪 Bekräfta testmail" if self._test_mode else "📤 Bekräfta e-postsändning"
+        )
         self.setModal(True)
         self.setMinimumWidth(600)
         self.resize(720, 560)
@@ -211,7 +220,9 @@ class SendConfirmDialog(QDialog):
         hero_layout.setContentsMargins(18, 14, 18, 14)
         hero_layout.setSpacing(4)
 
-        title = QLabel("④ 📤 Bekräfta & skicka")
+        title = QLabel(
+            "④ 🧪 Bekräfta testmail" if self._test_mode else "④ 📤 Bekräfta & skicka"
+        )
         title.setStyleSheet(
             "color: #FFFFFF; font-size: 15pt; font-weight: bold; "
             "background: transparent;"
@@ -219,7 +230,10 @@ class SendConfirmDialog(QDialog):
         hero_layout.addWidget(title)
 
         subtitle = QLabel(
-            "Kontrollera To/Bcc, ämne, bilagor och fritext. "
+            "Testläge: bara testadressen får mailet – vanliga "
+            "mottagare, standard-Bcc och arkivkopia används inte."
+            if self._test_mode
+            else "Kontrollera To/Bcc, ämne, bilagor och fritext. "
             "E-post skickas bara när du bekräftar."
         )
         subtitle.setStyleSheet(
@@ -290,6 +304,17 @@ class SendConfirmDialog(QDialog):
             if self._total == 0
             else colors.get("success", ""),
         )
+        if self._sender_email or self._sender_profile_name:
+            sender_text = self._sender_profile_name or self._sender_email
+            if self._sender_email and self._sender_email != sender_text:
+                sender_text = f"{sender_text} <{self._sender_email}>"
+            row("👤 Avsändare:", sender_text, colors.get("accent", ""))
+        if self._test_mode:
+            row(
+                "🧪 Testläge:",
+                f"Bara {self._test_recipient or 'testadressen'} får mailet",
+                colors.get("warning", ""),
+            )
         row(
             "✉️ Ämne:",
             self._subj or "(tomt)",
@@ -318,6 +343,19 @@ class SendConfirmDialog(QDialog):
             colors.get("accent", "") if self._has_free_text else "",
         )
         layout.addWidget(info)
+
+        if self._preflight_text:
+            preflight_box = QFrame()
+            preflight_box.setProperty("cssClass", "card")
+            preflight_layout = QVBoxLayout(preflight_box)
+            preflight_layout.setContentsMargins(14, 10, 14, 10)
+            preflight_title = QLabel("🔎 Förhandskontroll")
+            preflight_title.setStyleSheet("font-weight: bold;")
+            preflight_layout.addWidget(preflight_title)
+            preflight_label = QLabel(self._preflight_text)
+            preflight_label.setWordWrap(True)
+            preflight_layout.addWidget(preflight_label)
+            layout.addWidget(preflight_box)
 
         # Platshållare
         ph_box = QFrame()
@@ -380,7 +418,9 @@ class SendConfirmDialog(QDialog):
         layout.addWidget(self._receipt_check)
 
         question = QLabel(
-            f"Vill du skicka e-post till {self._total} mottagare?"
+            f"Vill du skicka testmail till {self._test_recipient}?"
+            if self._test_mode and self._total > 0
+            else f"Vill du skicka e-post till {self._total} mottagare?"
             if self._total > 0
             else "Inga mottagare har lagts till."
         )

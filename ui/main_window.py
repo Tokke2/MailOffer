@@ -272,6 +272,7 @@ from PyQt6.QtWidgets import (
     QGridLayout,
     QGroupBox,
     QHBoxLayout,
+    QInputDialog,
     QLabel,
     QLineEdit,
     QListWidget,
@@ -301,6 +302,11 @@ from core.email_lists import (
     read_email_list_file,
 )
 from core.email_sender import SendResult, send_email, test_smtp_connection
+from core.sender_profiles import (
+    SENDER_PROFILE_FIELDS,
+    normalize_sender_profile,
+)
+from core.send_preflight import build_send_preflight
 from core.i18n import get_language as i18n_get_language
 from core.i18n import normalize_language
 from core.i18n import set_language as i18n_set_language
@@ -767,6 +773,16 @@ class SendWorker(QThread):
         self.s = settings
         self.p = params
 
+    def _sender_profile(self) -> Dict[str, Any]:
+        raw = self.p.get("sender_profile")
+        return dict(raw) if isinstance(raw, dict) else {}
+
+    def _profile_value(self, key: str, fallback: Any = None) -> Any:
+        profile = self._sender_profile()
+        if key in profile:
+            return profile.get(key)
+        return self.s.get(key, fallback)
+
     def _resolve_default_bcc(self) -> List[str]:
         """Standard-Bcc + arkivkopia (deduplicerat, v4.7)."""
         default_bcc = list(
@@ -774,7 +790,9 @@ class SendWorker(QThread):
             or self.s.get("default_bcc", [])
             or []
         )
-        archive = str(self.s.get("archive_copy_email", "") or "").strip()
+        archive = str(
+            self._profile_value("archive_copy_email", "") or ""
+        ).strip()
         if archive:
             lowered = {str(email).lower() for email in default_bcc}
             if archive.lower() not in lowered:
@@ -798,13 +816,35 @@ class SendWorker(QThread):
                 except Exception:
                     image_settings = {}
 
+            profile = self._sender_profile()
+            is_test = bool(self.p.get("test_mode"))
+            sender_email_value = str(
+                self._profile_value("sender_email", "") or ""
+            )
+            own_email_value = ""
+            if not is_test:
+                if "own_email" in profile:
+                    own_email_value = str(profile.get("own_email") or "")
+                elif hasattr(self.s, "get_own_email"):
+                    own_email_value = str(self.s.get_own_email() or "")
+                else:
+                    own_email_value = str(self.s.get("own_email", "") or "")
+            if profile:
+                reply_to_value = str(
+                    profile.get("reply_to") or sender_email_value
+                )
+            elif hasattr(self.s, "get_reply_to"):
+                reply_to_value = str(self.s.get_reply_to() or "")
+            else:
+                reply_to_value = str(self.s.get("reply_to", "") or "")
+
             kwargs = dict(
-                smtp_server=self.s.get("smtp_server"),
-                smtp_port=self.s.get("smtp_port"),
-                sender_email=self.s.get("sender_email"),
-                sender_name=self.s.get("sender_name"),
-                username=self.s.get("username"),
-                password=self.s.get("password"),
+                smtp_server=self._profile_value("smtp_server"),
+                smtp_port=self._profile_value("smtp_port"),
+                sender_email=sender_email_value,
+                sender_name=self._profile_value("sender_name"),
+                username=self._profile_value("username"),
+                password=self._profile_value("password"),
                 word_file_path=self.p.get("template_path", ""),
                 replacements=replacements_sv,
                 include_english=include_english,
@@ -834,19 +874,14 @@ class SendWorker(QThread):
                 generate_html_from_plain=self.s.get(
                     "generate_html_from_plain", True
                 ),
-                own_email=(
-                    self.s.get_own_email()
-                    if hasattr(self.s, "get_own_email")
-                    else self.s.get("own_email", "")
+                own_email=own_email_value,
+                reply_to=reply_to_value,
+                use_ssl=bool(self._profile_value("use_ssl", False)),
+                # Standard-Bcc + arkivkopia används aldrig i testläge.
+                default_bcc=[] if is_test else self._resolve_default_bcc(),
+                extra_headers=(
+                    {"X-Epostofferten-Test": "1"} if is_test else None
                 ),
-                reply_to=(
-                    self.s.get_reply_to()
-                    if hasattr(self.s, "get_reply_to")
-                    else self.s.get("reply_to", "")
-                ),
-                # Standard-Bcc + arkivkopia (v4.7): fast adress som
-                # alltid får kopia (dold Bcc) på varje skickat mail.
-                default_bcc=self._resolve_default_bcc(),
                 translate_placeholders=(
                     self.s.should_translate_placeholders()
                     if hasattr(self.s, "should_translate_placeholders")
@@ -854,7 +889,7 @@ class SendWorker(QThread):
                 ),
                 # v5.0 – leverans-/läskvitto (email_sender v3.8)
                 request_receipts=bool(
-                    self.p.get("request_receipts", False)
+                    self.p.get("request_receipts", False) and not is_test
                 ),
                 dry_run=False,
                 on_progress=lambda current, total, message: (
@@ -2252,15 +2287,37 @@ class MainWindow(QMainWindow):
         self._send_summary.setWordWrap(True)
         layout.addWidget(self._send_summary)
 
+        profile_row = QHBoxLayout()
+        profile_row.addWidget(QLabel(tr("profile.label")))
+        self._send_profile_combo = QComboBox()
+        self._send_profile_combo.setMinimumWidth(280)
+        self._send_profile_combo.currentIndexChanged.connect(
+            lambda *_args: self._update_send_summary()
+        )
+        profile_row.addWidget(self._send_profile_combo, stretch=1)
+        layout.addLayout(profile_row)
+        self._refresh_sender_profile_combos()
+
         buttons = QHBoxLayout()
         btn_preview = QPushButton("👁️ Visa preview-tab")
         btn_preview.setProperty("cssClass", "purple")
         btn_preview.clicked.connect(lambda: self.select_tab("preview"))
         buttons.addWidget(btn_preview)
 
+        btn_preflight = QPushButton(tr("send.preflight_btn"))
+        btn_preflight.setProperty("cssClass", "accent")
+        btn_preflight.clicked.connect(self._show_preflight_only)
+        buttons.addWidget(btn_preflight)
+
+        self._btn_test_send = QPushButton(tr("send.test_btn"))
+        self._btn_test_send.setProperty("cssClass", "back")
+        self._btn_test_send.clicked.connect(self._send_test_mail)
+        buttons.addWidget(self._btn_test_send)
+
         buttons.addStretch()
 
         btn_send = QPushButton("📤 Skicka mail")
+        self._btn_send_step = btn_send
         btn_send.setProperty("cssClass", "send")
         btn_send.setMinimumHeight(42)
         btn_send.clicked.connect(self._send)
@@ -3552,10 +3609,23 @@ class MainWindow(QMainWindow):
             total_n = to_n + bcc_n
             if total_n > 0:
                 lang_text = f" · 🌐 SV {total_n - en_n} · EN {en_n}"
+        profile_text = ""
+        try:
+            profile = self._selected_sender_profile(
+                getattr(self, "_send_profile_combo", None)
+            )
+            if profile:
+                profile_text = " · " + tr(
+                    "profile.summary",
+                    name=str(profile.get("name") or "Standard"),
+                    email=str(profile.get("sender_email") or "–"),
+                )
+        except Exception:
+            profile_text = ""
         self._send_summary.setText(
             f"Till: {to_n} · Bcc: {bcc_n} · Bilagor: {len(self._attachments)} "
             f"({img_n} bilder, {file_n} övriga filer){lang_text} · "
-            f"Ämne: {subject_text}"
+            f"Ämne: {subject_text}{profile_text}"
         )
 
     # ────────────────────────────────────────────────────────────────
@@ -4344,6 +4414,30 @@ class MainWindow(QMainWindow):
     def _build_settings_group_smtp(self) -> QGroupBox:
         group = QGroupBox("📡 SMTP & Avsändare")
         form = QFormLayout(group)
+
+        self._settings_profile_combo = QComboBox()
+        self._settings_profile_combo.currentIndexChanged.connect(
+            self._on_settings_profile_changed
+        )
+        form.addRow(tr("profile.label"), self._settings_profile_combo)
+
+        profile_buttons_widget = QWidget()
+        profile_buttons = QHBoxLayout(profile_buttons_widget)
+        profile_buttons.setContentsMargins(0, 0, 0, 0)
+        btn_profile_save = QPushButton(tr("profile.save_btn"))
+        btn_profile_save.setProperty("cssClass", "success")
+        btn_profile_save.clicked.connect(self._save_sender_profile_from_form)
+        profile_buttons.addWidget(btn_profile_save)
+        btn_profile_new = QPushButton(tr("profile.new_btn"))
+        btn_profile_new.clicked.connect(self._new_sender_profile)
+        profile_buttons.addWidget(btn_profile_new)
+        btn_profile_delete = QPushButton(tr("profile.delete_btn"))
+        btn_profile_delete.setProperty("cssClass", "danger")
+        btn_profile_delete.clicked.connect(self._delete_sender_profile)
+        profile_buttons.addWidget(btn_profile_delete)
+        profile_buttons.addStretch()
+        form.addRow("", profile_buttons_widget)
+
         form.addRow("SMTP-server", self._make_settings_line("smtp_server", "SMTP-server"))
         form.addRow("SMTP-port", self._make_settings_line("smtp_port", "SMTP-port"))
         form.addRow("Avsändaradress", self._make_settings_line("sender_email", "Avsändaradress"))
@@ -4634,6 +4728,7 @@ class MainWindow(QMainWindow):
                     self._refresh_default_template_combo()
                 else:
                     widget.setCurrentText(str(value or ""))
+        self._refresh_sender_profile_combos()
 
     def _collect_settings_form(self) -> Dict[str, Any]:
         values: Dict[str, Any] = {}
@@ -4694,11 +4789,33 @@ class MainWindow(QMainWindow):
                 )
         except Exception:
             log.debug("Kunde inte normalisera donationsfält", exc_info=True)
+
+        selected_profile = self._selected_sender_profile(
+            getattr(self, "_settings_profile_combo", None)
+        )
+        selected_profile_id = str(selected_profile.get("id") or "")
+        if selected_profile_id:
+            values["active_sender_profile_id"] = selected_profile_id
+
         if hasattr(self.settings, "update_from_dict"):
             self.settings.update_from_dict(values)
         else:
             for key, value in values.items():
                 self.settings.set(key, value)
+
+        try:
+            sync_profile = getattr(
+                self.settings,
+                "sync_active_sender_profile_from_settings",
+                None,
+            )
+            if callable(sync_profile):
+                sync_profile(profile_id=selected_profile_id or None)
+        except Exception:
+            log.debug(
+                "Kunde inte synka avsändarprofil efter settings save",
+                exc_info=True,
+            )
 
         if self.settings.save():
             try:
@@ -4709,6 +4826,10 @@ class MainWindow(QMainWindow):
                     exc_info=True,
                 )
             self._status("💾 Inställningar sparade", "success")
+            self._refresh_sender_profile_combos(
+                settings_selected_id=selected_profile_id or None,
+                send_selected_id=selected_profile_id or None,
+            )
             # (v5.1) Applicera standardmallen direkt om den ändrades
             if "default_template" in values:
                 self._apply_default_template()
@@ -4724,6 +4845,278 @@ class MainWindow(QMainWindow):
             QMessageBox.critical(
                 self, "Inställningar", "Kunde inte spara inställningarna."
             )
+
+    # ────────────────────────────────────────────────────────────────
+    # Avsändarprofiler
+    # ────────────────────────────────────────────────────────────────
+
+    def _sender_profiles_list(self) -> List[Dict[str, Any]]:
+        getter = getattr(self.settings, "get_sender_profiles", None)
+        if callable(getter):
+            try:
+                return [dict(profile) for profile in getter()]
+            except Exception:
+                log.debug("Kunde inte läsa avsändarprofiler", exc_info=True)
+        raw = {
+            field: self.settings.get(field, "")
+            for field in SENDER_PROFILE_FIELDS
+        }
+        raw["id"] = "standard"
+        raw["name"] = (
+            str(self.settings.get("sender_name", "") or "").strip()
+            or str(self.settings.get("sender_email", "") or "").strip()
+            or "Standard"
+        )
+        return [normalize_sender_profile(raw)]
+
+    @staticmethod
+    def _sender_profile_display(profile: Mapping[str, Any]) -> str:
+        name = str(profile.get("name") or "Standard").strip()
+        email = str(profile.get("sender_email") or "").strip()
+        return f"{name} – {email}" if email and email != name else name
+
+    def _selected_sender_profile(
+        self, combo: Optional[QComboBox] = None
+    ) -> Dict[str, Any]:
+        profiles = self._sender_profiles_list()
+        profile_id = ""
+        if combo is not None:
+            try:
+                profile_id = str(combo.currentData() or "")
+            except Exception:
+                profile_id = ""
+        if profile_id:
+            for profile in profiles:
+                if str(profile.get("id")) == profile_id:
+                    return dict(profile)
+        getter = getattr(self.settings, "get_active_sender_profile", None)
+        if callable(getter):
+            try:
+                return dict(getter())
+            except Exception:
+                log.debug("Kunde inte hämta aktiv avsändarprofil", exc_info=True)
+        return dict(profiles[0]) if profiles else {}
+
+    def _refresh_sender_profile_combos(
+        self,
+        *,
+        settings_selected_id: Optional[str] = None,
+        send_selected_id: Optional[str] = None,
+    ) -> None:
+        profiles = self._sender_profiles_list()
+        active_id = ""
+        getter = getattr(
+            self.settings, "get_active_sender_profile_id", None
+        )
+        if callable(getter):
+            try:
+                active_id = str(getter() or "")
+            except Exception:
+                active_id = ""
+        combo_specs = (
+            ("_settings_profile_combo", settings_selected_id),
+            ("_send_profile_combo", send_selected_id),
+        )
+        valid_ids = {str(profile.get("id")) for profile in profiles}
+        for attr, wanted_override in combo_specs:
+            combo = getattr(self, attr, None)
+            if combo is None:
+                continue
+            current = ""
+            try:
+                current = str(combo.currentData() or "")
+            except Exception:
+                current = ""
+            wanted = str(wanted_override or current or active_id or "")
+            if wanted not in valid_ids:
+                wanted = active_id
+            combo.blockSignals(True)
+            combo.clear()
+            selected_index = 0
+            for index, profile in enumerate(profiles):
+                combo.addItem(
+                    self._sender_profile_display(profile),
+                    str(profile.get("id") or ""),
+                )
+                if str(profile.get("id")) == wanted:
+                    selected_index = index
+            if profiles:
+                combo.setCurrentIndex(selected_index)
+            combo.blockSignals(False)
+
+    def _apply_sender_profile_to_settings_form(
+        self, profile: Mapping[str, Any]
+    ) -> None:
+        if "smtp_server" not in self._settings_widgets:
+            return
+        for field in SENDER_PROFILE_FIELDS:
+            widget = self._settings_widgets.get(field)
+            if widget is None:
+                continue
+            value = profile.get(field)
+            if isinstance(widget, QLineEdit):
+                widget.setText("" if value is None else str(value))
+            elif isinstance(widget, QCheckBox):
+                widget.setChecked(bool(value))
+
+    def _on_settings_profile_changed(self, _index: int = -1) -> None:
+        combo = getattr(self, "_settings_profile_combo", None)
+        if combo is None:
+            return
+        profile = self._selected_sender_profile(combo)
+        self._apply_sender_profile_to_settings_form(profile)
+        if profile:
+            self._status(
+                tr(
+                    "profile.loaded_status",
+                    name=str(profile.get("name") or "Standard"),
+                ),
+                "info",
+            )
+
+        self._refresh_preview()
+
+    def _sender_profile_from_form(
+        self,
+        *,
+        name: Optional[str] = None,
+        profile_id: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        values = self._collect_settings_form()
+        selected = self._selected_sender_profile(
+            getattr(self, "_settings_profile_combo", None)
+        )
+        profile_name = str(
+            name
+            or selected.get("name")
+            or values.get("sender_name")
+            or values.get("sender_email")
+            or "Standard"
+        ).strip()
+        raw: Dict[str, Any] = {
+            "id": str(profile_id or selected.get("id") or ""),
+            "name": profile_name,
+        }
+        for field in SENDER_PROFILE_FIELDS:
+            raw[field] = values.get(field)
+        return normalize_sender_profile(raw)
+
+    def _save_sender_profile_from_form(self) -> None:
+        selected = self._selected_sender_profile(
+            getattr(self, "_settings_profile_combo", None)
+        )
+        values = self._collect_settings_form()
+        default_name = str(
+            values.get("sender_name")
+            or selected.get("name")
+            or values.get("sender_email")
+            or "Standard"
+        ).strip()
+        name, ok = QInputDialog.getText(
+            self,
+            tr("profile.save_title"),
+            tr("profile.name_prompt"),
+            text=default_name,
+        )
+        if not ok:
+            return
+        profile = self._sender_profile_from_form(
+            name=name.strip() or default_name,
+            profile_id=str(selected.get("id") or ""),
+        )
+        upsert = getattr(self.settings, "upsert_sender_profile", None)
+        if not callable(upsert):
+            QMessageBox.warning(
+                self, tr("profile.save_title"), tr("profile.name_prompt")
+            )
+            return
+        saved = upsert(profile, make_active=True, save=True)
+        saved_id = str(saved.get("id") or profile.get("id") or "")
+        self._refresh_sender_profile_combos(
+            settings_selected_id=saved_id,
+            send_selected_id=saved_id,
+        )
+        self._reload_settings_form()
+        self._status(
+            tr(
+                "profile.saved_status",
+                name=str(saved.get("name") or profile.get("name") or ""),
+            ),
+            "success",
+        )
+        self._update_send_summary()
+
+    def _new_sender_profile(self) -> None:
+        name, ok = QInputDialog.getText(
+            self,
+            tr("profile.new_title"),
+            tr("profile.name_prompt"),
+        )
+        if not ok or not name.strip():
+            return
+        raw: Dict[str, Any] = {
+            field: "" for field in SENDER_PROFILE_FIELDS
+        }
+        raw.update(
+            {
+                "name": name.strip(),
+                "sender_name": name.strip(),
+                "smtp_port": self.settings.get("smtp_port", 587),
+                "use_ssl": bool(self.settings.get("use_ssl", False)),
+            }
+        )
+        profile = normalize_sender_profile(
+            raw,
+            existing_ids=[
+                str(item.get("id") or "")
+                for item in self._sender_profiles_list()
+            ],
+        )
+        upsert = getattr(self.settings, "upsert_sender_profile", None)
+        if not callable(upsert):
+            return
+        saved = upsert(profile, make_active=False, save=True)
+        saved_id = str(saved.get("id") or profile.get("id") or "")
+        self._refresh_sender_profile_combos(
+            settings_selected_id=saved_id
+        )
+        self._apply_sender_profile_to_settings_form(saved)
+        self._status(
+            tr(
+                "profile.saved_status",
+                name=str(saved.get("name") or name.strip()),
+            ),
+            "success",
+        )
+
+    def _delete_sender_profile(self) -> None:
+        selected = self._selected_sender_profile(
+            getattr(self, "_settings_profile_combo", None)
+        )
+        profile_id = str(selected.get("id") or "")
+        if not profile_id:
+            return
+        name = str(selected.get("name") or profile_id)
+        reply = QMessageBox.question(
+            self,
+            tr("profile.delete_btn"),
+            tr("profile.delete_confirm", name=name),
+            QMessageBox.StandardButton.Yes
+            | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        if reply != QMessageBox.StandardButton.Yes:
+            return
+        delete = getattr(self.settings, "delete_sender_profile", None)
+        if not callable(delete) or not delete(profile_id, save=True):
+            self._status("⚠️ Minst en avsändarprofil måste finnas", "warning")
+            return
+        self._reload_settings_form()
+        self._refresh_sender_profile_combos()
+        self._status(
+            tr("profile.deleted_status", name=name), "success"
+        )
+        self._update_send_summary()
 
     def _test_smtp_from_settings(self) -> None:
         values = self._collect_settings_form()
@@ -4999,12 +5392,17 @@ class MainWindow(QMainWindow):
     # Sändning
     # ────────────────────────────────────────────────────────────────
 
-    def _default_bcc_with_archive(self) -> List[str]:
-        """Standard-Bcc + arkivkopia (deduplicerat, v4.7)."""
+    def _default_bcc_with_archive(
+        self, profile: Optional[Mapping[str, Any]] = None
+    ) -> List[str]:
+        """Standard-Bcc + vald profils arkivkopia (deduplicerat)."""
         default_bcc = list(self.settings.get("default_bcc", []) or [])
-        archive = str(
-            self.settings.get("archive_copy_email", "") or ""
-        ).strip()
+        archive_source = (
+            profile.get("archive_copy_email")
+            if profile is not None
+            else self.settings.get("archive_copy_email", "")
+        )
+        archive = str(archive_source or "").strip()
         if archive and _looks_like_email(archive):
             lowered = {str(email).lower() for email in default_bcc}
             if archive.lower() not in lowered:
@@ -5037,6 +5435,10 @@ class MainWindow(QMainWindow):
                 if str(key).lower() not in EN_ONLY_PLACEHOLDERS
             }
 
+        sender_profile = self._selected_sender_profile(
+            getattr(self, "_send_profile_combo", None)
+        )
+
         return {
             "recipients_to": recipients_to,
             "recipients_bcc": recipients_bcc,
@@ -5052,7 +5454,15 @@ class MainWindow(QMainWindow):
             "language": "both" if include_english else "sv",
             "free_text": self._free_edit.toPlainText().strip(),
             "attachments": list(self._attachments),
-            "default_bcc": self._default_bcc_with_archive(),
+            "sender_profile": sender_profile,
+            "sender_profile_id": str(sender_profile.get("id") or ""),
+            "sender_profile_name": str(sender_profile.get("name") or ""),
+            "sender_email": str(sender_profile.get("sender_email") or ""),
+            "sender_name": str(sender_profile.get("sender_name") or ""),
+            "own_email": str(sender_profile.get("own_email") or ""),
+            "default_bcc": self._default_bcc_with_archive(sender_profile),
+            "test_mode": False,
+            "test_recipient": "",
             # v5.0 – standardvärde för kvittocheckboxen i sänddialogen
             "request_receipts": bool(
                 self.settings.get("request_receipts", False)
@@ -5065,11 +5475,239 @@ class MainWindow(QMainWindow):
             "warnings": [],
         }
 
-    def _send(self) -> None:
+    @staticmethod
+    def _format_bytes(num_bytes: int) -> str:
+        size = float(max(0, int(num_bytes or 0)))
+        for unit in ("B", "KB", "MB", "GB"):
+            if size < 1024 or unit == "GB":
+                return f"{size:.0f} {unit}" if unit == "B" else f"{size:.1f} {unit}"
+            size /= 1024.0
+        return f"{size:.1f} GB"
+
+    def _preflight_report(self, params: Dict[str, Any]) -> Any:
+        return build_send_preflight(
+            params,
+            bcc_batch_size=self.settings.get("bcc_batch_size", 0),
+            skip_invalid_recipients=bool(
+                self.settings.get("skip_invalid_recipients", True)
+            ),
+        )
+
+    @staticmethod
+    def _format_preflight_issue(issue: Any) -> str:
+        try:
+            code, values = issue
+            values = dict(values or {})
+        except Exception:
+            return str(issue)
+        joined = {}
+        for key, value in values.items():
+            if isinstance(value, (list, tuple)):
+                joined[key] = ", ".join(str(item) for item in value)
+            else:
+                joined[key] = value
+        key_map = {
+            "no_recipients": "send.issue.no_recipients",
+            "missing_smtp_server": "send.issue.missing_smtp_server",
+            "invalid_smtp_port": "send.issue.invalid_smtp_port",
+            "invalid_sender": "send.issue.invalid_sender",
+            "missing_template": "send.issue.missing_template",
+            "invalid_recipients": "send.issue.invalid_recipients",
+            "missing_attachments": "send.issue.missing_attachments",
+            "overlap": "send.issue.overlap",
+            "invalid_recipients_skipped": "send.issue.invalid_recipients_skipped",
+            "missing_subject": "send.issue.missing_subject",
+            "missing_placeholders": "send.issue.missing_placeholders",
+            "many_recipients": "send.issue.many_recipients",
+            "bcc_no_batch": "send.issue.bcc_no_batch",
+            "missing_username": "send.issue.missing_username",
+            "missing_password": "send.issue.missing_password",
+            "sender_username_domain_mismatch": "send.issue.domain_mismatch",
+        }
+        # Core-rapporten använder "keys"/"files"; i18n-texterna likaså.
+        return tr(key_map.get(str(code), "send.issue.missing_subject"), **joined)
+
+    def _format_preflight_text(self, report: Any) -> str:
+        lines = [
+            tr(
+                "send.preflight.sender",
+                name=str(getattr(report, "profile_name", "") or "Standard"),
+                email=str(getattr(report, "sender_email", "") or "–"),
+            ),
+            tr(
+                "send.preflight.smtp",
+                server=str(getattr(report, "smtp_server", "") or "–"),
+                port=int(getattr(report, "smtp_port", 0) or 0),
+            ),
+            tr(
+                "send.preflight.recipients",
+                total=int(getattr(report, "total", 0) or 0),
+                to=len(getattr(report, "to_final", []) or []),
+                bcc=len(getattr(report, "bcc_final", []) or []),
+            ),
+            tr(
+                "send.preflight.languages",
+                sv=int(getattr(report, "sv_count", 0) or 0),
+                en=int(getattr(report, "en_count", 0) or 0),
+            ),
+            tr(
+                "send.preflight.attachments",
+                count=int(getattr(report, "attachment_count", 0) or 0),
+                size=self._format_bytes(
+                    int(getattr(report, "attachment_bytes", 0) or 0)
+                ),
+            ),
+        ]
+        blockers = list(getattr(report, "blockers", []) or [])
+        warnings = list(getattr(report, "warnings", []) or [])
+        lines.append("")
+        if blockers:
+            lines.append(tr("send.preflight.blockers"))
+            lines.extend(
+                f"• {self._format_preflight_issue(issue)}"
+                for issue in blockers
+            )
+        else:
+            lines.append(tr("send.preflight.no_blockers"))
+        if warnings:
+            lines.append("")
+            lines.append(tr("send.preflight.warnings"))
+            lines.extend(
+                f"• {self._format_preflight_issue(issue)}"
+                for issue in warnings
+            )
+        return "\n".join(lines)
+
+    def _show_preflight_only(self) -> None:
         params = self._gather_send_params()
+        report = self._preflight_report(params)
+        text = self._format_preflight_text(report)
+        if getattr(report, "blockers", None):
+            QMessageBox.warning(
+                self, tr("send.preflight_title"), text
+            )
+        else:
+            QMessageBox.information(
+                self, tr("send.preflight_title"), text
+            )
+
+    def _make_test_params(
+        self, params: Dict[str, Any], test_recipient: str
+    ) -> Dict[str, Any]:
+        """Bygg säkra testparametrar: bara testadressen får mailet."""
+        test_email = str(test_recipient or "").strip().lower()
+        test_lang = "sv"
+        store = getattr(self, "_contact_store", None)
+        contact = None
+        if store is not None:
+            try:
+                contact = store.get(test_email)
+            except Exception:
+                contact = None
+        if contact is not None:
+            test_lang = self._contact_lang(test_email)
+        else:
+            combo = getattr(self, "_new_lang_combo", None)
+            if combo is not None:
+                try:
+                    test_lang = (
+                        "en" if str(combo.currentData() or "sv") == "en" else "sv"
+                    )
+                except Exception:
+                    test_lang = "sv"
+
+        test_params = dict(params)
+        replacements = dict(params.get("replacements") or {})
+        if test_lang != "en":
+            replacements = {
+                key: value
+                for key, value in replacements.items()
+                if str(key).lower() not in EN_ONLY_PLACEHOLDERS
+            }
+        free_text = str(params.get("free_text") or "").strip()
+        banner = tr("send.test_banner")
+        test_params.update(
+            {
+                "recipients_to": [test_email],
+                "recipients_bcc": [],
+                "recipients_to_lang": {test_email: test_lang},
+                "recipients_bcc_lang": {},
+                "include_english": test_lang == "en",
+                "language": test_lang,
+                "replacements": replacements,
+                "default_bcc": [],
+                "request_receipts": False,
+                "test_mode": True,
+                "test_recipient": test_email,
+                "test_language": test_lang,
+                "free_text": banner + (f"\n\n{free_text}" if free_text else ""),
+            }
+        )
+        return test_params
+
+    def _send_test_mail(self) -> None:
+        if self._worker is not None and self._worker.isRunning():
+            self._status("⏳ En sändning pågår redan…", "warning")
+            return
+        profile = self._selected_sender_profile(
+            getattr(self, "_send_profile_combo", None)
+        )
+        default_test = str(
+            profile.get("own_email")
+            or profile.get("sender_email")
+            or self.settings.get("own_email", "")
+            or self.settings.get("sender_email", "")
+            or ""
+        ).strip()
+        address, ok = QInputDialog.getText(
+            self,
+            tr("send.test_title"),
+            tr("send.test_prompt"),
+            text=default_test,
+        )
+        if not ok:
+            return
+        address = str(address or "").strip().lower()
+        if not _looks_like_email(address):
+            QMessageBox.warning(
+                self, tr("send.test_title"), tr("send.test_invalid")
+            )
+            return
+        self._send(test_recipient=address)
+
+    def _set_send_buttons_enabled(self, enabled: bool) -> None:
+        for attr in ("btn_send", "_btn_send_step", "_btn_test_send"):
+            button = getattr(self, attr, None)
+            if button is not None:
+                try:
+                    button.setEnabled(bool(enabled))
+                except Exception:
+                    pass
+
+    def _send(self, test_recipient: Optional[str] = None) -> None:
+        if not isinstance(test_recipient, str) or not test_recipient.strip():
+            test_recipient = None
+        if self._worker is not None and self._worker.isRunning():
+            self._status("⏳ En sändning pågår redan…", "warning")
+            return
+
+        params = self._gather_send_params()
+        if test_recipient:
+            params = self._make_test_params(params, test_recipient)
+
+        report = self._preflight_report(params)
+        params["preflight_text"] = self._format_preflight_text(report)
+        params["warnings"] = [
+            self._format_preflight_issue(issue)
+            for issue in (
+                list(getattr(report, "blockers", []) or [])
+                + list(getattr(report, "warnings", []) or [])
+            )
+        ]
+
         recipients_to = params["recipients_to"]
         recipients_bcc = params["recipients_bcc"]
-        total = len(recipients_to) + len(recipients_bcc)
+        total = int(getattr(report, "total", 0) or 0)
 
         if total == 0:
             QMessageBox.warning(
@@ -5107,12 +5745,21 @@ class MainWindow(QMainWindow):
             self.select_tab("send")
             return
 
+        if getattr(report, "blockers", None):
+            QMessageBox.warning(
+                self,
+                tr("send.preflight.blocked_title"),
+                str(params.get("preflight_text") or ""),
+            )
+            self._status("⛔ Förhandskontrollen stoppar sändningen", "error")
+            return
+
         if not self._confirm_send(params, total):
             self._status("❌ Sändning avbruten")
             return
 
         self._last_send_params = dict(params)
-        self.btn_send.setEnabled(False)
+        self._set_send_buttons_enabled(False)
         self._status("⏳ Skickar…", "warning")
 
         if self._tray_ref is not None and hasattr(
@@ -5188,7 +5835,7 @@ class MainWindow(QMainWindow):
 
     @pyqtSlot(object)
     def _send_done(self, result: SendResult) -> None:
-        self.btn_send.setEnabled(True)
+        self._set_send_buttons_enabled(True)
         success = bool(getattr(result, "success", False))
 
         if self._tray_ref is not None and hasattr(
@@ -5200,6 +5847,19 @@ class MainWindow(QMainWindow):
 
         if success:
             total = int(getattr(result, "total_recipients", 0) or 0)
+            if bool(self._last_send_params.get("test_mode")):
+                test_email = str(
+                    self._last_send_params.get("test_recipient") or ""
+                )
+                self._status(
+                    f"🧪 Testmail skickat till {test_email}", "success"
+                )
+                QMessageBox.information(
+                    self,
+                    tr("send.test_done_title"),
+                    tr("send.test_done_text", email=test_email),
+                )
+                return
             self._status(f"✅ Skickat till {total} mottagare!", "success")
             self.bus.publish(
                 "mail.sent",
@@ -5234,7 +5894,7 @@ class MainWindow(QMainWindow):
 
     @pyqtSlot(str)
     def _send_err(self, message: str) -> None:
-        self.btn_send.setEnabled(True)
+        self._set_send_buttons_enabled(True)
         if self._tray_ref is not None and hasattr(
             self._tray_ref, "update_icon"
         ):
