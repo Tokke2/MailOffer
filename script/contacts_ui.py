@@ -121,14 +121,18 @@ from PyQt6.QtWidgets import (
     QCheckBox,
     QComboBox,
     QDialog,
+    QDialogButtonBox,
     QFileDialog,
+    QFormLayout,
     QGridLayout,
     QGroupBox,
     QHBoxLayout,
+    QInputDialog,
     QLabel,
     QLineEdit,
     QMenu,
     QMessageBox,
+    QPlainTextEdit,
     QPushButton,
     QSplitter,
     QTreeWidget,
@@ -138,7 +142,13 @@ from PyQt6.QtWidgets import (
 )
 
 # core
+from core.email_lists import (
+    ParsedEmailList,
+    parse_email_list_text,
+    read_email_list_file,
+)
 from core.event_bus import EventBus
+from core.i18n import tr
 
 # ui
 from ui.styles import StyleEngine, get_colors
@@ -520,45 +530,122 @@ class ContactStore:
             )
         return result
 
-    def import_csv(self, path: str, encoding: str = "utf-8") -> Dict[str, int]:
-        stats = {"added": 0, "updated": 0, "invalid": 0}
-        try:
-            with open(path, newline="", encoding=encoding) as handle:
-                for row in csv.DictReader(handle):
-                    email = row.get("email", "").strip()
-                    if not email or not validate_email_address(email):
-                        stats["invalid"] += 1
-                        continue
-                    cats_raw = row.get("categories", row.get("group", ""))
-                    categories = [
-                        part.strip()
-                        for part in re.split(r"[;,]", cats_raw)
-                        if part.strip()
-                    ]
-                    existing = self.get(email)
-                    if existing:
-                        self.update(
-                            email,
-                            name=row.get("name", existing.name),
-                            company=row.get("company", existing.company),
-                            language=row.get("language", existing.language),
-                            categories=categories or existing.categories,
+    def _import_parsed_email_list(
+        self,
+        parsed: ParsedEmailList,
+        *,
+        category: str = "",
+        default_language: str = "sv",
+    ) -> Dict[str, int]:
+        """Slå ihop en tolkad e-postlista med adressboken och spara en gång."""
+        stats = {
+            "added": 0,
+            "updated": 0,
+            "invalid": int(parsed.invalid),
+            "duplicates": int(parsed.duplicates),
+        }
+        forced_category = str(category or "").strip()
+        fallback_language = (
+            "en" if str(default_language or "sv").strip().lower() == "en" else "sv"
+        )
+        changed = False
+
+        with self._lock:
+            for parsed_contact in parsed.contacts:
+                email = str(parsed_contact.email or "").strip().lower()
+                if not email or not validate_email_address(email):
+                    stats["invalid"] += 1
+                    continue
+
+                existing = self._contacts.get(email)
+                categories: List[str] = []
+                category_sources = (
+                    list(existing.categories) if existing else [],
+                    list(parsed_contact.categories),
+                    [forced_category] if forced_category else [],
+                )
+                for values in category_sources:
+                    for value in values:
+                        category_value = str(value or "").strip()
+                        if category_value and category_value not in categories:
+                            categories.append(category_value)
+
+                name = parsed_contact.name or (existing.name if existing else "")
+                company = parsed_contact.company or (
+                    existing.company if existing else ""
+                )
+                language = parsed_contact.language or (
+                    existing.language if existing else fallback_language
+                )
+                group = (
+                    existing.group
+                    if existing and existing.group
+                    else (
+                        forced_category
+                        or (
+                            parsed_contact.categories[0]
+                            if parsed_contact.categories
+                            else ""
                         )
-                        stats["updated"] += 1
-                    else:
-                        self.upsert(
-                            email,
-                            name=row.get("name", ""),
-                            company=row.get("company", ""),
-                            language=row.get("language", "sv"),
-                            categories=categories,
-                        )
-                        stats["added"] += 1
-        except Exception as exc:
-            log.error("CSV-import: %s", exc)
-            raise
-        self._publish("import_csv")
+                    )
+                )
+                merged = Contact(
+                    email=email,
+                    name=name,
+                    company=company,
+                    group=group,
+                    language=language,
+                    categories=categories,
+                )
+
+                if existing is None:
+                    self._contacts[email] = merged
+                    stats["added"] += 1
+                    changed = True
+                elif merged.to_dict() != existing.to_dict():
+                    self._contacts[email] = merged
+                    stats["updated"] += 1
+                    changed = True
+                else:
+                    stats["duplicates"] += 1
+
+            if changed:
+                self._save_locked()
+
+        self._publish("import_email_list")
         return stats
+
+    def import_email_list_text(
+        self,
+        text: str,
+        *,
+        category: str = "",
+        default_language: str = "sv",
+    ) -> Dict[str, int]:
+        """Importera inklistrad text/CSV/Excel-rader till adressboken."""
+        return self._import_parsed_email_list(
+            parse_email_list_text(text),
+            category=category,
+            default_language=default_language,
+        )
+
+    def import_email_list(
+        self,
+        path: str,
+        *,
+        category: str = "",
+        default_language: str = "sv",
+    ) -> Dict[str, int]:
+        """Importera en .txt/.csv/.tsv-fil med adresser och metadata."""
+        return self._import_parsed_email_list(
+            read_email_list_file(path),
+            category=category,
+            default_language=default_language,
+        )
+
+    def import_csv(self, path: str, encoding: str = "utf-8") -> Dict[str, int]:
+        """Bakåtkompatibelt namn – numera samma flexibla listimport."""
+        return self.import_email_list(path)
 
     def export_csv(self, path: str, encoding: str = "utf-8") -> None:
         with open(path, "w", newline="", encoding=encoding) as handle:
@@ -760,6 +847,80 @@ class _ContactEditDialog(QDialog):
         return self._result
 
 
+class _PasteEmailListDialog(QDialog):
+    """Klistra in en hel e-postlista och spara den som kategori/lista."""
+
+    def __init__(self, parent: Optional[QWidget] = None) -> None:
+        super().__init__(parent)
+        self.setWindowTitle(tr("emaillist.paste_contacts_title"))
+        self.setModal(True)
+        self.resize(720, 560)
+
+        layout = QVBoxLayout(self)
+        layout.setSpacing(10)
+
+        form = QFormLayout()
+        self._list_name_edit = QLineEdit()
+        self._list_name_edit.setPlaceholderText(
+            tr("emaillist.list_name_placeholder")
+        )
+        form.addRow(tr("emaillist.list_name_label"), self._list_name_edit)
+
+        self._language_combo = QComboBox()
+        self._language_combo.addItem("🇸🇪 Svenska (SV)", "sv")
+        self._language_combo.addItem("🇬🇧 Engelska (EN)", "en")
+        form.addRow(tr("emaillist.language_label"), self._language_combo)
+        layout.addLayout(form)
+
+        layout.addWidget(QLabel(f"<b>{tr('emaillist.text_label')}</b>"))
+        self._text_edit = QPlainTextEdit()
+        self._text_edit.setPlaceholderText(tr("emaillist.text_placeholder"))
+        self._text_edit.setMinimumHeight(260)
+        layout.addWidget(self._text_edit, stretch=1)
+
+        hint = QLabel(tr("emaillist.hint"))
+        hint.setWordWrap(True)
+        hint.setProperty("cssClass", "subtext")
+        layout.addWidget(hint)
+
+        buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Cancel)
+        import_button = buttons.addButton(
+            tr("emaillist.import_action"),
+            QDialogButtonBox.ButtonRole.AcceptRole,
+        )
+        import_button.setProperty("cssClass", "success")
+        import_button.setDefault(True)
+        buttons.accepted.connect(self._on_accept)
+        buttons.rejected.connect(self.reject)
+        layout.addWidget(buttons)
+
+    def _on_accept(self) -> None:
+        if not self._text_edit.toPlainText().strip():
+            QMessageBox.warning(
+                self,
+                tr("emaillist.paste_contacts_title"),
+                tr("emaillist.empty_text"),
+            )
+            return
+        if not parse_email_list_text(self._text_edit.toPlainText()).emails:
+            QMessageBox.warning(
+                self,
+                tr("emaillist.paste_contacts_title"),
+                tr("emaillist.no_valid"),
+            )
+            return
+        self.accept()
+
+    def list_name(self) -> str:
+        return self._list_name_edit.text().strip()
+
+    def language(self) -> str:
+        return str(self._language_combo.currentData() or "sv")
+
+    def text(self) -> str:
+        return self._text_edit.toPlainText()
+
+
 # ═══════════════════════════════════════════════════════════════════════════
 # ContactsTab (PyQt6)
 # ═══════════════════════════════════════════════════════════════════════════
@@ -915,9 +1076,13 @@ class ContactsTab(QWidget):
         info_layout.addLayout(crud_row)
 
         csv_row = QHBoxLayout()
-        btn_import = QPushButton("📥 Importera CSV")
+        btn_import = QPushButton(tr("emaillist.import_btn"))
         btn_import.clicked.connect(self._import_csv)
         csv_row.addWidget(btn_import)
+
+        btn_paste = QPushButton(tr("emaillist.paste_btn"))
+        btn_paste.clicked.connect(self._paste_email_list)
+        csv_row.addWidget(btn_paste)
 
         btn_export = QPushButton("📤 Exportera CSV")
         btn_export.clicked.connect(self._export_csv)
@@ -1353,27 +1518,84 @@ class ContactsTab(QWidget):
             f"{len(emails)} kontakt(er) lades till i {target.upper()}.",
         )
 
+    def _show_import_stats(self, stats: Dict[str, int]) -> None:
+        QMessageBox.information(
+            self,
+            tr("emaillist.done_title"),
+            tr(
+                "emaillist.contacts_stats",
+                added=int(stats.get("added", 0)),
+                updated=int(stats.get("updated", 0)),
+                duplicates=int(stats.get("duplicates", 0)),
+                invalid=int(stats.get("invalid", 0)),
+            ),
+        )
+
+    def _focus_imported_category(self, category: str) -> None:
+        """Visa den importerade listan direkt via kategorifiltret."""
+        self.refresh_list()
+        wanted = str(category or "").strip()
+        if not wanted:
+            return
+        index = self._group_cb.findText(wanted)
+        if index >= 0:
+            self._group_cb.setCurrentIndex(index)
+
     def _import_csv(self) -> None:
+        """Importera TXT/CSV/TSV och spara adresserna under ett listnamn."""
         path, _ = QFileDialog.getOpenFileName(
             self,
-            "Importera kontakter",
+            tr("emaillist.file_title"),
             "",
-            "CSV-filer (*.csv);;Alla filer (*.*)",
+            tr("emaillist.file_filter"),
         )
         if not path or not self._store:
             return
+
+        category, ok = QInputDialog.getText(
+            self,
+            tr("emaillist.file_title"),
+            tr("emaillist.category_prompt"),
+            text=Path(path).stem,
+        )
+        if not ok:
+            return
+
         try:
-            stats = self._store.import_csv(path)
-            QMessageBox.information(
-                self,
-                "✅ Import klar",
-                f"Tillagda: {stats['added']}\n"
-                f"Uppdaterade: {stats['updated']}\n"
-                f"Ogiltiga: {stats['invalid']}",
-            )
-            self.refresh_list()
+            import_method = getattr(self._store, "import_email_list", None)
+            if callable(import_method):
+                stats = import_method(path, category=category.strip())
+            else:
+                stats = self._store.import_csv(path)
         except Exception as exc:
-            QMessageBox.critical(self, "❌ Import misslyckades", str(exc))
+            QMessageBox.critical(
+                self, tr("emaillist.failed_title"), str(exc)
+            )
+            return
+
+        self._focus_imported_category(category)
+        self._show_import_stats(stats)
+
+    def _paste_email_list(self) -> None:
+        """Klistra in adresser eller hela rader kopierade från Excel/CSV."""
+        if not self._store:
+            return
+        dialog = _PasteEmailListDialog(self)
+        if dialog.exec() != QDialog.DialogCode.Accepted:
+            return
+        try:
+            stats = self._store.import_email_list_text(
+                dialog.text(),
+                category=dialog.list_name(),
+                default_language=dialog.language(),
+            )
+        except Exception as exc:
+            QMessageBox.critical(
+                self, tr("emaillist.failed_title"), str(exc)
+            )
+            return
+        self._focus_imported_category(dialog.list_name())
+        self._show_import_stats(stats)
 
     def _export_csv(self) -> None:
         path, _ = QFileDialog.getSaveFileName(

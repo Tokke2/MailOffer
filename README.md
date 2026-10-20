@@ -15,7 +15,9 @@ _English summary below._
   namn/format → svensk text → valfri engelsk text (autoöversättning) →
   förhandsgranskning med testvärden → spara
 - 👥 **Kontakter & grupper** med språk per mottagare – EN får alltid
-  engelsk version, SV alltid svensk (VIN skickas bara i EN-mailet)
+  engelsk version, SV alltid svensk (VIN skickas bara i EN-mailet).
+  **E-postlistor** kan importeras från TXT/CSV/TSV eller klistras in
+  (även kopierade Excel-rader) och sparas under ett listnamn
 - 🖼️ Bilagor med drag & drop och bildkomprimering, fritext ovan signatur
 - 🌐 **Gränssnitt på svenska/engelska** (nytt i 5.4) – byt i menyn
   **Språk** eller i Inställningar (omstart erbjuds)
@@ -55,6 +57,28 @@ En exempelmall finns i `Mallar/` – skapa egna med
    knappen *Översätt automatiskt* ger ett utkast av den svenska texten.
 5. Förhandsgranska med testvärden, spara – klart! Mallen hamnar i
    `Mallar/` och kan väljas direkt i Skicka-fliken.
+
+## 📥 Lägg in e-postlistor
+
+Det går att lägga in många adresser på en gång på två ställen:
+
+- **Kontakter → 📥 Importera e-postlista**: välj en `.txt`-, `.csv`-
+  eller `.tsv`-fil och ge importen ett listnamn/kategori. Svensk
+  semikolon-CSV med rubriker som `E-post;Namn;Företag;Språk;Kategori`
+  fungerar, liksom en enkel textfil med en adress per rad.
+- **Kontakter → 📋 Klistra in lista**: klistra in adresser, Outlook-text
+  (`Namn <namn@example.se>; …`), CSV-rader eller celler kopierade
+  från Excel. `.xlsx` läses inte direkt – spara som CSV eller kopiera
+  cellerna i stället.
+- **Skicka → Steg 3 Mottagare**: varje To/Bcc-ruta har **📋 Klistra in
+  lista** och **📥 Importera e-postlista** för det aktuella utskicket.
+  Det går också att klistra flera adresser med `;` eller `,` direkt i
+  adressfältet och trycka **Lägg till**.
+
+Dubbletter tas bort automatiskt och importen visar hur många som
+lades till, uppdaterades eller hoppades över som ogiltiga. I Kontakter
+kan du filtrera på listnamnet/kategorin och använda
+**Alla visade → To/Bcc**.
 
 ## 🔄 Uppdateringar & att publicera en release (för ägaren)
 

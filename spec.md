@@ -29,6 +29,7 @@
 # V6.4 (5.4-uppföljning): DONATIONSSIDA I APPEN – Ko-fi + PayPal (inbyggda standardlänkar, bytbara i Inställningar) + Swish-QR (legacy C-format); qrcode OPTIONAL
 # V6.4: START UTAN KONSOL – Starta EmailApp.vbs (hittar pythonw, kör annars Installera_Python.bat /silent dolt = senaste Python 3.12) + Python-vakt i main.pyw (MIN 3.10)
 # V6.4: UPDATE TRAY – tray-notis direkt, installationsfrågan när fönstret öppnas; NY IKON överallt med transparens (tools/make_icon.py); HTML-mall escape-fix
+# V6.5: E-POSTLISTOR (core/email_lists) – importera TXT/CSV/TSV eller klistra in (även Excel-rader) i Kontakter och direkt i To/Bcc; listnamn = kategori, dubbletter/ogiltiga rapporteras
 # V6.2: VIN ENDAST I [en] – fält syns/skickas bara till EN-mottagare
 # V6.1: KOMMANDE VALDA (2026-09-16) – To/Bcc-dubblett, historik öppna, bild-thumbnails,
 #       bättre autostart, saknade tillägg vid dubbelklick → fråga om installera

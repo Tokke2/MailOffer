@@ -265,6 +265,7 @@ from PyQt6.QtWidgets import (
     QCheckBox,
     QComboBox,
     QDialog,
+    QDialogButtonBox,
     QFileDialog,
     QFormLayout,
     QFrame,
@@ -294,6 +295,11 @@ from PyQt6.QtWidgets import (
 )
 
 # local
+from core.email_lists import (
+    extract_email_addresses,
+    parse_email_list_text,
+    read_email_list_file,
+)
 from core.email_sender import SendResult, send_email, test_smtp_connection
 from core.i18n import get_language as i18n_get_language
 from core.i18n import normalize_language
@@ -2162,7 +2168,7 @@ class MainWindow(QMainWindow):
 
         input_row = QHBoxLayout()
         line = QLineEdit()
-        line.setPlaceholderText("namn@example.se")
+        line.setPlaceholderText(tr("emaillist.many_placeholder"))
         input_row.addWidget(line, stretch=1)
 
         btn_add = QPushButton("➕ Lägg till")
@@ -2196,6 +2202,18 @@ class MainWindow(QMainWindow):
         btn_clear = QPushButton("🧹 Rensa")
         btn_clear.setProperty("cssClass", "danger")
         buttons.addWidget(btn_clear)
+
+        btn_paste_list = QPushButton(tr("emaillist.paste_btn"))
+        btn_paste_list.clicked.connect(
+            lambda _checked=False, t=target: self._paste_recipient_list(t)
+        )
+        buttons.addWidget(btn_paste_list)
+
+        btn_import_list = QPushButton(tr("emaillist.import_btn"))
+        btn_import_list.clicked.connect(
+            lambda _checked=False, t=target: self._import_recipient_list(t)
+        )
+        buttons.addWidget(btn_import_list)
         buttons.addStretch()
         layout.addLayout(buttons)
 
@@ -3074,6 +3092,18 @@ class MainWindow(QMainWindow):
         value = (email if email is not None else line.text()).strip()
         if not value:
             return 0
+
+        # E-postlistor kan klistras direkt i inmatningsfältet:
+        # flera adresser med komma/semikolon/mellanslag hanteras i bulk.
+        extracted = extract_email_addresses(value)
+        if len(extracted) > 1:
+            added = self._add_recipients(target, extracted, lang=lang)
+            if email is None:
+                line.clear()
+            return added
+        if len(extracted) == 1:
+            value = extracted[0]
+
         if not _looks_like_email(value):
             if show_warning:
                 QMessageBox.warning(
@@ -3107,6 +3137,224 @@ class MainWindow(QMainWindow):
         self._update_en_only_placeholder_visibility()
         self._refresh_preview()
         return 1
+
+    def _add_recipients(
+        self,
+        target: str,
+        emails: Sequence[str],
+        *,
+        lang: Optional[str] = None,
+    ) -> int:
+        """Lägg till flera mottagare och returnera antal nya adresser."""
+        added = 0
+        seen = set()
+        for raw_email in emails:
+            email = str(raw_email or "").strip().lower()
+            if not email or email in seen:
+                continue
+            seen.add(email)
+            use_lang = lang
+            if use_lang is None:
+                store = getattr(self, "_contact_store", None)
+                contact = None
+                if store is not None:
+                    try:
+                        contact = store.get(email)
+                    except Exception:
+                        contact = None
+                if contact is not None:
+                    use_lang = self._contact_lang(email)
+            added += self._add_recipient(
+                target,
+                email=email,
+                show_warning=False,
+                lang=use_lang,
+            )
+        return added
+
+    def _add_parsed_recipient_list(self, target: str, parsed: Any) -> Dict[str, int]:
+        """Lägg en tolkad e-postlista i To/Bcc och visa importstatistik."""
+        list_widget = self._to_list if target == "to" else self._bcc_list
+        existing = {
+            item.strip().lower()
+            for item in self._list_items(list_widget)
+            if item.strip()
+        }
+        stats = {
+            "added": 0,
+            "duplicates": int(getattr(parsed, "duplicates", 0) or 0),
+            "invalid": int(getattr(parsed, "invalid", 0) or 0),
+        }
+
+        for contact in getattr(parsed, "contacts", []):
+            email = str(getattr(contact, "email", "") or "").strip().lower()
+            if not email:
+                stats["invalid"] += 1
+                continue
+            if email in existing:
+                stats["duplicates"] += 1
+                continue
+            language = str(getattr(contact, "language", "") or "").strip().lower()
+            added = self._add_recipients(
+                target,
+                [email],
+                lang=language if language in ("sv", "en") else None,
+            )
+            if added:
+                stats["added"] += added
+                existing.add(email)
+            else:
+                stats["duplicates"] += 1
+
+        target_label = "To" if target == "to" else "Bcc"
+        if stats["added"]:
+            self._status(
+                tr(
+                    "emaillist.added_status",
+                    added=stats["added"],
+                    target=target_label,
+                    duplicates=stats["duplicates"],
+                    invalid=stats["invalid"],
+                ),
+                "success",
+            )
+        else:
+            self._status(
+                tr(
+                    "emaillist.no_new_status",
+                    target=target_label,
+                    duplicates=stats["duplicates"],
+                    invalid=stats["invalid"],
+                ),
+                "info",
+            )
+        return stats
+
+    def _paste_recipient_list(self, target: str) -> None:
+        """Dialog: klistra in adresser/rader direkt i To eller Bcc."""
+        target_label = "To" if target == "to" else "Bcc"
+        dialog = QDialog(self)
+        dialog.setWindowTitle(
+            tr("emaillist.paste_recipients_title", target=target_label)
+        )
+        dialog.setModal(True)
+        dialog.resize(720, 540)
+
+        layout = QVBoxLayout(dialog)
+        editor = QPlainTextEdit()
+        editor.setPlaceholderText(tr("emaillist.text_placeholder"))
+        editor.setMinimumHeight(260)
+        layout.addWidget(editor, stretch=1)
+
+        hint = QLabel(tr("emaillist.hint"))
+        hint.setWordWrap(True)
+        hint.setProperty("cssClass", "subtext")
+        layout.addWidget(hint)
+
+        store = getattr(self, "_contact_store", None)
+        can_save_contacts = bool(
+            store is not None
+            and callable(getattr(store, "import_email_list_text", None))
+        )
+        save_checkbox = QCheckBox(tr("emaillist.save_contacts"))
+        save_checkbox.setEnabled(can_save_contacts)
+        layout.addWidget(save_checkbox)
+
+        category_row = QHBoxLayout()
+        category_row.addWidget(QLabel(tr("emaillist.list_name_label")))
+        category_edit = QLineEdit()
+        category_edit.setPlaceholderText(tr("emaillist.list_name_placeholder"))
+        category_edit.setEnabled(False)
+        category_row.addWidget(category_edit, stretch=1)
+        layout.addLayout(category_row)
+        save_checkbox.toggled.connect(category_edit.setEnabled)
+
+        parsed_holder: Dict[str, Any] = {}
+        buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Cancel)
+        import_button = buttons.addButton(
+            tr("emaillist.import_action"),
+            QDialogButtonBox.ButtonRole.AcceptRole,
+        )
+        import_button.setProperty("cssClass", "success")
+        import_button.setDefault(True)
+
+        def _accept_paste() -> None:
+            text = editor.toPlainText()
+            if not text.strip():
+                QMessageBox.warning(
+                    dialog,
+                    tr("emaillist.paste_recipients_title", target=target_label),
+                    tr("emaillist.empty_text"),
+                )
+                return
+            parsed = parse_email_list_text(text)
+            if not parsed.emails:
+                QMessageBox.warning(
+                    dialog,
+                    tr("emaillist.paste_recipients_title", target=target_label),
+                    tr("emaillist.no_valid"),
+                )
+                return
+            parsed_holder["parsed"] = parsed
+            dialog.accept()
+
+        buttons.accepted.connect(_accept_paste)
+        buttons.rejected.connect(dialog.reject)
+        layout.addWidget(buttons)
+
+        if dialog.exec() != QDialog.DialogCode.Accepted:
+            return
+        parsed = parsed_holder.get("parsed")
+        if parsed is None:
+            return
+
+        if save_checkbox.isChecked() and can_save_contacts:
+            default_language = "sv"
+            combo = getattr(self, "_new_lang_combo", None)
+            if combo is not None:
+                try:
+                    default_language = str(combo.currentData() or "sv")
+                except Exception:
+                    default_language = "sv"
+            try:
+                store.import_email_list_text(
+                    editor.toPlainText(),
+                    category=category_edit.text().strip(),
+                    default_language=default_language,
+                )
+            except Exception:
+                log.warning(
+                    "Kunde inte spara inklistrad mottagarlista i adressboken",
+                    exc_info=True,
+                )
+
+        self._add_parsed_recipient_list(target, parsed)
+
+    def _import_recipient_list(self, target: str) -> None:
+        """Importera TXT/CSV/TSV direkt till To eller Bcc."""
+        path, _ = QFileDialog.getOpenFileName(
+            self,
+            tr("emaillist.file_title"),
+            "",
+            tr("emaillist.file_filter"),
+        )
+        if not path:
+            return
+        try:
+            parsed = read_email_list_file(path)
+        except Exception as exc:
+            QMessageBox.critical(
+                self, tr("emaillist.failed_title"), str(exc)
+            )
+            return
+        if not parsed.emails:
+            QMessageBox.warning(
+                self,
+                tr("emaillist.file_title"),
+                tr("emaillist.no_valid"),
+            )
+            return
+        self._add_parsed_recipient_list(target, parsed)
 
     def _remove_selected_recipients(self, target: str) -> None:
         list_widget = self._to_list if target == "to" else self._bcc_list
