@@ -126,6 +126,50 @@ class TestContactStoreEmailLists(unittest.TestCase):
             "Importerad lista",
         )
 
+    def test_export_category_and_all_categories_to_txt(self):
+        from script.contacts_ui import ContactStore
+
+        with tempfile.TemporaryDirectory() as td:
+            base = Path(td)
+            store = ContactStore(base / "contacts.json")
+            store.upsert(
+                "bob@example.com",
+                name="Bob",
+                categories=["Taxi/Stockholm", "VIP"],
+            )
+            store.upsert(
+                "anna@example.se",
+                name="Anna",
+                categories=["Taxi/Stockholm"],
+            )
+            store.upsert(
+                "carin@example.se",
+                name="Carin",
+                categories=["Bilglas"],
+            )
+
+            one = base / "taxi.txt"
+            count = store.export_category_txt(str(one), "Taxi/Stockholm")
+            self.assertEqual(count, 2)
+            self.assertEqual(
+                one.read_text(encoding="utf-8"),
+                "anna@example.se; bob@example.com\n",
+            )
+
+            out_dir = base / "kategorier"
+            counts = store.export_categories_txt(str(out_dir))
+            self.assertEqual(counts["Taxi/Stockholm"], 2)
+            self.assertEqual(counts["VIP"], 1)
+            self.assertEqual(counts["Bilglas"], 1)
+            self.assertEqual(
+                (out_dir / "Taxi-Stockholm.txt").read_text(encoding="utf-8"),
+                "anna@example.se; bob@example.com\n",
+            )
+            self.assertEqual(
+                (out_dir / "Bilglas.txt").read_text(encoding="utf-8"),
+                "carin@example.se\n",
+            )
+
     def test_paste_dialog_values(self):
         from PyQt6.QtWidgets import QDialog
 
@@ -211,6 +255,9 @@ class TestMainWindowRecipientLists(unittest.TestCase):
         texts = [button.text() for button in win.findChildren(QPushButton)]
         self.assertGreaterEqual(texts.count(tr("emaillist.paste_btn")), 2)
         self.assertGreaterEqual(texts.count(tr("emaillist.import_btn")), 2)
+        self.assertGreaterEqual(
+            texts.count(tr("emaillist.export_category_btn")), 1
+        )
 
 
 if __name__ == "__main__":

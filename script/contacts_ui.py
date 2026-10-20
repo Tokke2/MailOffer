@@ -144,8 +144,10 @@ from PyQt6.QtWidgets import (
 # core
 from core.email_lists import (
     ParsedEmailList,
+    format_email_list_text,
     parse_email_list_text,
     read_email_list_file,
+    safe_txt_filename,
 )
 from core.event_bus import EventBus
 from core.i18n import tr
@@ -665,6 +667,48 @@ class ContactStore:
                     ]
                 )
 
+    def export_category_txt(
+        self, path: str, category: str, encoding: str = "utf-8"
+    ) -> int:
+        """Exportera en kategori som semikolonseparerad .txt-lista."""
+        wanted = str(category or "").strip()
+        emails = sorted(
+            {
+                contact.email
+                for contact in self.by_group(wanted)
+                if validate_email_address(contact.email)
+            },
+            key=lambda value: value.lower(),
+        )
+        output = Path(path)
+        output.parent.mkdir(parents=True, exist_ok=True)
+        output.write_text(
+            format_email_list_text(emails), encoding=encoding, newline="\n"
+        )
+        return len(emails)
+
+    def export_categories_txt(
+        self, directory: str, encoding: str = "utf-8"
+    ) -> Dict[str, int]:
+        """Exportera alla kategorier till en .txt-fil per kategori."""
+        folder = Path(directory)
+        folder.mkdir(parents=True, exist_ok=True)
+        counts: Dict[str, int] = {}
+        used_names = set()
+        for category in sorted(self.categories(), key=lambda value: value.lower()):
+            filename = safe_txt_filename(category)
+            stem = Path(filename).stem
+            candidate = filename
+            suffix = 2
+            while candidate.lower() in used_names:
+                candidate = f"{stem}-{suffix}.txt"
+                suffix += 1
+            used_names.add(candidate.lower())
+            counts[category] = self.export_category_txt(
+                str(folder / candidate), category, encoding=encoding
+            )
+        return counts
+
     def clear(self) -> None:
         with self._lock:
             self._contacts.clear()
@@ -1087,6 +1131,10 @@ class ContactsTab(QWidget):
         btn_export = QPushButton("📤 Exportera CSV")
         btn_export.clicked.connect(self._export_csv)
         csv_row.addWidget(btn_export)
+
+        btn_export_category = QPushButton(tr("emaillist.export_category_btn"))
+        btn_export_category.clicked.connect(self._export_category_txt)
+        csv_row.addWidget(btn_export_category)
         csv_row.addStretch()
         info_layout.addLayout(csv_row)
 
@@ -1607,6 +1655,131 @@ class ContactsTab(QWidget):
             return
         self._focus_imported_category(dialog.list_name())
         self._show_import_stats(stats)
+
+    def _export_one_category_txt(self, path: str, category: str) -> int:
+        """Exportera en kategori via store-API eller lokal fallback."""
+        export_method = getattr(self._store, "export_category_txt", None)
+        if callable(export_method):
+            return int(export_method(path, category))
+        contacts = []
+        if self._store is not None and hasattr(self._store, "by_group"):
+            contacts = self._store.by_group(category)
+        emails = sorted(
+            {
+                contact.email
+                for contact in contacts
+                if validate_email_address(getattr(contact, "email", ""))
+            },
+            key=lambda value: value.lower(),
+        )
+        output = Path(path)
+        output.parent.mkdir(parents=True, exist_ok=True)
+        output.write_text(
+            format_email_list_text(emails), encoding="utf-8", newline="\n"
+        )
+        return len(emails)
+
+    def _export_category_txt(self) -> None:
+        """Välj kategori och exportera adresserna som semikolon-.txt."""
+        if not self._store:
+            return
+        try:
+            categories = sorted(
+                self._store.categories(), key=lambda value: value.lower()
+            )
+        except Exception:
+            categories = []
+        if not categories:
+            QMessageBox.information(
+                self,
+                tr("emaillist.export_category_title"),
+                tr("emaillist.no_categories"),
+            )
+            return
+
+        all_label = tr("emaillist.export_all_categories")
+        choices = [*categories, all_label]
+        current = self._group_cb.currentText().strip()
+        current_index = choices.index(current) if current in choices else 0
+        selected, ok = QInputDialog.getItem(
+            self,
+            tr("emaillist.export_category_title"),
+            tr("emaillist.export_category_label"),
+            choices,
+            current_index,
+            False,
+        )
+        if not ok:
+            return
+
+        try:
+            if selected == all_label:
+                directory = QFileDialog.getExistingDirectory(
+                    self, tr("emaillist.export_folder_title"), ""
+                )
+                if not directory:
+                    return
+                export_all = getattr(
+                    self._store, "export_categories_txt", None
+                )
+                if callable(export_all):
+                    counts = export_all(directory)
+                else:
+                    counts = {}
+                    used_names = set()
+                    folder = Path(directory)
+                    for category in categories:
+                        filename = safe_txt_filename(category)
+                        stem = Path(filename).stem
+                        candidate = filename
+                        suffix = 2
+                        while candidate.lower() in used_names:
+                            candidate = f"{stem}-{suffix}.txt"
+                            suffix += 1
+                        used_names.add(candidate.lower())
+                        counts[category] = self._export_one_category_txt(
+                            str(folder / candidate), category
+                        )
+                files = sum(1 for count in counts.values() if count > 0)
+                total = sum(int(count) for count in counts.values())
+                QMessageBox.information(
+                    self,
+                    tr("emaillist.export_done_title"),
+                    tr(
+                        "emaillist.export_categories_saved",
+                        files=files,
+                        count=total,
+                        folder=str(Path(directory)),
+                    ),
+                )
+                return
+
+            category = str(selected).strip()
+            path, _ = QFileDialog.getSaveFileName(
+                self,
+                tr("emaillist.export_category_title"),
+                safe_txt_filename(category),
+                tr("emaillist.export_txt_filter"),
+            )
+            if not path:
+                return
+            if not path.lower().endswith(".txt"):
+                path += ".txt"
+            count = self._export_one_category_txt(path, category)
+            QMessageBox.information(
+                self,
+                tr("emaillist.export_done_title"),
+                tr(
+                    "emaillist.export_category_saved",
+                    count=count,
+                    category=category,
+                    filename=Path(path).name,
+                ),
+            )
+        except Exception as exc:
+            QMessageBox.critical(
+                self, tr("emaillist.export_failed_title"), str(exc)
+            )
 
     def _export_csv(self) -> None:
         path, _ = QFileDialog.getSaveFileName(

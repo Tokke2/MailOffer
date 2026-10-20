@@ -10,8 +10,10 @@ from pathlib import Path
 
 from core.email_lists import (
     extract_email_addresses,
+    format_email_list_text,
     parse_email_list_text,
     read_email_list_file,
+    safe_txt_filename,
 )
 
 
@@ -103,6 +105,31 @@ class TestParseEmailListText(unittest.TestCase):
         contact = parsed.contacts[0]
         self.assertEqual(contact.name, "Anna")
         self.assertEqual(contact.categories, ["VIP", "Bilglas"])
+
+
+class TestFormatEmailListText(unittest.TestCase):
+    def test_semicolon_separated_and_roundtrip(self):
+        text = format_email_list_text(
+            [
+                "Bob <bob@example.com>",
+                "anna@example.se",
+                "ANNA@example.se",
+                "inte giltig",
+            ]
+        )
+        self.assertEqual(text, "bob@example.com; anna@example.se\n")
+        self.assertEqual(
+            parse_email_list_text(text).emails,
+            ["bob@example.com", "anna@example.se"],
+        )
+
+    def test_safe_txt_filename(self):
+        self.assertEqual(
+            safe_txt_filename("Taxi / Stockholm: norr"),
+            "Taxi - Stockholm- norr.txt",
+        )
+        self.assertEqual(safe_txt_filename("CON"), "_CON.txt")
+        self.assertEqual(safe_txt_filename(""), "kategori.txt")
 
 
 class TestReadEmailListFile(unittest.TestCase):

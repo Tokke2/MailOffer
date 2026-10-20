@@ -451,10 +451,52 @@ def read_email_list_file(path: str | Path) -> ParsedEmailList:
     return parse_email_list_text(text)
 
 
+def format_email_list_text(
+    emails: Iterable[object], delimiter: str = "; "
+) -> str:
+    """Formatera adresser som en semikolonseparerad textlista.
+
+    Standardformatet är ``anna@example.se; bob@example.com`` följt av
+    en radbrytning – samma format som parsern/importen kan läsa igen.
+    Dubletter och ogiltiga värden tas bort, ordningen behålls.
+    """
+    addresses: List[str] = []
+    seen = set()
+    for raw in emails or []:
+        for email in extract_email_addresses(raw):
+            if email not in seen:
+                seen.add(email)
+                addresses.append(email)
+    return f"{delimiter.join(addresses)}\n" if addresses else ""
+
+
+_RESERVED_WINDOWS_NAMES = {
+    "con", "prn", "aux", "nul",
+    *(f"com{i}" for i in range(1, 10)),
+    *(f"lpt{i}" for i in range(1, 10)),
+}
+
+
+def safe_txt_filename(name: object, default: str = "kategori") -> str:
+    """Gör ett kategorinamn till ett säkert .txt-filnamn för Windows m.fl."""
+    candidate = re.sub(
+        r'[<>:"/\\|?*\x00-\x1f]', "-", str(name or "").strip()
+    )
+    candidate = re.sub(r"\s+", " ", candidate).strip(" .")
+    if candidate.lower() in _RESERVED_WINDOWS_NAMES:
+        candidate = f"_{candidate}"
+    if not candidate:
+        candidate = str(default or "kategori").strip() or "kategori"
+    candidate = candidate[:120].rstrip(" .") or "kategori"
+    return f"{candidate}.txt"
+
+
 __all__ = [
     "ParsedContact",
     "ParsedEmailList",
     "extract_email_addresses",
+    "format_email_list_text",
     "parse_email_list_text",
     "read_email_list_file",
+    "safe_txt_filename",
 ]

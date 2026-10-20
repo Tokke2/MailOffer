@@ -80,6 +80,13 @@ lades till, uppdaterades eller hoppades över som ogiltiga. I Kontakter
 kan du filtrera på listnamnet/kategorin och använda
 **Alla visade → To/Bcc**.
 
+I Kontakter kan du även klicka **📄 Exportera kategori (.txt)** och
+spara en kategori som en ren textlista med semikolon mellan
+adresserna (`anna@example.se; bob@example.com`). Det går också att
+exportera **alla kategorier på en gång** – då skapas en `.txt`-fil per
+kategori i vald mapp. Filerna kan importeras tillbaka med samma
+listimport.
+
 ## 🔄 Uppdateringar & att publicera en release (för ägaren)
 
 Appen uppdateras **endast från GitHub Releases** – aldrig från `main`.
