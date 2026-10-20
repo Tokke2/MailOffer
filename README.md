@@ -14,11 +14,11 @@ _English summary below._
 - 🧙 **Mall-wizard** (nytt i 5.4) – skapa nya mallar steg för steg:
   namn/format → svensk text → valfri engelsk text (autoöversättning) →
   förhandsgranskning med testvärden → spara
-- 👤 **Avsändarprofiler** (nytt i 5.5) – spara flera avsändarkonton
+- 👤 **Avsändarprofiler** (nytt i 1.0) – spara flera avsändarkonton
   (SMTP-server, avsändare, svar-till, egen kopia/arkiv) under
   *Inställningar → 📡 SMTP & Avsändare* och välj konto direkt i
   steg 4 **Skicka mail** i stället för att ändra inställningarna
-- 🧪 **Testläge & förhandskontroll** (nytt i 5.5) – **🔎 Förhandskontroll**
+- 🧪 **Testläge & förhandskontroll** (nytt i 1.0) – **🔎 Förhandskontroll**
   visar exakt slutantal (inkl. egen kopia/standard-Bcc), överlapp
   To/Bcc, ogiltiga adresser, SV/EN-fördelning och bilagestorlek;
   **🧪 Skicka testmail** skickar bara till din egen testadress
@@ -104,12 +104,12 @@ JSON-filer, inställningar och loggar rörs aldrig** (`core/update_protect.py`).
 Så publicerar du en ny version:
 
 1. Bumpa `__version__` i **`core/version.py`** (enda versionskällan),
-   t.ex. `"5.5.0"`.
+   t.ex. `"1.0.0"`.
 2. Committa och pusha som vanligt.
 3. Skapa releasen med exakt samma nummer i taggen:
 
    ```bat
-   gh release create v5.5.0 --title "E-postofferten 5.5.0" --generate-notes
+   gh release create v1.0.0 --title "E-postofferten 1.0.0" --generate-notes
    ```
 
    Ingen fil behöver bifogas – appen hämtar GitHubs zipball för taggen.
@@ -166,7 +166,7 @@ versions of the same template), attachments and To/Bcc batch sending.
 New in 5.4: a step-by-step **template wizard** (TXT/HTML/DOCX), a **Swedish/
 English UI** (Language menu), **auto-update from GitHub Releases** (silent
 daily check + manual button; user templates/JSON/settings are never
-overwritten) and **Ko-fi donations**. New in 5.5: **sender profiles** (pick the
+overwritten) and **Ko-fi donations**. New in 1.0: **sender profiles** (pick the
 sending account per send) plus a **preflight check & test mode**
 (final recipient counts, To/Bcc overlaps, attachment sizes; test
 mail goes only to your own test address). Version number lives in
