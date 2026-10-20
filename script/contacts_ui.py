@@ -1541,6 +1541,15 @@ class ContactsTab(QWidget):
         if index >= 0:
             self._group_cb.setCurrentIndex(index)
 
+    @staticmethod
+    def _resolve_import_category(path: str, category: str) -> str:
+        """Kategori för en filimport: angivet namn, annars filnamnet."""
+        return (
+            str(category or "").strip()
+            or Path(path).stem.strip()
+            or tr("emaillist.default_category")
+        )
+
     def _import_csv(self) -> None:
         """Importera TXT/CSV/TSV och spara adresserna under ett listnamn."""
         path, _ = QFileDialog.getOpenFileName(
@@ -1560,11 +1569,13 @@ class ContactsTab(QWidget):
         )
         if not ok:
             return
+        # Alla adresser i filen ska bli en egen kategori/lista.
+        category = self._resolve_import_category(path, category)
 
         try:
             import_method = getattr(self._store, "import_email_list", None)
             if callable(import_method):
-                stats = import_method(path, category=category.strip())
+                stats = import_method(path, category=category)
             else:
                 stats = self._store.import_csv(path)
         except Exception as exc:

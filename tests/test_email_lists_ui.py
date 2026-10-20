@@ -106,6 +106,26 @@ class TestContactStoreEmailLists(unittest.TestCase):
             self.assertIn("VIP", carin.categories)
             self.assertIn("Lista B", carin.categories)
 
+    def test_file_import_category_fallback_to_filename(self):
+        from script.contacts_ui import ContactsTab
+
+        self.assertEqual(
+            ContactsTab._resolve_import_category(
+                "/tmp/Taxi lista.txt", ""
+            ),
+            "Taxi lista",
+        )
+        self.assertEqual(
+            ContactsTab._resolve_import_category(
+                "/tmp/lista.txt", "  Egen kategori  "
+            ),
+            "Egen kategori",
+        )
+        self.assertEqual(
+            ContactsTab._resolve_import_category("", ""),
+            "Importerad lista",
+        )
+
     def test_paste_dialog_values(self):
         from PyQt6.QtWidgets import QDialog
 
