@@ -30,6 +30,7 @@
 # V6.4: START UTAN KONSOL – Starta EmailApp.vbs (hittar pythonw, kör annars Installera_Python.bat /silent dolt = senaste Python 3.12) + Python-vakt i main.pyw (MIN 3.10)
 # V6.4: UPDATE TRAY – tray-notis direkt, installationsfrågan när fönstret öppnas; NY IKON överallt med transparens (tools/make_icon.py); HTML-mall escape-fix
 # V6.5: E-POSTLISTOR (core/email_lists) – importera TXT/CSV/TSV eller klistra in (även Excel-rader) i Kontakter och direkt i To/Bcc; listnamn = kategori, dubbletter/ogiltiga rapporteras; exportera en eller alla kategorier till semikolonseparerad .txt
+# V6.7 (APP 5.5.1): MINIMERA TILL TRAY – changeEvent fångar minimering och döljer till trayen när minimize_to_tray=true (kryssruta i Inställningar bredvid Stäng till tray) och en synlig tray-ikon finns; show() avminimerar (showNormal) så tray-klick återställer minimerat fönster
 # V6.6 (APP 5.5.0): AVSÄNDARPROFILER (core/sender_profiles) – flera SMTP/avsändarkonton (server/port/avsändare/inlogg/svar-till/egen/arkiv/SSL), hanteras i Inställningar och väljs per sändning i steg 4; plana SMTP-inställningar = spegel av aktiv profil. TESTLÄGE+FÖRHANDSKONTROLL (core/send_preflight): slutantal/överlapp/ogiltiga/SV-EN/bilagestorlek + blockerare/varningar före sändning; testmail går ENDAST till testadress (ingen egen kopia, standard-Bcc, arkiv eller kvitton)
 # V6.2: VIN ENDAST I [en] – fält syns/skickas bara till EN-mottagare
 # V6.1: KOMMANDE VALDA (2026-09-16) – To/Bcc-dubblett, historik öppna, bild-thumbnails,

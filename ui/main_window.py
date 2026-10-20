@@ -250,7 +250,16 @@ if str(_PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(_PROJECT_ROOT))
 
 # third-party
-from PyQt6.QtCore import QPoint, Qt, QThread, QTimer, QUrl, pyqtSignal, pyqtSlot
+from PyQt6.QtCore import (
+    QEvent,
+    QPoint,
+    Qt,
+    QThread,
+    QTimer,
+    QUrl,
+    pyqtSignal,
+    pyqtSlot,
+)
 from PyQt6.QtGui import (
     QAction,
     QClipboard,
@@ -4532,6 +4541,7 @@ class MainWindow(QMainWindow):
         form.addRow(tr("settings.language_row"), self._make_settings_combo("language", ["sv", "en"]))
         form.addRow("Start minimerat", self._make_settings_checkbox("start_minimized", "Start minimerat"))
         form.addRow("Close to tray", self._make_settings_checkbox("close_to_tray", "Stäng till tray"))
+        form.addRow("Minimize to tray", self._make_settings_checkbox("minimize_to_tray", "Minimera till tray"))
         form.addRow("Autostart", self._make_settings_checkbox("autostart", "Starta med systemet"))
         # (v5.4) Ingen "Inkludera engelsk del" – språk styrs per mottagare
         return group
@@ -6057,7 +6067,12 @@ class MainWindow(QMainWindow):
             log.warning("Kunde inte öppna: %s", resolved, exc_info=True)
 
     def show(self) -> None:  # type: ignore[override]
-        super().show()
+        # show() ensamt återställer inte ett minimerat fönster –
+        # showNormal() krävs, annars "fastnar" fönstret i trayen.
+        if self.isMinimized():
+            super().showNormal()
+        else:
+            super().show()
         self.raise_()
         self.activateWindow()
         self.bus.publish("ui.window_shown", {})
@@ -6068,6 +6083,48 @@ class MainWindow(QMainWindow):
     def hide(self) -> None:  # type: ignore[override]
         super().hide()
         self.bus.publish("ui.window_hidden", {})
+
+    def _can_hide_to_tray(self) -> bool:
+        """True bara om en synlig tray-ikon finns att återställa från."""
+        tray = getattr(self, "_tray_ref", None)
+        if tray is None:
+            return False
+        icon = getattr(tray, "_tray", None)
+        if icon is None:
+            return False
+        try:
+            return bool(icon.isVisible())
+        except Exception:
+            return True
+
+    def _minimize_to_tray(self) -> None:
+        """Dölj minimerat fönster till trayen (körs uppskjutet)."""
+        try:
+            if not self.isMinimized():
+                return  # användaren hann återställa fönstret
+            if not bool(self.settings.get("minimize_to_tray", True)):
+                return
+            if not self._can_hide_to_tray():
+                return
+            self.hide()
+            log.debug("Fönstret minimerades till trayen.")
+        except Exception:
+            log.debug("Kunde inte minimera till tray", exc_info=True)
+
+    def changeEvent(self, event: Any) -> None:  # noqa: N802
+        super().changeEvent(event)
+        try:
+            if (
+                event is not None
+                and event.type() == QEvent.Type.WindowStateChange
+                and self.isMinimized()
+                and bool(self.settings.get("minimize_to_tray", True))
+                and self._can_hide_to_tray()
+            ):
+                # Uppskjutet: låt Qt avsluta minimeringsövergången först
+                QTimer.singleShot(0, self._minimize_to_tray)
+        except Exception:
+            log.debug("changeEvent/minimize_to_tray fel", exc_info=True)
 
     def closeEvent(self, event: Any) -> None:  # noqa: N802
         if self.settings.get("close_to_tray", True):

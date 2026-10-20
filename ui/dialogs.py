@@ -891,6 +891,7 @@ class SettingsDialog(QDialog):
         for key, label in [
             ("start_minimized", "Starta minimerat i systray"),
             ("close_to_tray", "Stäng till systray (ej avsluta)"),
+            ("minimize_to_tray", "Minimera till systray"),
             ("autostart", "Starta automatiskt med OS"),
         ]:
             checkbox = QCheckBox(label)
