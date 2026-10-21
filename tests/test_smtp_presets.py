@@ -38,6 +38,12 @@ class TestSmtpPresets(unittest.TestCase):
         self.assertIsNone(preset_for_email("anna@exempel.se"))
         self.assertIsNone(preset_for_email("inte-en-adress"))
 
+    def test_websupport_node_server_recognized(self):
+        preset = preset_for_server("smtp.m101.websupport.se")
+        self.assertIsNotNone(preset)
+        self.assertEqual(preset.preset_id, "websupport")
+        self.assertEqual(preset.note_key, "smtp.preset_note.websupport")
+
     def test_preset_for_server_and_id(self):
         self.assertEqual(
             preset_for_server("smtp.gmail.com").preset_id, "gmail"

@@ -112,6 +112,26 @@ class TestSmtpBackupUi(unittest.TestCase):
         win._reload_settings_form()
         self.assertEqual(win._smtp_provider_combo.currentData(), "yahoo")
 
+    def test_websupport_preset_preserves_node_server(self):
+        win, _settings, _base = self._make_window(
+            sender_email="info@bilglas.se",
+            smtp_server="smtp.m101.websupport.se",
+        )
+        combo = win._smtp_provider_combo
+        index = combo.findData("websupport")
+        self.assertGreaterEqual(index, 0)
+        combo.setCurrentIndex(0)
+        QApplication.processEvents()
+        combo.setCurrentIndex(index)
+        QApplication.processEvents()
+        self.assertEqual(
+            win._settings_widgets["smtp_server"].text(),
+            "smtp.m101.websupport.se",
+        )
+        self.assertEqual(win._settings_widgets["smtp_port"].text(), "465")
+        self.assertTrue(win._settings_widgets["use_ssl"].isChecked())
+        self.assertIn("smtp.m101", win._smtp_provider_help.text())
+
     def test_dns_report_formatting(self):
         from core.dns_checks import DnsReport
 

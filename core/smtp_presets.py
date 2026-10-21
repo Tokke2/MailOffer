@@ -88,7 +88,7 @@ PRESETS: Tuple[SmtpPreset, ...] = (
         server="smtp.websupport.se",
         port=465,
         use_ssl=True,
-        note_key="smtp.preset_note.webhotel",
+        note_key="smtp.preset_note.websupport",
     ),
     SmtpPreset(
         preset_id="loopia",
@@ -165,6 +165,8 @@ def preset_for_server(server: object) -> Optional[SmtpPreset]:
     for preset in PRESETS:
         if preset.server and host == preset.server:
             return preset
+    if host.startswith("smtp.") and host.endswith(".websupport.se"):
+        return preset_by_id("websupport")
     if host.startswith("mail."):
         return preset_by_id("webhotel_generic")
     return None

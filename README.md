@@ -14,6 +14,11 @@ _English summary below._
 - 🧙 **Mall-wizard** (nytt i 5.4) – skapa nya mallar steg för steg:
   namn/format → svensk text → valfri engelsk text (autoöversättning) →
   förhandsgranskning med testvärden → spara
+- ✏️ **Redigera mallar, versioner & mallpaket** (nytt i 1.3) – öppna en
+  befintlig mall i wizarden; tidigare innehåll sparas automatiskt som
+  en version som kan förhandsgranskas och återställas. Elva färdiga
+  mallar för påminnelser, tackmail, säsongskampanjer, bil/verkstad,
+  hantverk/service och leverantörsförfrågningar kan kopieras in
 - 👤 **Avsändarprofiler** (nytt i 1.0) – spara flera avsändarkonton
   (SMTP-server, avsändare, svar-till, egen kopia/arkiv) under
   *Inställningar → 📡 SMTP & Avsändare* och välj konto direkt i
@@ -24,7 +29,8 @@ _English summary below._
   **🧪 Skicka testmail** skickar bara till din egen testadress
 - 📡 **SMTP-förval & DNS-kontroll** (nytt i 1.1) – välj leverantör
   (Gmail/Outlook/Microsoft 365/Yahoo/iCloud eller webbhotell som
-  WebSupport/Loopia/one.com – egna domäner gissas som mail.domänen)
+  WebSupport/Loopia/one.com – egna domäner gissas som mail.domänen;
+  nodservrar som `smtp.m101.websupport.se` känns också igen)
   så fylls server, port
   och SSL i automatiskt, med länk till applösenord; kontrollera
   SPF/DKIM/DMARC för avsändardomänen med ett klick
@@ -67,13 +73,21 @@ En exempelmall finns i `Mallar/` – skapa egna med
 
 1. Klicka **🧙 Ny mall** (eller *Arkiv → Skapa ny mall (wizard)…*).
 2. Namn + format (TXT rekommenderas) och startläge: bilglas-exemplet,
-   tom mall eller kopia av en befintlig.
+   tom mall, kopia av en befintlig eller en färdig mall från mallpaketen.
 3. Skriv ämne och brödtext på svenska. Infoga uppgifter med knapparna
    (`::modell::`, `::ruta::`, `::vin::` …) eller **➕ Egen…**.
 4. Bocka i engelsk version om EN-mottagare ska få mailet på engelska –
    knappen *Översätt automatiskt* ger ett utkast av den svenska texten.
 5. Förhandsgranska med testvärden, spara – klart! Mallen hamnar i
    `Mallar/` och kan väljas direkt i Skicka-fliken.
+
+I fliken **Mallar** kan en befintlig mall väljas och öppnas med
+**✏️ Redigera vald mall**. När ändringarna sparas läggs den tidigare
+filen automatiskt i versionshistoriken under `Mallar/.versions/`.
+**🕘 Versioner** visar sparade versioner, låter dig spara nuvarande
+mall manuellt och återställa eller ta bort en vald version. Med
+**📦 Mallpaket** kopieras valda färdiga mallar direkt till mallmappen
+utan att befintliga filer skrivs över.
 
 ## 📥 Lägg in e-postlistor
 

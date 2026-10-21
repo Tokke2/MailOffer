@@ -1534,8 +1534,21 @@ class MainWindow(QMainWindow):
             self.settings.get("template_dir", "Mallar")
         )
 
-    def _open_template_wizard(self) -> None:
-        """Öppna wizarden för att skapa en ny mall (ui/template_wizard)."""
+    def _open_template_wizard(self, edit_name: Any = None) -> None:
+        """Öppna mall-wizarden för ny mall eller redigering av vald mall."""
+        edit_path: Optional[Path] = None
+        if isinstance(edit_name, str) and edit_name:
+            edit_path = self._templates_dir() / edit_name
+            if not edit_path.is_file():
+                QMessageBox.warning(
+                    self,
+                    tr("wizard.edit_title"),
+                    tr(
+                        "wizard.error.load_failed",
+                        error=str(edit_path),
+                    ),
+                )
+                return
         try:
             from ui.template_wizard import TemplateWizard
         except Exception:
@@ -1547,10 +1560,13 @@ class MainWindow(QMainWindow):
             templates_dir=self._templates_dir(),
             existing_names=self._template_names(),
             translate_func=_translate,
+            edit_path=edit_path,
         )
-        if wizard.exec() != QDialog.DialogCode.Accepted or not wizard.created_path:
+        if wizard.exec() != QDialog.DialogCode.Accepted:
             return
-        created = wizard.created_path
+        created = wizard.saved_path or wizard.created_path
+        if created is None:
+            return
         self._scan_tpls()
         self._refresh_default_template_combo()
         self._refresh_template_tools_list()
@@ -1566,13 +1582,111 @@ class MainWindow(QMainWindow):
                 log.debug(
                     "Kunde inte sätta standardmall efter wizarden", exc_info=True
                 )
+        was_selected = self._last_tpl == created
         if wizard.select_after and hasattr(self, "_tpl_combo"):
             idx = self._tpl_combo.findText(created.name)
             if idx >= 0:
                 self._tpl_combo.setCurrentIndex(idx)
                 self._on_tpl_sel(created.name)
             self.select_tab("send")
-        self._status(tr("wizard.created_status", name=created.name), "success")
+        elif wizard.edited_existing and was_selected and hasattr(
+            self, "_tpl_combo"
+        ):
+            idx = self._tpl_combo.findText(created.name)
+            if idx >= 0:
+                self._tpl_combo.setCurrentIndex(idx)
+                self._on_tpl_sel(created.name)
+        self._status(
+            tr(
+                "wizard.updated_status"
+                if wizard.edited_existing
+                else "wizard.created_status",
+                name=created.name,
+            ),
+            "success",
+        )
+
+    def _selected_template_tool_name(self) -> str:
+        lst = getattr(self, "_tpl_tools_list", None)
+        item = lst.currentItem() if lst is not None else None
+        return item.text().strip() if item is not None else ""
+
+    def _edit_selected_template_tool(self) -> None:
+        name = self._selected_template_tool_name()
+        if not name:
+            QMessageBox.information(
+                self,
+                tr("templates_tab.heading"),
+                tr("templates_tab.select_first"),
+            )
+            return
+        self._open_template_wizard(name)
+
+    def _show_selected_template_versions(self) -> None:
+        name = self._selected_template_tool_name()
+        if not name:
+            QMessageBox.information(
+                self,
+                tr("templates_tab.heading"),
+                tr("templates_tab.select_first"),
+            )
+            return
+        try:
+            from ui.template_wizard import TemplateVersionsDialog
+        except Exception:
+            log.warning("Versionsdialogen kunde inte laddas", exc_info=True)
+            return
+        template_path = self._templates_dir() / name
+        dialog = TemplateVersionsDialog(self, template_path=template_path)
+        dialog.exec()
+        if dialog.changed:
+            self._scan_tpls()
+            self._refresh_default_template_combo()
+            self._refresh_template_tools_list()
+        if dialog.restored:
+            if self._last_tpl == template_path and hasattr(
+                self, "_tpl_combo"
+            ):
+                idx = self._tpl_combo.findText(name)
+                if idx >= 0:
+                    self._tpl_combo.setCurrentIndex(idx)
+                self._on_tpl_sel(name)
+            self._status(
+                tr("template_versions.restored_status", name=name),
+                "success",
+            )
+
+    def _open_template_pack_dialog(self) -> None:
+        try:
+            from ui.template_wizard import TemplatePackDialog
+        except Exception:
+            log.warning("Mallpaketsdialogen kunde inte laddas", exc_info=True)
+            return
+        dialog = TemplatePackDialog(
+            self, templates_dir=self._templates_dir()
+        )
+        if dialog.exec() != QDialog.DialogCode.Accepted or not dialog.install_result:
+            return
+        result = dialog.install_result
+        self._scan_tpls()
+        self._refresh_default_template_combo()
+        self._refresh_template_tools_list()
+        QMessageBox.information(
+            self,
+            tr("template_packs.title"),
+            tr(
+                "template_packs.result",
+                created=len(result.created),
+                skipped=len(result.skipped),
+            ),
+        )
+        self._status(
+            tr(
+                "template_packs.installed_status",
+                count=len(result.created),
+            ),
+            "success" if result.created else "info",
+        )
 
     # ────────────────────────────────────────────────────────────────
     # (v5.4) Uppdatering från GitHub Releases (auto + manuellt)
@@ -5265,12 +5379,28 @@ class MainWindow(QMainWindow):
         widgets = self._settings_widgets
         if "smtp_server" in widgets:
             sender_w = widgets.get("sender_email")
-            widgets["smtp_server"].setText(
-                server_for_preset(
-                    preset,
-                    sender_w.text() if isinstance(sender_w, QLineEdit) else "",
-                )
+            server_w = widgets["smtp_server"]
+            current_server = (
+                server_w.text().strip()
+                if isinstance(server_w, QLineEdit)
+                else ""
             )
+            new_server = server_for_preset(
+                preset,
+                sender_w.text() if isinstance(sender_w, QLineEdit) else "",
+            )
+            current_preset = preset_for_server(current_server)
+            # Bevara leverantörens nodserver (t.ex.
+            # smtp.m101.websupport.se) i stället för att ersätta den
+            # med det generella förvalets server.
+            if (
+                preset.server
+                and current_preset is not None
+                and current_preset.preset_id == preset.preset_id
+                and current_server
+            ):
+                new_server = current_server
+            server_w.setText(new_server)
         if "smtp_port" in widgets:
             widgets["smtp_port"].setText(str(preset.port))
         if "use_ssl" in widgets:
@@ -5609,6 +5739,20 @@ class MainWindow(QMainWindow):
         self._tpl_tools_count.setProperty("cssClass", "subtext")
         row.addWidget(self._tpl_tools_count)
         layout.addLayout(row)
+
+        actions = QHBoxLayout()
+        btn_edit_template = QPushButton(tr("templates_tab.edit_btn"))
+        btn_edit_template.setProperty("cssClass", "accent")
+        btn_edit_template.clicked.connect(self._edit_selected_template_tool)
+        actions.addWidget(btn_edit_template)
+        btn_versions = QPushButton(tr("templates_tab.versions_btn"))
+        btn_versions.clicked.connect(self._show_selected_template_versions)
+        actions.addWidget(btn_versions)
+        btn_packs = QPushButton(tr("templates_tab.pack_btn"))
+        btn_packs.clicked.connect(self._open_template_pack_dialog)
+        actions.addWidget(btn_packs)
+        actions.addStretch()
+        layout.addLayout(actions)
 
         self._tpl_tools_list = QListWidget()
         self._tpl_tools_list.itemDoubleClicked.connect(

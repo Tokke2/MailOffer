@@ -11,6 +11,11 @@ Fem steg:
   4. Uppgifter & förhandsgranskning med testvärden (SV + EN).
   5. Spara – filnamnskoll, standardmall-val och direktval i Skicka.
 
+Wizarden kan även redigera en befintlig mall. Innan en befintlig
+fil skrivs över sparas automatiskt en mallversion som kan
+återställas. Färdiga mallpaket kan användas som startinnehåll
+eller kopieras direkt till mallmappen.
+
 Spara sker via ``script.templates.create_template`` (samma väg som
 resten av appen läser), filnamnet saneras med
 ``sanitize_template_filename`` och brödtexten byggs med
@@ -40,21 +45,26 @@ from PyQt6.QtWidgets import (
     QButtonGroup,
     QCheckBox,
     QComboBox,
+    QDialog,
     QHBoxLayout,
     QInputDialog,
     QLabel,
     QLineEdit,
+    QListWidget,
+    QListWidgetItem,
     QMessageBox,
     QPlainTextEdit,
     QPushButton,
     QRadioButton,
+    QTreeWidget,
+    QTreeWidgetItem,
     QVBoxLayout,
     QWidget,
     QWizard,
     QWizardPage,
 )
 
-from core.i18n import tr
+from core.i18n import get_language, tr
 from script.templates import (
     apply_placeholders,
     build_template_body,
@@ -63,6 +73,19 @@ from script.templates import (
     find_placeholders_in_text,
     parse_subject_and_body,
     sanitize_template_filename,
+)
+from script.template_packs import (
+    all_template_packs,
+    install_template_items,
+    template_pack_by_id,
+    template_pack_item_by_id,
+)
+from script.template_versions import (
+    TemplateVersionInfo,
+    delete_template_version,
+    list_template_versions,
+    restore_template_version,
+    snapshot_template_version,
 )
 
 log = logging.getLogger(__name__)
@@ -130,24 +153,39 @@ class TemplateWizard(QWizard):
         templates_dir: Path,
         existing_names: Sequence[str] = (),
         translate_func: Optional[Callable[[str], str]] = None,
+        edit_path: Optional[Path] = None,
     ) -> None:
         super().__init__(parent)
         self.templates_dir = Path(templates_dir)
         self._existing_names = list(existing_names)
         self._translate_func = translate_func
+        self.edit_path = Path(edit_path) if edit_path is not None else None
+        self.is_editing = self.edit_path is not None
 
         self.created_path: Optional[Path] = None
+        self.saved_path: Optional[Path] = None
+        self.edited_existing = False
+        self.version_snapshot_path: Optional[Path] = None
         self.set_as_default = False
         self.select_after = True
 
         self._loaded_start_key: Optional[tuple] = None
+        self._last_pack_name = ""
+        self._load_error = ""
         self._test_inputs: Dict[str, QLineEdit] = {}
 
-        self.setWindowTitle(tr("wizard.title"))
+        self.setWindowTitle(
+            tr("wizard.edit_title") if self.is_editing else tr("wizard.title")
+        )
         self.setMinimumSize(780, 640)
         self.setButtonText(QWizard.WizardButton.BackButton, tr("wizard.btn_back"))
         self.setButtonText(QWizard.WizardButton.NextButton, tr("wizard.btn_next"))
-        self.setButtonText(QWizard.WizardButton.FinishButton, tr("wizard.btn_finish"))
+        self.setButtonText(
+            QWizard.WizardButton.FinishButton,
+            tr("wizard.btn_finish_edit")
+            if self.is_editing
+            else tr("wizard.btn_finish"),
+        )
         self.setButtonText(QWizard.WizardButton.CancelButton, tr("wizard.btn_cancel"))
 
         self.addPage(self._build_start_page())
@@ -204,14 +242,48 @@ class TemplateWizard(QWizard):
         self._radio_copy.toggled.connect(self._copy_combo.setEnabled)
         if not self._existing_names:
             self._radio_copy.setEnabled(False)
-        for radio in (self._radio_example, self._radio_blank, self._radio_copy):
+        pack_row = QHBoxLayout()
+        self._radio_pack = QRadioButton(tr("wizard.start.pack"))
+        self._pack_combo = QComboBox()
+        language = get_language()
+        for pack in all_template_packs():
+            for item in pack.templates:
+                self._pack_combo.addItem(
+                    f"{pack.display_name(language)} – "
+                    f"{item.display_name(language)}",
+                    item.item_id,
+                )
+        self._pack_combo.setEnabled(False)
+        self._radio_pack.toggled.connect(self._pack_combo.setEnabled)
+        self._radio_pack.toggled.connect(self._on_pack_radio_toggled)
+        self._pack_combo.currentIndexChanged.connect(
+            self._on_pack_selection_changed
+        )
+        for radio in (
+            self._radio_example,
+            self._radio_blank,
+            self._radio_copy,
+            self._radio_pack,
+        ):
             self._start_group.addButton(radio)
         copy_row.addWidget(self._radio_copy)
         copy_row.addWidget(self._copy_combo, stretch=1)
+        pack_row.addWidget(self._radio_pack)
+        pack_row.addWidget(self._pack_combo, stretch=1)
         layout.addWidget(self._radio_example)
         layout.addWidget(self._radio_blank)
         layout.addLayout(copy_row)
+        layout.addLayout(pack_row)
+
+        self._editing_info_label = QLabel(tr("wizard.editing_info"))
+        self._editing_info_label.setWordWrap(True)
+        self._editing_info_label.setProperty("cssClass", "subtext")
+        self._editing_info_label.setVisible(self.is_editing)
+        layout.addWidget(self._editing_info_label)
+
         layout.addStretch()
+        if self.is_editing:
+            self._apply_edit_start_state()
         return page
 
     # ────────────────────────────────────────────────────────────────
@@ -455,7 +527,16 @@ class TemplateWizard(QWizard):
             )
         )
         target = self._target_path()
-        self._exists_label.setVisible(bool(target and target.exists()))
+        if self.is_editing:
+            self._exists_label.setText(tr("wizard.version_saved_note"))
+            self._exists_label.setStyleSheet("")
+            self._exists_label.setVisible(True)
+        else:
+            self._exists_label.setText(tr("wizard.exists_warning"))
+            self._exists_label.setStyleSheet(
+                "color: #B45309; font-weight: bold;"
+            )
+            self._exists_label.setVisible(bool(target and target.exists()))
 
     # ────────────────────────────────────────────────────────────────
     # Logik: filnamn, startinnehåll, validering, spara
@@ -468,6 +549,8 @@ class TemplateWizard(QWizard):
         return ".txt"
 
     def _filename(self) -> str:
+        if self.is_editing and self.edit_path is not None:
+            return self.edit_path.name
         return sanitize_template_filename(
             self._name_edit.text(), self._selected_extension()
         )
@@ -482,7 +565,51 @@ class TemplateWizard(QWizard):
             tr("wizard.filename.preview", filename=name) if name else ""
         )
 
+    def _apply_edit_start_state(self) -> None:
+        if self.edit_path is None:
+            return
+        self._name_edit.setText(self.edit_path.stem)
+        self._name_edit.setEnabled(False)
+        suffix = self.edit_path.suffix.lower()
+        if suffix == ".htm":
+            suffix = ".html"
+        for ext, radio in self._format_buttons.items():
+            radio.setChecked(ext == suffix)
+            radio.setEnabled(False)
+        for radio in (
+            self._radio_example,
+            self._radio_blank,
+            self._radio_copy,
+            self._radio_pack,
+        ):
+            radio.setEnabled(False)
+        self._copy_combo.setEnabled(False)
+        self._pack_combo.setEnabled(False)
+
+    def _on_pack_radio_toggled(self, checked: bool) -> None:
+        if checked:
+            self._on_pack_selection_changed()
+
+    def _on_pack_selection_changed(self, _index: int = -1) -> None:
+        if self.is_editing or not self._radio_pack.isChecked():
+            return
+        item = template_pack_item_by_id(self._pack_combo.currentData())
+        if item is None:
+            return
+        txt_radio = self._format_buttons.get(".txt")
+        if txt_radio is not None:
+            txt_radio.setChecked(True)
+        suggested = item.display_name(get_language())
+        current = self._name_edit.text().strip()
+        if not current or current == self._last_pack_name:
+            self._name_edit.setText(suggested)
+        self._last_pack_name = suggested
+
     def _start_key(self) -> tuple:
+        if self.is_editing and self.edit_path is not None:
+            return ("edit", self.edit_path.name)
+        if self._radio_pack.isChecked():
+            return ("pack", str(self._pack_combo.currentData() or ""))
         if self._radio_copy.isChecked():
             return ("copy", self._copy_combo.currentText())
         if self._radio_blank.isChecked():
@@ -504,11 +631,22 @@ class TemplateWizard(QWizard):
             self._sv_body_edit.clear()
             self._en_body_edit.clear()
             self._include_en.setChecked(False)
+        elif key[0] == "edit" and self.edit_path is not None:
+            if not self._load_template_content(self.edit_path):
+                QMessageBox.critical(
+                    self,
+                    tr("wizard.edit_title"),
+                    tr(
+                        "wizard.error.load_failed",
+                        error=self._load_error or self.edit_path.name,
+                    ),
+                )
+        elif key[0] == "pack":
+            self._load_pack_content(str(key[1]))
         else:
             self._load_copy_content(str(key[1]))
 
-    def _load_copy_content(self, template_name: str) -> None:
-        path = self.templates_dir / template_name
+    def _load_template_content(self, path: Path) -> bool:
         try:
             subject, sv_body = parse_subject_and_body(
                 path, replacements={}, include_english=False, keep_unknown=True
@@ -516,14 +654,28 @@ class TemplateWizard(QWizard):
             _en_subject, en_body = parse_subject_and_body(
                 path, replacements={}, include_english=True, keep_unknown=True
             )
-        except Exception:
-            log.warning("Kunde inte läsa kopieringskällan %s", path, exc_info=True)
-            return
+        except Exception as exc:
+            self._load_error = str(exc)
+            log.warning("Kunde inte läsa mallen %s", path, exc_info=True)
+            return False
         self._subject_edit.setText(subject)
         self._sv_body_edit.setPlainText(sv_body)
         has_en = bool(en_body.strip()) and en_body.strip() != sv_body.strip()
         self._en_body_edit.setPlainText(en_body if has_en else "")
         self._include_en.setChecked(has_en)
+        return True
+
+    def _load_copy_content(self, template_name: str) -> None:
+        self._load_template_content(self.templates_dir / template_name)
+
+    def _load_pack_content(self, item_id: str) -> None:
+        item = template_pack_item_by_id(item_id)
+        if item is None:
+            return
+        self._subject_edit.setText(item.subject)
+        self._sv_body_edit.setPlainText(item.body_sv)
+        self._en_body_edit.setPlainText(item.body_en)
+        self._include_en.setChecked(bool(item.body_en.strip()))
 
     def _warn(self, message_key: str) -> None:
         QMessageBox.warning(self, tr("wizard.error.title"), tr(message_key))
@@ -564,8 +716,11 @@ class TemplateWizard(QWizard):
             self._sv_body_edit.toPlainText(),
             self._en_body_edit.toPlainText() if self._include_en.isChecked() else "",
         )
+        had_existing = target.exists()
         try:
             self.templates_dir.mkdir(parents=True, exist_ok=True)
+            if had_existing:
+                self.version_snapshot_path = snapshot_template_version(target)
             create_template(target, self._subject_edit.text().strip(), body,
                             overwrite=True)
             clear_scan_cache()
@@ -577,9 +732,316 @@ class TemplateWizard(QWizard):
             )
             return
         self.created_path = target
+        self.saved_path = target
+        self.edited_existing = bool(self.is_editing or had_existing)
         self.set_as_default = self._chk_default.isChecked()
         self.select_after = self._chk_select.isChecked()
-        log.info("Mall skapad via wizarden: %s", target)
+        log.info("Mall sparad via wizarden: %s", target)
+        super().accept()
+
+
+
+class TemplateVersionsDialog(QDialog):
+    """Visa, spara, radera och återställ versioner av en mall."""
+
+    def __init__(
+        self,
+        parent: Optional[QWidget] = None,
+        *,
+        template_path: Path,
+    ) -> None:
+        super().__init__(parent)
+        self.template_path = Path(template_path)
+        self.restored = False
+        self.changed = False
+        self._versions: Dict[str, TemplateVersionInfo] = {}
+
+        self.setWindowTitle(
+            tr("template_versions.title", name=self.template_path.name)
+        )
+        self.setMinimumSize(760, 560)
+        layout = QVBoxLayout(self)
+        layout.setSpacing(10)
+
+        info = QLabel(tr("template_versions.text"))
+        info.setWordWrap(True)
+        layout.addWidget(info)
+
+        self._empty_label = QLabel(tr("template_versions.empty"))
+        self._empty_label.setWordWrap(True)
+        self._empty_label.setProperty("cssClass", "subtext")
+        layout.addWidget(self._empty_label)
+
+        self._list = QListWidget()
+        self._list.currentItemChanged.connect(self._on_selection_changed)
+        layout.addWidget(self._list, stretch=1)
+
+        layout.addWidget(QLabel(f"<b>{tr('template_versions.preview_title')}</b>"))
+        self._preview = QPlainTextEdit()
+        self._preview.setReadOnly(True)
+        self._preview.setMinimumHeight(150)
+        layout.addWidget(self._preview)
+
+        row = QHBoxLayout()
+        self._btn_snapshot = QPushButton(tr("template_versions.snapshot_btn"))
+        self._btn_snapshot.clicked.connect(self._snapshot_current)
+        row.addWidget(self._btn_snapshot)
+        self._btn_delete = QPushButton(tr("template_versions.delete_btn"))
+        self._btn_delete.setProperty("cssClass", "danger")
+        self._btn_delete.clicked.connect(self._delete_selected)
+        row.addWidget(self._btn_delete)
+        row.addStretch()
+        self._btn_restore = QPushButton(tr("template_versions.restore_btn"))
+        self._btn_restore.setProperty("cssClass", "success")
+        self._btn_restore.clicked.connect(self._restore_selected)
+        row.addWidget(self._btn_restore)
+        btn_close = QPushButton(tr("template_versions.close"))
+        btn_close.clicked.connect(self.reject)
+        row.addWidget(btn_close)
+        layout.addLayout(row)
+
+        self._reload_versions()
+
+    def _reload_versions(self, select_path: Optional[Path] = None) -> None:
+        versions = list_template_versions(self.template_path)
+        self._versions = {str(version.path): version for version in versions}
+        self._list.clear()
+        for version in versions:
+            item = QListWidgetItem(
+                f"{version.label} · {version.size} B · {version.path.name}"
+            )
+            item.setData(Qt.ItemDataRole.UserRole, str(version.path))
+            self._list.addItem(item)
+        self._empty_label.setVisible(not versions)
+        target_row = 0 if versions else -1
+        if select_path is not None:
+            for row, version in enumerate(versions):
+                if version.path == select_path:
+                    target_row = row
+                    break
+        if target_row >= 0:
+            self._list.setCurrentRow(target_row)
+        else:
+            self._preview.clear()
+            self._update_buttons()
+
+    def _selected_version(self) -> Optional[TemplateVersionInfo]:
+        item = self._list.currentItem()
+        if item is None:
+            return None
+        return self._versions.get(str(item.data(Qt.ItemDataRole.UserRole)))
+
+    def _update_buttons(self) -> None:
+        selected = self._selected_version() is not None
+        self._btn_restore.setEnabled(selected)
+        self._btn_delete.setEnabled(selected)
+
+    def _on_selection_changed(self, *_args: object) -> None:
+        version = self._selected_version()
+        self._update_buttons()
+        if version is None:
+            self._preview.clear()
+            return
+        try:
+            subject, sv_body = parse_subject_and_body(
+                version.path,
+                replacements={},
+                include_english=False,
+                keep_unknown=True,
+            )
+            _en_subject, en_body = parse_subject_and_body(
+                version.path,
+                replacements={},
+                include_english=True,
+                keep_unknown=True,
+            )
+        except Exception as exc:
+            self._preview.setPlainText(str(exc))
+            return
+        separator = chr(10) * 2
+        text = f"{subject}{separator}{sv_body}" if subject else sv_body
+        if en_body.strip() and en_body.strip() != sv_body.strip():
+            text += separator + "[en]" + chr(10) + en_body
+        self._preview.setPlainText(text)
+
+    def _show_error(self, exc: Exception) -> None:
+        QMessageBox.warning(
+            self,
+            tr("template_versions.title", name=self.template_path.name),
+            tr("template_versions.error", error=str(exc)),
+        )
+
+    def _snapshot_current(self) -> None:
+        try:
+            path = snapshot_template_version(self.template_path)
+        except Exception as exc:
+            self._show_error(exc)
+            return
+        if path is None:
+            self._show_error(FileNotFoundError(str(self.template_path)))
+            return
+        self.changed = True
+        self._reload_versions(path)
+
+    def _restore_selected(self) -> None:
+        version = self._selected_version()
+        if version is None:
+            return
+        reply = QMessageBox.question(
+            self,
+            tr("template_versions.title", name=self.template_path.name),
+            tr(
+                "template_versions.confirm_restore",
+                when=version.label,
+            ),
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+        )
+        if reply != QMessageBox.StandardButton.Yes:
+            return
+        try:
+            restore_template_version(self.template_path, version.path)
+            clear_scan_cache()
+        except Exception as exc:
+            self._show_error(exc)
+            return
+        self.restored = True
+        self.changed = True
+        self.accept()
+
+    def _delete_selected(self) -> None:
+        version = self._selected_version()
+        if version is None:
+            return
+        reply = QMessageBox.question(
+            self,
+            tr("template_versions.title", name=self.template_path.name),
+            tr("template_versions.confirm_delete", when=version.label),
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+        )
+        if reply != QMessageBox.StandardButton.Yes:
+            return
+        try:
+            delete_template_version(self.template_path, version.path)
+        except Exception as exc:
+            self._show_error(exc)
+            return
+        self.changed = True
+        self._reload_versions()
+
+
+class TemplatePackDialog(QDialog):
+    """Kopiera valda mallar från de inbyggda mallpaketen."""
+
+    def __init__(
+        self,
+        parent: Optional[QWidget] = None,
+        *,
+        templates_dir: Path,
+    ) -> None:
+        super().__init__(parent)
+        self.templates_dir = Path(templates_dir)
+        self.install_result = None
+
+        self.setWindowTitle(tr("template_packs.title"))
+        self.setMinimumSize(680, 520)
+        layout = QVBoxLayout(self)
+        layout.setSpacing(10)
+
+        info = QLabel(tr("template_packs.text"))
+        info.setWordWrap(True)
+        layout.addWidget(info)
+
+        self._tree = QTreeWidget()
+        self._tree.setColumnCount(1)
+        self._tree.setHeaderHidden(True)
+        self._tree.currentItemChanged.connect(self._on_current_changed)
+        language = get_language()
+        for pack in all_template_packs():
+            parent_item = QTreeWidgetItem([pack.display_name(language)])
+            parent_item.setData(0, Qt.ItemDataRole.UserRole, "")
+            parent_item.setData(0, Qt.ItemDataRole.UserRole + 1, pack.pack_id)
+            font = parent_item.font(0)
+            font.setBold(True)
+            parent_item.setFont(0, font)
+            self._tree.addTopLevelItem(parent_item)
+            for template in pack.templates:
+                child = QTreeWidgetItem([template.display_name(language)])
+                child.setData(0, Qt.ItemDataRole.UserRole, template.item_id)
+                child.setData(
+                    0, Qt.ItemDataRole.UserRole + 1, pack.pack_id
+                )
+                child.setFlags(
+                    child.flags() | Qt.ItemFlag.ItemIsUserCheckable
+                )
+                child.setCheckState(0, Qt.CheckState.Checked)
+                parent_item.addChild(child)
+            parent_item.setExpanded(True)
+        layout.addWidget(self._tree, stretch=1)
+
+        self._description = QLabel("")
+        self._description.setWordWrap(True)
+        self._description.setProperty("cssClass", "subtext")
+        layout.addWidget(self._description)
+        if self._tree.topLevelItemCount():
+            self._tree.setCurrentItem(self._tree.topLevelItem(0))
+            self._on_current_changed(self._tree.topLevelItem(0), None)
+
+        row = QHBoxLayout()
+        row.addStretch()
+        btn_cancel = QPushButton(tr("template_packs.cancel"))
+        btn_cancel.clicked.connect(self.reject)
+        row.addWidget(btn_cancel)
+        btn_install = QPushButton(tr("template_packs.install_btn"))
+        btn_install.setProperty("cssClass", "success")
+        btn_install.clicked.connect(self.accept)
+        row.addWidget(btn_install)
+        layout.addLayout(row)
+
+    def _on_current_changed(
+        self, current: Optional[QTreeWidgetItem], _previous: object
+    ) -> None:
+        if current is None:
+            self._description.clear()
+            return
+        pack = template_pack_by_id(
+            current.data(0, Qt.ItemDataRole.UserRole + 1)
+        )
+        self._description.setText(
+            pack.display_description(get_language()) if pack else ""
+        )
+
+    def selected_item_ids(self) -> List[str]:
+        selected: List[str] = []
+        for top_index in range(self._tree.topLevelItemCount()):
+            parent_item = self._tree.topLevelItem(top_index)
+            for child_index in range(parent_item.childCount()):
+                child = parent_item.child(child_index)
+                if child.checkState(0) == Qt.CheckState.Checked:
+                    item_id = str(child.data(0, Qt.ItemDataRole.UserRole) or "")
+                    if item_id:
+                        selected.append(item_id)
+        return selected
+
+    def accept(self) -> None:  # noqa: N802 (Qt-API)
+        item_ids = self.selected_item_ids()
+        if not item_ids:
+            QMessageBox.warning(
+                self,
+                tr("template_packs.title"),
+                tr("template_packs.select_none"),
+            )
+            return
+        try:
+            self.install_result = install_template_items(
+                self.templates_dir, item_ids
+            )
+        except Exception as exc:
+            QMessageBox.warning(
+                self,
+                tr("template_packs.title"),
+                tr("template_packs.error", error=str(exc)),
+            )
+            return
         super().accept()
 
 
@@ -588,5 +1050,7 @@ __all__ = [
     "EXAMPLE_BODY_SV",
     "EXAMPLE_SUBJECT",
     "INSERT_PLACEHOLDER_KEYS",
+    "TemplatePackDialog",
+    "TemplateVersionsDialog",
     "TemplateWizard",
 ]
