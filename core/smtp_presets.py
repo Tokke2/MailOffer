@@ -28,6 +28,7 @@ class SmtpPreset:
     domains: Tuple[str, ...] = ()
     app_password_url: str = ""
     note_key: str = ""  # i18n-nyckel för hjälptext i UI:t
+    server_template: str = ""  # t.ex. "mail.{domain}" för webbhotell
 
 
 PRESETS: Tuple[SmtpPreset, ...] = (
@@ -81,6 +82,39 @@ PRESETS: Tuple[SmtpPreset, ...] = (
         app_password_url="https://appleid.apple.com/",
         note_key="smtp.preset_note.icloud",
     ),
+    SmtpPreset(
+        preset_id="websupport",
+        name="WebSupport (webbhotell)",
+        server="smtp.websupport.se",
+        port=465,
+        use_ssl=True,
+        note_key="smtp.preset_note.webhotel",
+    ),
+    SmtpPreset(
+        preset_id="loopia",
+        name="Loopia (webbhotell)",
+        server="mailcluster.loopia.se",
+        port=587,
+        use_ssl=False,
+        note_key="smtp.preset_note.webhotel",
+    ),
+    SmtpPreset(
+        preset_id="onecom",
+        name="one.com (webbhotell)",
+        server="send.one.com",
+        port=587,
+        use_ssl=False,
+        note_key="smtp.preset_note.webhotel",
+    ),
+    SmtpPreset(
+        preset_id="webhotel_generic",
+        name="Annat webbhotell (egen domän)",
+        server="",
+        port=465,
+        use_ssl=True,
+        note_key="smtp.preset_note.webhotel_generic",
+        server_template="mail.{domain}",
+    ),
 )
 
 
@@ -129,9 +163,23 @@ def preset_for_server(server: object) -> Optional[SmtpPreset]:
     if not host:
         return None
     for preset in PRESETS:
-        if host == preset.server:
+        if preset.server and host == preset.server:
             return preset
+    if host.startswith("mail."):
+        return preset_by_id("webhotel_generic")
     return None
+
+
+def server_for_preset(preset: SmtpPreset, email: object) -> str:
+    """Servernamn för ett förval; mallförval fylls med adressens domän."""
+    if preset.server:
+        return preset.server
+    if preset.server_template:
+        domain = domain_from_email(email)
+        if domain:
+            return preset.server_template.replace("{domain}", domain)
+        return preset.server_template.replace("{domain}", "dindomän.se")
+    return ""
 
 
 __all__ = [
@@ -142,4 +190,5 @@ __all__ = [
     "preset_for_email",
     "preset_for_server",
     "domain_from_email",
+    "server_for_preset",
 ]

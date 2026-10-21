@@ -23,7 +23,9 @@ _English summary below._
   To/Bcc, ogiltiga adresser, SV/EN-fördelning och bilagestorlek;
   **🧪 Skicka testmail** skickar bara till din egen testadress
 - 📡 **SMTP-förval & DNS-kontroll** (nytt i 1.1) – välj leverantör
-  (Gmail/Outlook/Microsoft 365/Yahoo/iCloud) så fylls server, port
+  (Gmail/Outlook/Microsoft 365/Yahoo/iCloud eller webbhotell som
+  WebSupport/Loopia/one.com – egna domäner gissas som mail.domänen)
+  så fylls server, port
   och SSL i automatiskt, med länk till applösenord; kontrollera
   SPF/DKIM/DMARC för avsändardomänen med ett klick
 - 💾 **Säkerhetskopiering** (nytt i 1.1) – en ZIP med kontakter,

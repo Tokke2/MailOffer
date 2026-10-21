@@ -91,6 +91,20 @@ class TestSmtpBackupUi(unittest.TestCase):
             win._settings_widgets["smtp_server"].text(), "smtp.mail.me.com"
         )
 
+    def test_autodetect_falls_back_to_generic_webhotel(self):
+        win, _settings, _base = self._make_window()
+        win._settings_widgets["smtp_server"].setText("")
+        win._settings_widgets["sender_email"].setText("info@bilglas.se")
+        win._autodetect_smtp_provider()
+        QApplication.processEvents()
+        self.assertEqual(
+            win._smtp_provider_combo.currentData(), "webhotel_generic"
+        )
+        self.assertEqual(
+            win._settings_widgets["smtp_server"].text(), "mail.bilglas.se"
+        )
+        self.assertTrue(win._settings_widgets["use_ssl"].isChecked())
+
     def test_sync_combo_from_saved_server(self):
         win, _settings, _base = self._make_window(
             smtp_server="smtp.mail.yahoo.com", smtp_port=465, use_ssl=True

@@ -322,6 +322,7 @@ from core.smtp_presets import (
     preset_by_id,
     preset_for_email,
     preset_for_server,
+    server_for_preset,
 )
 from core.user_backup import (
     create_full_backup,
@@ -5263,7 +5264,13 @@ class MainWindow(QMainWindow):
             return
         widgets = self._settings_widgets
         if "smtp_server" in widgets:
-            widgets["smtp_server"].setText(preset.server)
+            sender_w = widgets.get("sender_email")
+            widgets["smtp_server"].setText(
+                server_for_preset(
+                    preset,
+                    sender_w.text() if isinstance(sender_w, QLineEdit) else "",
+                )
+            )
         if "smtp_port" in widgets:
             widgets["smtp_port"].setText(str(preset.port))
         if "use_ssl" in widgets:
@@ -5321,6 +5328,12 @@ class MainWindow(QMainWindow):
         preset = preset_for_email(
             sender_w.text() if isinstance(sender_w, QLineEdit) else ""
         )
+        if preset is None and isinstance(sender_w, QLineEdit):
+            # Egen domän (troligen webbhotell): föreslå mail.<domänen>
+            from core.smtp_presets import domain_from_email
+
+            if domain_from_email(sender_w.text()):
+                preset = preset_by_id("webhotel_generic")
         if preset is not None:
             index = combo.findData(preset.preset_id)
             if index >= 0:

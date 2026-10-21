@@ -12,13 +12,14 @@ from core.smtp_presets import (
     preset_by_id,
     preset_for_email,
     preset_for_server,
+    server_for_preset,
 )
 
 
 class TestSmtpPresets(unittest.TestCase):
     def test_preset_values_sane(self):
         for preset in all_presets():
-            self.assertTrue(preset.server)
+            self.assertTrue(preset.server or preset.server_template)
             self.assertIn(preset.port, (465, 587))
             # 465 = implicit SSL, 587 = STARTTLS
             self.assertEqual(preset.use_ssl, preset.port == 465)
@@ -41,9 +42,26 @@ class TestSmtpPresets(unittest.TestCase):
         self.assertEqual(
             preset_for_server("smtp.gmail.com").preset_id, "gmail"
         )
-        self.assertIsNone(preset_for_server("mail.exempel.se"))
+        self.assertIsNone(preset_for_server("smtp.exempel.se"))
         self.assertEqual(preset_by_id("yahoo").port, 465)
         self.assertIsNone(preset_by_id("okand"))
+
+    def test_webhotel_presets_and_generic_template(self):
+        self.assertEqual(
+            preset_by_id("websupport").server, "smtp.websupport.se"
+        )
+        self.assertEqual(
+            preset_by_id("loopia").server, "mailcluster.loopia.se"
+        )
+        self.assertEqual(preset_by_id("onecom").server, "send.one.com")
+        generic = preset_by_id("webhotel_generic")
+        self.assertEqual(
+            server_for_preset(generic, "anna@bilglas.se"), "mail.bilglas.se"
+        )
+        self.assertEqual(
+            preset_for_server("mail.bilglas.se").preset_id,
+            "webhotel_generic",
+        )
 
     def test_domain_from_email(self):
         self.assertEqual(domain_from_email("Anna@Example.SE"), "example.se")
