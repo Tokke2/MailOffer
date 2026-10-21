@@ -22,6 +22,13 @@ _English summary below._
   visar exakt slutantal (inkl. egen kopia/standard-Bcc), överlapp
   To/Bcc, ogiltiga adresser, SV/EN-fördelning och bilagestorlek;
   **🧪 Skicka testmail** skickar bara till din egen testadress
+- 📡 **SMTP-förval & DNS-kontroll** (nytt i 1.1) – välj leverantör
+  (Gmail/Outlook/Microsoft 365/Yahoo/iCloud) så fylls server, port
+  och SSL i automatiskt, med länk till applösenord; kontrollera
+  SPF/DKIM/DMARC för avsändardomänen med ett klick
+- 💾 **Säkerhetskopiering** (nytt i 1.1) – en ZIP med kontakter,
+  mallar, historik och inställningar (lösenord följer aldrig med)
+  under *Inställningar → 💾 Säkerhetskopiering*, med återställning
 - 👥 **Kontakter & grupper** med språk per mottagare – EN får alltid
   engelsk version, SV alltid svensk (VIN skickas bara i EN-mailet).
   **E-postlistor** kan importeras från TXT/CSV/TSV eller klistras in
@@ -169,6 +176,8 @@ daily check + manual button; user templates/JSON/settings are never
 overwritten) and **Ko-fi donations**. New in 1.0: **sender profiles** (pick the
 sending account per send) plus a **preflight check & test mode**
 (final recipient counts, To/Bcc overlaps, attachment sizes; test
-mail goes only to your own test address). Version number lives in
+mail goes only to your own test address). New in 1.1: **SMTP provider
+presets** with app-password links, a one-click **SPF/DKIM/DMARC check**
+and full **backup/restore** (ZIP; passwords never included). Version number lives in
 `core/version.py`. Run with `pip install -r requirements.txt` +
 `python main.pyw`; tests with `python -m unittest discover -s tests -v`.

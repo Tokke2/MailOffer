@@ -316,6 +316,18 @@ from core.sender_profiles import (
     normalize_sender_profile,
 )
 from core.send_preflight import build_send_preflight
+from core.dns_checks import check_domain, normalize_domain
+from core.smtp_presets import (
+    all_presets,
+    preset_by_id,
+    preset_for_email,
+    preset_for_server,
+)
+from core.user_backup import (
+    create_full_backup,
+    inspect_backup,
+    restore_full_backup,
+)
 from core.i18n import get_language as i18n_get_language
 from core.i18n import normalize_language
 from core.i18n import set_language as i18n_set_language
@@ -962,6 +974,28 @@ class UpdateWorker(QThread):
             log.warning(
                 "UpdateWorker (%s) misslyckades", self._mode, exc_info=True
             )
+            self.failed.emit(str(exc))
+
+
+class DnsCheckWorker(QThread):
+    """SPF/DKIM/DMARC-kontroll i bakgrunden (blockerar aldrig UI:t)."""
+
+    done = pyqtSignal(object)  # core.dns_checks.DnsReport
+    failed = pyqtSignal(str)
+
+    def __init__(self, domain: str) -> None:
+        super().__init__()
+        self._domain = str(domain or "")
+
+    def run(self) -> None:
+        try:
+            report = check_domain(self._domain)
+            if report.error and report.spf_status == "error":
+                self.failed.emit(report.error)
+                return
+            self.done.emit(report)
+        except Exception as exc:  # check_domain kastar normalt inte
+            log.warning("DnsCheckWorker misslyckades", exc_info=True)
             self.failed.emit(str(exc))
 
 
@@ -4374,6 +4408,7 @@ class MainWindow(QMainWindow):
         layout.addWidget(self._build_settings_group_logging())
         layout.addWidget(self._build_settings_group_updates())
         layout.addWidget(self._build_settings_group_support())
+        layout.addWidget(self._build_settings_group_backup())
 
         buttons = QHBoxLayout()
         btn_reload = QPushButton("🔄 Läs om")
@@ -4447,6 +4482,25 @@ class MainWindow(QMainWindow):
         profile_buttons.addStretch()
         form.addRow("", profile_buttons_widget)
 
+        self._smtp_provider_combo = QComboBox()
+        self._smtp_provider_combo.addItem(tr("smtp.provider_manual"), "")
+        for preset in all_presets():
+            self._smtp_provider_combo.addItem(preset.name, preset.preset_id)
+        self._smtp_provider_combo.currentIndexChanged.connect(
+            self._on_smtp_provider_changed
+        )
+        form.addRow(tr("smtp.provider_label"), self._smtp_provider_combo)
+
+        self._smtp_provider_help = QLabel("")
+        self._smtp_provider_help.setProperty("cssClass", "muted")
+        self._smtp_provider_help.setWordWrap(True)
+        form.addRow("", self._smtp_provider_help)
+
+        self._btn_app_password = QPushButton(tr("smtp.app_password_btn"))
+        self._btn_app_password.clicked.connect(self._open_app_password_page)
+        self._btn_app_password.setVisible(False)
+        form.addRow("", self._btn_app_password)
+
         form.addRow("SMTP-server", self._make_settings_line("smtp_server", "SMTP-server"))
         form.addRow("SMTP-port", self._make_settings_line("smtp_port", "SMTP-port"))
         form.addRow("Avsändaradress", self._make_settings_line("sender_email", "Avsändaradress"))
@@ -4460,6 +4514,11 @@ class MainWindow(QMainWindow):
             self._make_settings_line("archive_copy_email", "Arkivkopia"),
         )
         form.addRow("SSL", self._make_settings_checkbox("use_ssl", "Använd SSL"))
+        sender_widget = self._settings_widgets.get("sender_email")
+        if isinstance(sender_widget, QLineEdit):
+            sender_widget.editingFinished.connect(
+                self._autodetect_smtp_provider
+            )
         return group
 
     def _build_settings_group_paths(self) -> QGroupBox:
@@ -4605,6 +4664,17 @@ class MainWindow(QMainWindow):
         tip.setProperty("cssClass", "muted")
         tip.setWordWrap(True)
         layout.addWidget(tip)
+
+        self._btn_dns_check = QPushButton(tr("smtp.dns_btn"))
+        self._btn_dns_check.setProperty("cssClass", "purple")
+        self._btn_dns_check.clicked.connect(self._check_dns_from_settings)
+        layout.addWidget(
+            self._btn_dns_check, alignment=Qt.AlignmentFlag.AlignLeft
+        )
+
+        self._dns_result_label = QLabel("")
+        self._dns_result_label.setWordWrap(True)
+        layout.addWidget(self._dns_result_label)
         return group
 
     def _open_deliverability_guide(self) -> None:
@@ -4739,6 +4809,7 @@ class MainWindow(QMainWindow):
                 else:
                     widget.setCurrentText(str(value or ""))
         self._refresh_sender_profile_combos()
+        self._sync_smtp_provider_combo()
 
     def _collect_settings_form(self) -> Dict[str, Any]:
         values: Dict[str, Any] = {}
@@ -4968,6 +5039,7 @@ class MainWindow(QMainWindow):
                 widget.setText("" if value is None else str(value))
             elif isinstance(widget, QCheckBox):
                 widget.setChecked(bool(value))
+        self._sync_smtp_provider_combo()
 
     def _on_settings_profile_changed(self, _index: int = -1) -> None:
         combo = getattr(self, "_settings_profile_combo", None)
@@ -5166,6 +5238,317 @@ class MainWindow(QMainWindow):
         else:
             QMessageBox.warning(self, "SMTP-test", message)
             self._status("⚠️ SMTP-test misslyckades", "warning")
+
+    # ────────────────────────────────────────────────────────────────
+    # SMTP-leverantörsförval + DNS-kontroll + säkerhetskopiering
+    # ────────────────────────────────────────────────────────────────
+
+    def _update_smtp_provider_help(self, preset: Any) -> None:
+        help_label = getattr(self, "_smtp_provider_help", None)
+        if help_label is not None:
+            help_label.setText(
+                tr(preset.note_key) if preset is not None and preset.note_key else ""
+            )
+        btn = getattr(self, "_btn_app_password", None)
+        if btn is not None:
+            btn.setVisible(bool(preset is not None and preset.app_password_url))
+
+    def _on_smtp_provider_changed(self, _index: int = -1) -> None:
+        combo = getattr(self, "_smtp_provider_combo", None)
+        if combo is None:
+            return
+        preset = preset_by_id(combo.currentData())
+        self._update_smtp_provider_help(preset)
+        if preset is None:
+            return
+        widgets = self._settings_widgets
+        if "smtp_server" in widgets:
+            widgets["smtp_server"].setText(preset.server)
+        if "smtp_port" in widgets:
+            widgets["smtp_port"].setText(str(preset.port))
+        if "use_ssl" in widgets:
+            widgets["use_ssl"].setChecked(bool(preset.use_ssl))
+        try:
+            username_w = widgets.get("username")
+            sender_w = widgets.get("sender_email")
+            if (
+                isinstance(username_w, QLineEdit)
+                and isinstance(sender_w, QLineEdit)
+                and not username_w.text().strip()
+                and sender_w.text().strip()
+            ):
+                username_w.setText(sender_w.text().strip())
+        except Exception:
+            log.debug("Kunde inte fylla i användarnamn", exc_info=True)
+        self._status(
+            tr("smtp.provider_applied", provider=preset.name), "success"
+        )
+
+    def _open_app_password_page(self) -> None:
+        combo = getattr(self, "_smtp_provider_combo", None)
+        preset = preset_by_id(combo.currentData()) if combo is not None else None
+        if preset is not None and preset.app_password_url:
+            self._open_url(preset.app_password_url)
+
+    def _sync_smtp_provider_combo(self) -> None:
+        """Spegla formulärets SMTP-server i leverantörskombon (utan att
+        skriva över några fält)."""
+        combo = getattr(self, "_smtp_provider_combo", None)
+        if combo is None:
+            return
+        server_w = self._settings_widgets.get("smtp_server")
+        preset = preset_for_server(
+            server_w.text() if isinstance(server_w, QLineEdit) else ""
+        )
+        combo.blockSignals(True)
+        try:
+            combo.setCurrentIndex(
+                combo.findData(preset.preset_id) if preset is not None else 0
+            )
+        finally:
+            combo.blockSignals(False)
+        self._update_smtp_provider_help(preset)
+
+    def _autodetect_smtp_provider(self) -> None:
+        """Föreslå leverantör från avsändaradressen om servern är tom."""
+        server_w = self._settings_widgets.get("smtp_server")
+        sender_w = self._settings_widgets.get("sender_email")
+        combo = getattr(self, "_smtp_provider_combo", None)
+        if combo is None or not isinstance(server_w, QLineEdit):
+            return
+        if server_w.text().strip():
+            return
+        preset = preset_for_email(
+            sender_w.text() if isinstance(sender_w, QLineEdit) else ""
+        )
+        if preset is not None:
+            index = combo.findData(preset.preset_id)
+            if index >= 0:
+                combo.setCurrentIndex(index)
+
+    def _check_dns_from_settings(self) -> None:
+        values = self._collect_settings_form()
+        email = str(
+            values.get("sender_email")
+            or self.settings.get("sender_email", "")
+            or ""
+        )
+        domain = normalize_domain(email)
+        if not domain:
+            QMessageBox.information(
+                self, tr("app.window_title"), tr("smtp.dns_no_domain")
+            )
+            return
+        btn = getattr(self, "_btn_dns_check", None)
+        label = getattr(self, "_dns_result_label", None)
+        if btn is not None:
+            btn.setEnabled(False)
+        if label is not None:
+            label.setText(tr("smtp.dns_running", domain=domain))
+        self._dns_worker = DnsCheckWorker(domain)
+        self._dns_worker.done.connect(self._on_dns_checked)
+        self._dns_worker.failed.connect(self._on_dns_failed)
+        self._dns_worker.start()
+
+    def _format_dns_report(self, report: Any) -> str:
+        def fmt(status: str) -> str:
+            return tr(
+                {
+                    "ok": "smtp.dns_ok",
+                    "missing": "smtp.dns_missing",
+                }.get(status, "smtp.dns_error_status")
+            )
+
+        dmarc = fmt(report.dmarc_status)
+        if report.dmarc_status == "ok" and report.dmarc_policy:
+            dmarc += tr("smtp.dns_dmarc_policy", policy=report.dmarc_policy)
+        dkim = fmt(report.dkim_status)
+        if report.dkim_selectors:
+            dkim += tr(
+                "smtp.dns_dkim_selectors",
+                selectors=", ".join(report.dkim_selectors),
+            )
+        text = tr(
+            "smtp.dns_result",
+            domain=report.domain,
+            spf=fmt(report.spf_status),
+            dmarc=dmarc,
+            dkim=dkim,
+        )
+        if report.ok_count < 3:
+            text += "\n\n" + tr("smtp.dns_hint")
+        return text
+
+    def _on_dns_checked(self, report: Any) -> None:
+        btn = getattr(self, "_btn_dns_check", None)
+        if btn is not None:
+            btn.setEnabled(True)
+        label = getattr(self, "_dns_result_label", None)
+        if label is not None:
+            label.setText(self._format_dns_report(report))
+        self._status(
+            f"🌐 DNS {report.domain}: {report.ok_count}/3",
+            "success" if report.ok_count == 3 else "warning",
+        )
+
+    def _on_dns_failed(self, error: str) -> None:
+        btn = getattr(self, "_btn_dns_check", None)
+        if btn is not None:
+            btn.setEnabled(True)
+        label = getattr(self, "_dns_result_label", None)
+        if label is not None:
+            label.setText(tr("smtp.dns_failed", error=error))
+        self._status("⚠️ DNS-kontrollen misslyckades", "warning")
+
+    def _build_settings_group_backup(self) -> QGroupBox:
+        group = QGroupBox(tr("backup.group"))
+        layout = QVBoxLayout(group)
+        layout.setSpacing(8)
+        info = QLabel(tr("backup.info"))
+        info.setProperty("cssClass", "muted")
+        info.setWordWrap(True)
+        layout.addWidget(info)
+        row = QHBoxLayout()
+        btn_create = QPushButton(tr("backup.create_btn"))
+        btn_create.setProperty("cssClass", "success")
+        btn_create.clicked.connect(self._create_full_backup_ui)
+        row.addWidget(btn_create)
+        btn_restore = QPushButton(tr("backup.restore_btn"))
+        btn_restore.clicked.connect(self._restore_full_backup_ui)
+        row.addWidget(btn_restore)
+        row.addStretch()
+        layout.addLayout(row)
+        return group
+
+    def _backup_dir_map(self) -> Dict[str, Path]:
+        """Kanonisk sektion → aktuell mapp (respekterar egna sökvägar)."""
+        base = self._base_dir()
+
+        def resolve(value: object, default: str) -> Path:
+            path = Path(str(value or default))
+            return path if path.is_absolute() else base / path
+
+        return {
+            "adresslistor": resolve(
+                self.settings.get("address_dir", "adresslistor"), "adresslistor"
+            ),
+            "Mallar": resolve(
+                self.settings.get("template_dir", "Mallar"), "Mallar"
+            ),
+        }
+
+    def _backup_sections_text(self, sections: Mapping[str, Any]) -> str:
+        labels = []
+        for key in ("settings", "adresslistor", "Mallar", "history"):
+            if sections.get(key):
+                labels.append(tr("backup.section_" + key.lower()))
+        return ", ".join(labels)
+
+    def _create_full_backup_ui(self) -> None:
+        default_name = (
+            "Epostofferten-sakerhetskopia-"
+            + datetime.datetime.now().strftime("%Y%m%d-%H%M")
+            + ".zip"
+        )
+        path, _ = QFileDialog.getSaveFileName(
+            self,
+            tr("backup.create_title"),
+            str(Path.home() / default_name),
+            "ZIP (*.zip)",
+        )
+        if not path:
+            return
+        if not path.lower().endswith(".zip"):
+            path += ".zip"
+        try:
+            summary = create_full_backup(
+                self._base_dir(),
+                getattr(self.settings, "settings_path", None),
+                Path(path),
+                app_version=APP_VERSION,
+                dir_sources=self._backup_dir_map(),
+            )
+        except Exception as exc:
+            QMessageBox.warning(
+                self,
+                tr("backup.group"),
+                tr("backup.failed", error=str(exc)),
+            )
+            return
+        QMessageBox.information(
+            self,
+            tr("backup.create_title"),
+            tr(
+                "backup.create_done",
+                path=path,
+                files=summary["files"],
+                sections=self._backup_sections_text(summary["sections"]) or "—",
+            ),
+        )
+        self._status("💾 Säkerhetskopia skapad", "success")
+
+    def _restore_full_backup_ui(self) -> None:
+        path, _ = QFileDialog.getOpenFileName(
+            self,
+            tr("backup.restore_title"),
+            str(Path.home()),
+            "ZIP (*.zip)",
+        )
+        if not path:
+            return
+        try:
+            manifest = inspect_backup(Path(path))
+        except Exception as exc:
+            QMessageBox.warning(
+                self,
+                tr("backup.restore_title"),
+                tr("backup.invalid", error=str(exc)),
+            )
+            return
+        reply = QMessageBox.question(
+            self,
+            tr("backup.restore_title"),
+            tr(
+                "backup.confirm",
+                created=str(manifest.get("created") or "?"),
+                version=str(manifest.get("app_version") or "?"),
+                sections=self._backup_sections_text(
+                    manifest.get("sections") or {}
+                ) or "—",
+            ),
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+        )
+        if reply != QMessageBox.StandardButton.Yes:
+            return
+        try:
+            result = restore_full_backup(
+                Path(path),
+                self._base_dir(),
+                getattr(self.settings, "settings_path", None),
+                app_version=APP_VERSION,
+                dir_targets=self._backup_dir_map(),
+            )
+        except Exception as exc:
+            QMessageBox.warning(
+                self,
+                tr("backup.restore_title"),
+                tr("backup.failed", error=str(exc)),
+            )
+            return
+        box = QMessageBox(self)
+        box.setWindowTitle(tr("backup.restore_title"))
+        box.setText(
+            tr("backup.restored", safety=str(result["safety_backup"]))
+        )
+        btn_restart = box.addButton(
+            tr("backup.restart_now"), QMessageBox.ButtonRole.AcceptRole
+        )
+        box.addButton(
+            tr("backup.later"), QMessageBox.ButtonRole.RejectRole
+        )
+        box.exec()
+        if box.clickedButton() is btn_restart:
+            self._restart_app()
 
     def _open_settings(self) -> None:
         self.select_tab("settings")
