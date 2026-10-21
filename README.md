@@ -14,7 +14,7 @@ _English summary below._
 - 🧙 **Mall-wizard** (nytt i 5.4) – skapa nya mallar steg för steg:
   namn/format → svensk text → valfri engelsk text (autoöversättning) →
   förhandsgranskning med testvärden → spara
-- ✏️ **Redigera mallar, versioner & mallpaket** (nytt i 1.3) – öppna en
+- ✏️ **Redigera mallar, versioner & mallpaket** (nytt i 1.0) – öppna en
   befintlig mall i wizarden; tidigare innehåll sparas automatiskt som
   en version som kan förhandsgranskas och återställas. Elva färdiga
   mallar för påminnelser, tackmail, säsongskampanjer, bil/verkstad,
@@ -27,14 +27,14 @@ _English summary below._
   visar exakt slutantal (inkl. egen kopia/standard-Bcc), överlapp
   To/Bcc, ogiltiga adresser, SV/EN-fördelning och bilagestorlek;
   **🧪 Skicka testmail** skickar bara till din egen testadress
-- 📡 **SMTP-förval & DNS-kontroll** (nytt i 1.1) – välj leverantör
+- 📡 **SMTP-förval & DNS-kontroll** (nytt i 1.0) – välj leverantör
   (Gmail/Outlook/Microsoft 365/Yahoo/iCloud eller webbhotell som
   WebSupport/Loopia/one.com – egna domäner gissas som mail.domänen;
   nodservrar som `smtp.m101.websupport.se` känns också igen)
   så fylls server, port
   och SSL i automatiskt, med länk till applösenord; kontrollera
   SPF/DKIM/DMARC för avsändardomänen med ett klick
-- 💾 **Säkerhetskopiering** (nytt i 1.1) – en ZIP med kontakter,
+- 💾 **Säkerhetskopiering** (nytt i 1.0) – en ZIP med kontakter,
   mallar, historik och inställningar (lösenord följer aldrig med)
   under *Inställningar → 💾 Säkerhetskopiering*, med återställning
 - 👥 **Kontakter & grupper** med språk per mottagare – EN får alltid
