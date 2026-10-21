@@ -223,6 +223,64 @@ class TestUpdateDeferralUi(unittest.TestCase):
         win._maybe_prompt_pending_update()  # samma anrop som timern i show()
         self.assertEqual(prompted, [info])
 
+    def test_same_version_check_baselines_fingerprint(self) -> None:
+        from core.github_update import UpdateInfo
+        from core.version import __version__
+
+        win = self._make_window()
+        info = UpdateInfo(
+            available=False,
+            latest_version=__version__,
+            tag="v" + __version__,
+            download_url="https://example.invalid/x.zip",
+            fingerprint="fp-aktuell",
+        )
+        win._update_check_manual = False
+        win._on_update_checked(info)
+        self.assertEqual(
+            win.settings.get("installed_release_fingerprint"), "fp-aktuell"
+        )
+
+    def test_same_version_files_changed_flow(self) -> None:
+        from core.github_update import UpdateInfo
+        from core.version import __version__
+
+        win = self._make_window()
+        win.settings.set("installed_release_fingerprint", "fp-gammal")
+        prompted: list = []
+        win._prompt_update_install = lambda info: prompted.append(info)  # type: ignore[method-assign]
+        info = UpdateInfo(
+            available=True,
+            latest_version=__version__,
+            tag="v" + __version__,
+            download_url="https://example.invalid/x.zip",
+            fingerprint="fp-ny",
+            same_version_files_changed=True,
+        )
+        win._update_check_manual = True
+        win._on_update_checked(info)
+        self.assertEqual(prompted, [info])
+        # Fingeravtrycket skrivs INTE över förrän uppdateringen installerats
+        self.assertEqual(
+            win.settings.get("installed_release_fingerprint"), "fp-gammal"
+        )
+
+        import ui.main_window as main_mod
+
+        original = main_mod.QMessageBox.question
+        main_mod.QMessageBox.question = staticmethod(
+            lambda *a, **k: main_mod.QMessageBox.StandardButton.No
+        )
+        try:
+            win._on_update_installed(
+                {"copied": ["main.pyw"], "errors": [], "fingerprint": "fp-ny"}
+            )
+        finally:
+            main_mod.QMessageBox.question = original
+        self.assertEqual(
+            win.settings.get("installed_release_fingerprint"), "fp-ny"
+        )
+
     def test_manual_check_prompts_immediately(self) -> None:
         win = self._make_window()
         prompted: list = []

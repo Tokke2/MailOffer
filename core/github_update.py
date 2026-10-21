@@ -5,7 +5,11 @@
 Flöde:
 1. ``check_for_update()`` frågar GitHub-API:t efter senaste *release*
    (``/repos/{repo}/releases/latest``) och jämför ``tag_name`` med den
-   installerade versionen (``core/version.py``).
+   installerade versionen (``core/version.py``). Om versionsnumret är
+   SAMMA jämförs även byggstämpel (``BUILD_ID`` mot releasens
+   "build:"-markering) och ett release-fingeravtryck av releasens
+   metadata, så att uppdaterade filer i t.ex. v1.0.0 ändå erbjuds som
+   uppdatering (ägarbeslut 2026-10-21).
 2. ``apply_github_update()`` laddar ner release-zip:en (bifogad
    ``.zip``-asset om den finns, annars ``zipball_url``), packar upp
    den säkert (zip-slip-skydd) och delegerar kopieringen till
@@ -27,6 +31,7 @@ FIL: core/github_update.py
 from __future__ import annotations
 
 import datetime as _dt
+import hashlib
 import json
 import logging
 import re
@@ -39,7 +44,11 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable, Dict, Optional, Tuple
 
-from core.version import GITHUB_REPO, __version__ as CURRENT_VERSION
+from core.version import (
+    BUILD_ID as CURRENT_BUILD_ID,
+    GITHUB_REPO,
+    __version__ as CURRENT_VERSION,
+)
 
 log = logging.getLogger(__name__)
 
@@ -102,6 +111,81 @@ def normalize_tag(tag: object) -> str:
     return match.group(1) if match else ""
 
 
+_BUILD_MARKER_RE = re.compile("(?i)build *: *([A-Za-z0-9._+-]+)")
+
+
+def parse_build_id(value: object) -> str:
+    """Byggstämpel ur release-text: "build: 2026102102" → "2026102102".
+
+    Accepterar antingen en release-payload (dict – namn + text söks
+    igenom) eller en ren sträng. Saknas markering returneras "".
+    """
+    if isinstance(value, dict):
+        text = f"{value.get('name') or ''} {value.get('body') or ''}"
+    else:
+        text = str(value or "")
+    match = _BUILD_MARKER_RE.search(text)
+    return match.group(1).strip() if match else ""
+
+
+def _is_newer_build(latest: object, current: object) -> bool:
+    """True om releasens byggstämpel är nyare än den installerade.
+
+    Numeriska stämplar (t.ex. datum + löpnummer) jämförs numeriskt;
+    övriga stämplar räknas som nyare om de skiljer sig åt.
+    """
+    latest_s = str(latest or "").strip()
+    current_s = str(current or "").strip()
+    if not latest_s or not current_s:
+        return False
+    if latest_s.isdigit() and current_s.isdigit():
+        return int(latest_s) > int(current_s)
+    return latest_s != current_s
+
+
+def release_fingerprint(payload: Dict[str, Any]) -> str:
+    """Stabilt fingeravtryck av en releases nedladdningsbara innehåll.
+
+    Bygger på fält som ändras när releasens FILER ändras (ny commit för
+    taggen, ompublicerad release, utbytt zip-asset) men INTE när bara
+    release-texten redigeras. Returnerar "" för ogiltig payload.
+    """
+    if not isinstance(payload, dict):
+        return ""
+    assets: list = []
+    raw_assets = payload.get("assets")
+    if isinstance(raw_assets, list):
+        for asset in raw_assets:
+            if not isinstance(asset, dict):
+                continue
+            assets.append({
+                "id": asset.get("id"),
+                "name": str(asset.get("name") or ""),
+                "size": asset.get("size"),
+                "created_at": str(asset.get("created_at") or ""),
+                "updated_at": str(asset.get("updated_at") or ""),
+                "digest": str(asset.get("digest") or ""),
+                "browser_download_url": str(
+                    asset.get("browser_download_url") or ""
+                ),
+            })
+    assets.sort(key=lambda item: (item["name"], str(item["id"])))
+    data = {
+        "id": payload.get("id"),
+        "tag_name": str(payload.get("tag_name") or ""),
+        "target_commitish": str(payload.get("target_commitish") or ""),
+        "created_at": str(payload.get("created_at") or ""),
+        "published_at": str(payload.get("published_at") or ""),
+        "zipball_url": str(payload.get("zipball_url") or ""),
+        "tarball_url": str(payload.get("tarball_url") or ""),
+        "assets": assets,
+    }
+    encoded = json.dumps(
+        data, ensure_ascii=False, sort_keys=True, separators=(",", ":")
+    ).encode("utf-8")
+    return hashlib.sha256(encoded).hexdigest()
+
+
 # ───────────────────────────────────────────────────────────────────────
 # Auto-check-planering (ren logik – testbar)
 # ───────────────────────────────────────────────────────────────────────
@@ -154,6 +238,9 @@ class UpdateInfo:
     notes: str = ""
     download_url: str = ""
     html_url: str = ""
+    build_id: str = ""
+    fingerprint: str = ""
+    same_version_files_changed: bool = False
     error: str = ""
     no_releases: bool = False
     raw: Dict[str, Any] = field(default_factory=dict)
@@ -203,6 +290,8 @@ def check_for_update(
     repo: str = GITHUB_REPO,
     timeout: float = 15.0,
     fetcher: Optional[Fetcher] = None,
+    current_build_id: str = CURRENT_BUILD_ID,
+    installed_fingerprint: str = "",
 ) -> UpdateInfo:
     """Fråga GitHub om senaste release och jämför med installerad version.
 
@@ -243,18 +332,41 @@ def check_for_update(
     info.notes = str(payload.get("body") or "").strip()
     info.html_url = str(payload.get("html_url") or "")
     info.download_url = _pick_download_url(payload)
+    info.build_id = parse_build_id(payload)
+    info.fingerprint = release_fingerprint(payload)
+    newer = is_newer_version(info.latest_version, current_version)
+    same_version = bool(
+        info.latest_version
+        and compare_versions(info.latest_version, current_version) == 0
+    )
+    stored_fingerprint = str(installed_fingerprint or "").strip()
+    build_changed = _is_newer_build(info.build_id, current_build_id)
+    fingerprint_changed = bool(
+        stored_fingerprint
+        and info.fingerprint
+        and stored_fingerprint != info.fingerprint
+    )
+    # Samma versionsnummer, men releasens filer har uppdaterats
+    # (nyare byggstämpel eller annat release-fingeravtryck).
+    info.same_version_files_changed = bool(
+        same_version
+        and info.download_url
+        and (build_changed or fingerprint_changed)
+    )
     info.available = bool(
         info.latest_version
         and info.download_url
-        and is_newer_version(info.latest_version, current_version)
+        and (newer or info.same_version_files_changed)
     )
-    if info.latest_version and not info.download_url and is_newer_version(
-        info.latest_version, current_version
+    if info.latest_version and not info.download_url and (
+        newer or (same_version and (build_changed or fingerprint_changed))
     ):
         info.error = "Releasen saknar nedladdningsbar zip (asset/zipball)."
     log.info(
-        "Uppdateringssökning: installerad=%s senaste=%s tillgänglig=%s",
+        "Uppdateringssökning: installerad=%s senaste=%s tillgänglig=%s "
+        "bygg=%s uppdaterade_filer=%s",
         current_version, info.latest_version or "?", info.available,
+        info.build_id or "-", info.same_version_files_changed,
     )
     return info
 
@@ -358,6 +470,17 @@ def apply_github_update(
         result = apply_update_from_dir(app_root, Path(base_dir))
         result = dict(result)
         result["version"] = info.latest_version
+        result["build_id"] = str(
+            getattr(info, "build_id", "")
+            or parse_build_id(getattr(info, "raw", {}))
+        )
+        result["fingerprint"] = str(
+            getattr(info, "fingerprint", "")
+            or release_fingerprint(getattr(info, "raw", {}) or {})
+        )
+        result["same_version_files_changed"] = bool(
+            getattr(info, "same_version_files_changed", False)
+        )
         return result
     finally:
         shutil.rmtree(tmp_root, ignore_errors=True)
@@ -376,6 +499,8 @@ __all__ = [
     "latest_release_url",
     "normalize_tag",
     "now_iso",
+    "parse_build_id",
     "parse_version",
+    "release_fingerprint",
     "should_auto_check",
 ]

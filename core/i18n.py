@@ -376,6 +376,14 @@ _SV: Dict[str, str] = {
     ),
     "update.install_failed": "Uppdateringen misslyckades:\n{error}",
     "update.status_available": "⬇️ Ny version {latest} finns på GitHub",
+    "update.files_changed_title": "Uppdaterade filer finns! 🎉",
+    "update.files_changed_text": (
+        "Filerna i version {latest} har uppdaterats på GitHub (du har samma version, {current}).\n\n{notes}\n\n"
+        "Ladda ner och installera de uppdaterade filerna nu? Dina mallar, "
+        "adresslistor och inställningar rörs aldrig."
+    ),
+    "update.status_files_changed": "⬇️ Uppdaterade filer för version {latest} finns på GitHub",
+    "update.tray_files_changed_text": "Filerna i version {latest} har uppdaterats på GitHub. Öppna appen för att installera.",
     "update.group": "🔄 Uppdateringar (GitHub)",
     "update.auto_check": "Sök automatiskt efter uppdateringar vid start (högst 1 gång per dygn)",
     "update.current_version": "Installerad version: {version}",
@@ -768,6 +776,14 @@ _EN: Dict[str, str] = {
     ),
     "update.install_failed": "The update failed:\n{error}",
     "update.status_available": "⬇️ New version {latest} is available on GitHub",
+    "update.files_changed_title": "Updated files are available! 🎉",
+    "update.files_changed_text": (
+        "The files in version {latest} have been updated on GitHub (you have the same version, {current}).\n\n{notes}\n\n"
+        "Download and install the updated files now? Your templates, "
+        "address lists and settings are never touched."
+    ),
+    "update.status_files_changed": "⬇️ Updated files for version {latest} are available on GitHub",
+    "update.tray_files_changed_text": "The files in version {latest} have been updated on GitHub. Open the app to install.",
     "update.group": "🔄 Updates (GitHub)",
     "update.auto_check": "Automatically check for updates at startup (max once a day)",
     "update.current_version": "Installed version: {version}",

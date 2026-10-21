@@ -27,18 +27,25 @@ from core.github_update import (  # noqa: E402
     is_newer_version,
     normalize_tag,
     now_iso,
+    parse_build_id,
     parse_version,
+    release_fingerprint,
     should_auto_check,
 )
 
 
 def _release_payload(**overrides):
     payload = {
+        "id": 12345,
         "tag_name": "v5.4.0",
+        "target_commitish": "abc123",
+        "created_at": "2026-10-21T08:00:00Z",
+        "published_at": "2026-10-21T08:05:00Z",
         "name": "E-postofferten 5.4.0",
         "body": "Ny mall-wizard!",
         "html_url": "https://github.com/Tokke2/MailOffer/releases/tag/v5.4.0",
         "zipball_url": "https://api.github.com/repos/Tokke2/MailOffer/zipball/v5.4.0",
+        "tarball_url": "https://api.github.com/repos/Tokke2/MailOffer/tarball/v5.4.0",
         "assets": [],
     }
     payload.update(overrides)
@@ -169,6 +176,105 @@ class TestCheckForUpdate(unittest.TestCase):
         self.assertTrue(info.error)
 
 
+class TestSameVersionFileChanges(unittest.TestCase):
+    """Uppdaterade filer i SAMMA versionsnummer ska erbjudas."""
+
+    def test_parse_build_id(self) -> None:
+        self.assertEqual(parse_build_id("text build: 2026102102 mer"), "2026102102")
+        self.assertEqual(
+            parse_build_id({"name": "x", "body": "<!-- build: 7 -->"}), "7"
+        )
+        self.assertEqual(parse_build_id("ingen markering"), "")
+        self.assertEqual(parse_build_id(None), "")
+
+    def test_fingerprint_changes_with_files_not_notes(self) -> None:
+        base = _release_payload()
+        fp = release_fingerprint(base)
+        self.assertTrue(fp)
+        # Bara release-texten/namnet ändrat -> samma fingeravtryck
+        self.assertEqual(
+            fp,
+            release_fingerprint(
+                _release_payload(body="Annan text", name="Annat namn")
+            ),
+        )
+        # Ny commit för taggen -> annat fingeravtryck
+        self.assertNotEqual(
+            fp, release_fingerprint(_release_payload(target_commitish="def456"))
+        )
+        # Utbytt zip-asset (ny storlek) -> annat fingeravtryck
+        self.assertNotEqual(
+            fp,
+            release_fingerprint(_release_payload(assets=[{
+                "id": 1, "name": "app.zip", "size": 999,
+                "browser_download_url": "https://x/app.zip",
+            }])),
+        )
+        self.assertEqual(release_fingerprint(None), "")
+        self.assertEqual(release_fingerprint("skräp"), "")
+
+    def test_same_version_newer_build_available(self) -> None:
+        payload = _release_payload(
+            tag_name="v1.0.0",
+            body="Anteckningar <!-- build: 2026102102 -->",
+            zipball_url="https://api.github.com/repos/Tokke2/MailOffer/zipball/v1.0.0",
+        )
+        info = check_for_update(
+            current_version="1.0.0",
+            current_build_id="2026102101",
+            fetcher=_fetcher(200, payload),
+        )
+        self.assertTrue(info.available)
+        self.assertTrue(info.same_version_files_changed)
+        self.assertEqual(info.build_id, "2026102102")
+        self.assertTrue(info.fingerprint)
+
+    def test_same_version_same_or_older_build_not_available(self) -> None:
+        for build in ("2026102101", "2026102100"):
+            payload = _release_payload(
+                tag_name="v1.0.0", body=f"build: {build}"
+            )
+            info = check_for_update(
+                current_version="1.0.0",
+                current_build_id="2026102101",
+                fetcher=_fetcher(200, payload),
+            )
+            self.assertFalse(info.available, build)
+            self.assertFalse(info.same_version_files_changed, build)
+
+    def test_same_version_fingerprint_change_available(self) -> None:
+        installed_fp = release_fingerprint(
+            _release_payload(tag_name="v1.0.0", target_commitish="old", body="x")
+        )
+        changed = _release_payload(
+            tag_name="v1.0.0", target_commitish="new", body="x"
+        )
+        info = check_for_update(
+            current_version="1.0.0",
+            current_build_id="",
+            installed_fingerprint=installed_fp,
+            fetcher=_fetcher(200, changed),
+        )
+        self.assertTrue(info.available)
+        self.assertTrue(info.same_version_files_changed)
+
+        same = check_for_update(
+            current_version="1.0.0",
+            current_build_id="",
+            installed_fingerprint=release_fingerprint(changed),
+            fetcher=_fetcher(200, changed),
+        )
+        self.assertFalse(same.available)
+
+        unknown = check_for_update(
+            current_version="1.0.0",
+            current_build_id="",
+            installed_fingerprint="",
+            fetcher=_fetcher(200, changed),
+        )
+        self.assertFalse(unknown.available)  # baslinjas av UI:t i stället
+
+
 class TestDownloadExtractApply(unittest.TestCase):
     def test_download_writes_zip(self) -> None:
         data = _make_zip_bytes({"main.pyw": "# nytt"})
@@ -243,12 +349,17 @@ class TestDownloadExtractApply(unittest.TestCase):
             info = UpdateInfo(
                 available=True, latest_version="9.9.9",
                 download_url="https://example.invalid/app.zip",
+                build_id="2026102102", fingerprint="fp-123",
+                same_version_files_changed=True,
             )
             result = apply_github_update(
                 info, app_dir,
                 fetcher=lambda url, timeout: (200, zip_bytes),
             )
             self.assertEqual(result["version"], "9.9.9")
+            self.assertEqual(result["build_id"], "2026102102")
+            self.assertEqual(result["fingerprint"], "fp-123")
+            self.assertTrue(result["same_version_files_changed"])
             self.assertEqual(
                 (app_dir / "main.pyw").read_text(encoding="utf-8"), "# NY VERSION"
             )

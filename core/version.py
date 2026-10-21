@@ -20,6 +20,13 @@ APP_NAME = "E-postofferten"
 # (1.0.0 = första publika releasen; äldre 5.x-nummer var interna byggen.)
 __version__ = "1.0.0"
 
+# Intern byggstämpel (visas inte som appversion). Höjs när filerna i en
+# redan släppt version uppdateras och releasen skapas om med SAMMA
+# versionsnummer (t.ex. v1.0.0). Uppdateraren jämför den mot
+# "build:"-markeringen i GitHub-releasens text, så att uppdaterade filer
+# upptäcks trots att versionsnumret är oförändrat.
+BUILD_ID = "2026102101"
+
 # GitHub-repo som autouppdateraren hämtar releaser från ("ägare/repo").
 GITHUB_REPO = "Tokke2/MailOffer"
 GITHUB_REPO_URL = f"https://github.com/{GITHUB_REPO}"
@@ -30,4 +37,11 @@ def get_version() -> str:
     return __version__
 
 
-__all__ = ["APP_NAME", "__version__", "GITHUB_REPO", "GITHUB_REPO_URL", "get_version"]
+__all__ = [
+    "APP_NAME",
+    "__version__",
+    "BUILD_ID",
+    "GITHUB_REPO",
+    "GITHUB_REPO_URL",
+    "get_version",
+]

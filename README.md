@@ -46,7 +46,8 @@ _English summary below._
   **Språk** eller i Inställningar (omstart erbjuds)
 - 🔄 **Autouppdatering från GitHub Releases** (nytt i 5.4) – tyst sökning
   vid start (max 1 gång/dygn, kan stängas av) + manuell knapp under
-  *Arkiv → Sök efter uppdateringar* och i Inställningar
+  *Arkiv → Sök efter uppdateringar* och i Inställningar; även uppdaterade
+  filer inom samma versionsnummer upptäcks och erbjuds
 - ❤️ **Donation via Ko-fi** (nytt i 5.4) – hjärtknapp i verktygsraden;
   länken läggs in under *Inställningar → ❤️ Stöd & om*
 - 📨 Skicka-historik, leveransbarhets-guide (SPF/DKIM/DMARC), läskvitton,

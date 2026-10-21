@@ -954,11 +954,13 @@ class UpdateWorker(QThread):
         mode: str,
         info: Any = None,
         base_dir: Optional[Path] = None,
+        installed_fingerprint: str = "",
     ) -> None:
         super().__init__()
         self._mode = str(mode or "check")
         self._info = info
         self._base_dir = base_dir
+        self._installed_fingerprint = str(installed_fingerprint or "")
 
     def run(self) -> None:
         try:
@@ -970,7 +972,11 @@ class UpdateWorker(QThread):
                 )
                 self.installed.emit(result)
             else:
-                self.checked.emit(check_for_update())
+                self.checked.emit(
+                    check_for_update(
+                        installed_fingerprint=self._installed_fingerprint
+                    )
+                )
         except Exception as exc:
             log.warning(
                 "UpdateWorker (%s) misslyckades", self._mode, exc_info=True
@@ -1715,7 +1721,12 @@ class MainWindow(QMainWindow):
         if manual:
             QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
             self._status(tr("update.checking"), "info")
-        worker = UpdateWorker("check")
+        worker = UpdateWorker(
+            "check",
+            installed_fingerprint=str(
+                self.settings.get("installed_release_fingerprint", "") or ""
+            ),
+        )
         worker.checked.connect(self._on_update_checked)
         worker.failed.connect(self._on_update_failed)
         worker.finished.connect(worker.deleteLater)
@@ -1751,6 +1762,49 @@ class MainWindow(QMainWindow):
         except Exception:
             pass
 
+    def _save_release_fingerprint(self, fingerprint: object) -> None:
+        """Kom ihåg vilken release (fingeravtryck) som är installerad."""
+        value = str(fingerprint or "").strip()
+        if not value:
+            return
+        try:
+            if str(
+                self.settings.get("installed_release_fingerprint", "") or ""
+            ) != value:
+                self.settings.set("installed_release_fingerprint", value)
+                self.settings.save()
+        except Exception:
+            log.debug(
+                "Kunde inte spara release-fingeravtryck", exc_info=True
+            )
+
+    def _remember_installed_release_fingerprint(self, info: Any) -> None:
+        """Baselinja fingeravtrycket när installerad release är aktuell.
+
+        Körs bara när sökningen INTE fann något att installera – då är
+        den senaste releasen samma som den installerade, och dess
+        fingeravtryck sparas så att framtida filändringar i samma
+        versionsnummer upptäcks.
+        """
+        try:
+            if (
+                getattr(info, "available", False)
+                or getattr(info, "error", "")
+                or getattr(info, "no_releases", False)
+            ):
+                return
+            fingerprint = str(getattr(info, "fingerprint", "") or "").strip()
+            latest = str(getattr(info, "latest_version", "") or "")
+            if not fingerprint or not latest:
+                return
+            from core.github_update import compare_versions
+
+            if compare_versions(latest, APP_VERSION) == 0:
+                self._save_release_fingerprint(fingerprint)
+        except Exception:
+            log.debug("Baselinja release-fingeravtryck hoppades över",
+                      exc_info=True)
+
     def _on_update_checked(self, info: Any) -> None:
         self._restore_update_cursor()
         self._update_worker = None
@@ -1758,7 +1812,12 @@ class MainWindow(QMainWindow):
         if getattr(info, "available", False):
             self._pending_update_info = info
             self._status(
-                tr("update.status_available", latest=info.latest_version),
+                tr(
+                    "update.status_files_changed"
+                    if getattr(info, "same_version_files_changed", False)
+                    else "update.status_available",
+                    latest=info.latest_version,
+                ),
                 "success",
             )
             if manual or self.isVisible():
@@ -1768,6 +1827,7 @@ class MainWindow(QMainWindow):
                 # installationsfrågan visas när fönstret öppnas (show()).
                 self._notify_update_via_tray(info)
             return
+        self._remember_installed_release_fingerprint(info)
         self._status_reset()
         if getattr(info, "no_releases", False):
             if manual:
@@ -1799,10 +1859,21 @@ class MainWindow(QMainWindow):
         if len(notes) > 700:
             notes = notes[:700] + "…"
         box = QMessageBox(self)
-        box.setWindowTitle(tr("update.available_title"))
+        files_changed = bool(
+            getattr(info, "same_version_files_changed", False)
+        )
+        box.setWindowTitle(
+            tr(
+                "update.files_changed_title"
+                if files_changed
+                else "update.available_title"
+            )
+        )
         box.setText(
             tr(
-                "update.available_text",
+                "update.files_changed_text"
+                if files_changed
+                else "update.available_text",
                 latest=info.latest_version,
                 current=APP_VERSION,
                 notes=notes,
@@ -1831,7 +1902,11 @@ class MainWindow(QMainWindow):
                 notify(
                     tr("update.tray_title"),
                     tr(
-                        "update.tray_text",
+                        "update.tray_files_changed_text"
+                        if getattr(
+                            info, "same_version_files_changed", False
+                        )
+                        else "update.tray_text",
                         latest=getattr(info, "latest_version", ""),
                     ),
                 )
@@ -1894,6 +1969,9 @@ class MainWindow(QMainWindow):
                 ),
             )
             return
+        # Den nyss installerade releasen är nu baslinjen för framtida
+        # filändringar i samma versionsnummer.
+        self._save_release_fingerprint(result.get("fingerprint"))
         self._status(tr("update.installed_title"), "success")
         reply = QMessageBox.question(
             self,
