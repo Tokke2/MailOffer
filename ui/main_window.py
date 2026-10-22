@@ -865,6 +865,9 @@ class SendWorker(QThread):
                 smtp_port=self._profile_value("smtp_port"),
                 sender_email=sender_email_value,
                 sender_name=self._profile_value("sender_name"),
+                signature_text=self._profile_value("signature_text"),
+                signature_contact=self._profile_value("signature_contact"),
+                signature_logo=self._profile_value("signature_logo"),
                 username=self._profile_value("username"),
                 password=self._profile_value("password"),
                 word_file_path=self.p.get("template_path", ""),
@@ -1088,6 +1091,10 @@ class MainWindow(QMainWindow):
         # (v5.4) Tyst GitHub-uppdateringssökning strax efter start
         # (respekterar auto_update_check + max 1 gång/dygn).
         QTimer.singleShot(4000, self._maybe_auto_check_update)
+        self._automatic_backup_timer = QTimer(self)
+        self._automatic_backup_timer.timeout.connect(self._run_automatic_backup)
+        self._automatic_backup_timer.start(60_000)
+        QTimer.singleShot(6000, self._run_automatic_backup)
 
         # (v5.5) Muskjulsskydd – idempotent (main.pyw installerar normalt)
         try:
@@ -4698,6 +4705,18 @@ class MainWindow(QMainWindow):
         form.addRow("SMTP-port", self._make_settings_line("smtp_port", "SMTP-port"))
         form.addRow("Avsändaradress", self._make_settings_line("sender_email", "Avsändaradress"))
         form.addRow("Avsändarnamn", self._make_settings_line("sender_name", "Avsändarnamn"))
+        signature = QTextEdit()
+        signature.setPlainText(str(self.settings.get("signature_text", "") or ""))
+        signature.setMaximumHeight(110)
+        self._settings_widgets["signature_text"] = signature
+        form.addRow("Signatur (text)", signature)
+        form.addRow("Kontaktinformation", self._make_settings_line("signature_contact", "Telefon, webbplats …"))
+        logo_row = QHBoxLayout()
+        logo_row.addWidget(self._make_settings_line("signature_logo", "PNG/JPG/GIF, max 2 MB"))
+        logo_button = QPushButton("Välj logotyp …")
+        logo_button.clicked.connect(self._choose_signature_logo)
+        logo_row.addWidget(logo_button)
+        form.addRow("Logotyp", logo_row)
         form.addRow("Användarnamn", self._make_settings_line("username", "Användarnamn"))
         form.addRow("Lösenord", self._make_settings_line("password", "Lösenord", password=True))
         form.addRow("Reply-To", self._make_settings_line("reply_to", "Reply-To"))
@@ -4992,6 +5011,8 @@ class MainWindow(QMainWindow):
                     )
                 else:
                     widget.setText("" if value is None else str(value))
+            elif isinstance(widget, QTextEdit):
+                widget.setPlainText(str(value or ""))
             elif isinstance(widget, QCheckBox):
                 widget.setChecked(bool(value))
             elif isinstance(widget, QComboBox):
@@ -5026,6 +5047,8 @@ class MainWindow(QMainWindow):
                     values[key] = raw
                 else:
                     values[key] = raw
+            elif isinstance(widget, QTextEdit):
+                values[key] = widget.toPlainText().strip()
             elif isinstance(widget, QCheckBox):
                 values[key] = widget.isChecked()
             elif isinstance(widget, QComboBox):
@@ -5041,6 +5064,18 @@ class MainWindow(QMainWindow):
 
     def _save_settings_form(self) -> None:
         values = self._collect_settings_form()
+        try:
+            for key, maximum in (("auto_backup_hours", 8760), ("auto_backup_keep", 100)):
+                number = int(values.get(key, self.settings.get(key, "24" if key.endswith("hours") else "10")))
+                if not 1 <= number <= maximum:
+                    raise ValueError(key)
+                values[key] = str(number)
+            if values.get("signature_logo"):
+                from core.signatures import logo_part
+                logo_part(values["signature_logo"])
+        except Exception as exc:
+            QMessageBox.warning(self, "Kontrollera inställningar", str(exc))
+            return
         # (v5.4) "ko-fi.com/namn" eller bara "namn" → fullständig URL;
         # Swish-numret normaliseras till nationellt sifferformat.
         try:
@@ -5230,9 +5265,16 @@ class MainWindow(QMainWindow):
             value = profile.get(field)
             if isinstance(widget, QLineEdit):
                 widget.setText("" if value is None else str(value))
+            elif isinstance(widget, QTextEdit):
+                widget.setPlainText(str(value or ""))
             elif isinstance(widget, QCheckBox):
                 widget.setChecked(bool(value))
         self._sync_smtp_provider_combo()
+
+    def _choose_signature_logo(self):
+        path, _ = QFileDialog.getOpenFileName(self, "Välj logotyp", "", "Bilder (*.png *.jpg *.jpeg *.gif)")
+        if path:
+            self._settings_widgets["signature_logo"].setText(path)
 
     def _on_settings_profile_changed(self, _index: int = -1) -> None:
         combo = getattr(self, "_settings_profile_combo", None)
@@ -5621,10 +5663,27 @@ class MainWindow(QMainWindow):
             label.setText(tr("smtp.dns_failed", error=error))
         self._status("⚠️ DNS-kontrollen misslyckades", "warning")
 
+    def _run_automatic_backup(self):
+        from core.auto_backup import run_due_backup
+        try:
+            run_due_backup(self._base_dir(), self.settings,
+                           dir_sources=self._backup_dir_map())
+        except Exception as exc:
+            self._status("Automatisk säkerhetskopia misslyckades: " + str(exc), "error")
+
     def _build_settings_group_backup(self) -> QGroupBox:
         group = QGroupBox(tr("backup.group"))
         layout = QVBoxLayout(group)
         layout.setSpacing(8)
+        layout.addWidget(self._make_settings_checkbox(
+            "auto_backup_enabled", "Automatisk säkerhetskopiering när appen är öppen"))
+        form = QFormLayout()
+        form.addRow("Intervall (timmar, 1–8760)", self._make_settings_line("auto_backup_hours", "24"))
+        form.addRow("Antal kopior (1–100)", self._make_settings_line("auto_backup_keep", "10"))
+        layout.addLayout(form)
+        location = QLabel(str(self._base_dir() / ".data" / "automatic-backups"))
+        location.setWordWrap(True)
+        layout.addWidget(location)
         info = QLabel(tr("backup.info"))
         info.setProperty("cssClass", "muted")
         info.setWordWrap(True)

@@ -1,11 +1,13 @@
 {
   "manifest_version": 2,
-  "name": "E-postofferten – spara avsändare",
-  "version": "2.0.0",
+  "name": "MailOffer – skicka e-postadress",
+  "version": "1.0.0",
   "description": "Högerklicka på ett mail i Thunderbird och spara avsändaren i E-postofferten.",
   "author": "E-postofferten",
   "background": {
-    "scripts": ["background.js"]
+    "scripts": [
+      "background.js"
+    ]
   },
   "browser_specific_settings": {
     "gecko": {

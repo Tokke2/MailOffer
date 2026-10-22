@@ -104,3 +104,24 @@ browser.menus.onClicked.addListener(async (info, tab) => {
     notify("E-postofferten", String(err.message || err));
   }
 });
+
+// A clicked address takes precedence over the author of the displayed mail.
+browser.menus.create({
+  id: "mailoffer-address",
+  title: "Skicka e-postadressen till E-postofferten",
+  contexts: ["link"],
+  targetUrlPatterns: ["mailto:*"],
+});
+browser.menus.onClicked.addListener(async (info) => {
+  if (info.menuItemId !== "mailoffer-address") return;
+  try {
+    const address = decodeURIComponent(String(info.linkUrl || "").replace(/^mailto:/i, "").split("?")[0]);
+    const contacts = address.split(/[,;]/).map(email => parseAuthor(email)).filter(Boolean);
+    if (!contacts.length) throw new Error("Ingen giltig e-postadress hittades.");
+    const result = await browser.runtime.sendNativeMessage(NATIVE_HOST, {action: "add_contacts", contacts});
+    if (!result || !result.ok) throw new Error((result && result.error) || "Starta appen en gång för att registrera kopplingen.");
+    notify("E-postofferten", "Adressen har skickats till appens kontaktlista.");
+  } catch (err) {
+    notify("E-postofferten", String(err.message || err));
+  }
+});

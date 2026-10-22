@@ -232,6 +232,10 @@ def get_defaults() -> Dict[str, Any]:
 
         # Avsändarprofiler (v5.5) – de platta SMTP-fälten nedan är
         # alltid en spegel av den aktiva profilen.
+        "auto_backup_enabled": False,
+        "auto_backup_hours": "24",
+        "auto_backup_keep": "10",
+        "auto_backup_last": "",
         "sender_profiles": [],
         "active_sender_profile_id": "",
 

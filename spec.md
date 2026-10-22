@@ -2475,3 +2475,11 @@ Användaren valde från redan-valda: tema-knapp (§34 #6) och tydligare
 3. `tests/test_v58_theme_history.py` + py_compile.
 4. spec.md: §34 #6 och §47.2 markerade implementerade (ingen text borttagen).
 5. Omgång 5-räknare: +1 kodfil denna leverans (main_window.py).
+
+## V7.6 (APP 1.0.0)
+- Valbar automatisk lokal ZIP-backup: timintervall, retention, kontroll vid start
+  och under körning, lösenordsrensning och atomär publicering innan gallring.
+- Signaturtext, kontaktinformation och inbäddad CID-logotyp per avsändarprofil.
+- Installerbar thunderbird/MailOffer.xpi: högerklick på mailto-länk skickar den
+  klickade adressen via befintlig native messaging till kontaktlistan.
+- Versionsnummer fortsatt 1.0.0, intern byggstämpel 2026102201.

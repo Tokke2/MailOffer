@@ -1113,6 +1113,7 @@ def build_message(
     body_html:     Optional[str],
     attachments:   List[str],
     *,
+    signature_logo: str = "",
     reply_to:      Optional[str]       = None,
     extra_headers: Optional[Dict[str, str]] = None,
     request_receipts: bool             = False,
@@ -1165,7 +1166,14 @@ def build_message(
     alt.attach(MIMEText(body_plain or "", "plain", "utf-8"))
     if body_html:
         alt.attach(MIMEText(body_html, "html", "utf-8"))
-    outer.attach(alt)
+    if signature_logo:
+        from core.signatures import logo_part
+        related = MIMEMultipart("related")
+        related.attach(alt)
+        related.attach(logo_part(signature_logo))
+        outer.attach(related)
+    else:
+        outer.attach(alt)
 
     # Bilagor
     total_size = 0
@@ -1240,6 +1248,9 @@ def send_email(
     comment:        str  = "",
     free_text:      str  = "",
     *,
+    signature_text: str = "",
+    signature_contact: str = "",
+    signature_logo: str = "",
     # Formatering
     body_is_html:             bool          = False,
     generate_html_from_plain: bool          = True,
@@ -1493,6 +1504,10 @@ def send_email(
                     body_html_l = text_to_html(body_plain_l)
             else:
                 body_html_l = None
+        from core.signatures import append_signature
+        body_plain_l, body_html_l = append_signature(
+            body_plain_l, body_html_l, signature_text, signature_contact,
+            bool(signature_logo))
         return subject_l, body_plain_l, body_html_l
 
     try:
@@ -1606,6 +1621,7 @@ def send_email(
                 body_plain    = body_plain_l,
                 body_html     = body_html_l,
                 attachments   = attachments,
+                signature_logo = signature_logo,
                 reply_to      = reply_to or sender_email,
                 extra_headers = extra_headers,
                 request_receipts = request_receipts,
@@ -1657,6 +1673,7 @@ def send_email(
                 body_plain    = body_plain_l,
                 body_html     = body_html_l,
                 attachments   = attachments,
+                signature_logo = signature_logo,
                 reply_to      = reply_to or sender_email,
                 extra_headers = extra_headers,
                 request_receipts = request_receipts,

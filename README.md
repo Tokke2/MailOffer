@@ -198,3 +198,39 @@ presets** with app-password links, a one-click **SPF/DKIM/DMARC check**
 and full **backup/restore** (ZIP; passwords never included). Version number lives in
 `core/version.py`. Run with `pip install -r requirements.txt` +
 `python main.pyw`; tests with `python -m unittest discover -s tests -v`.
+
+### Automatiska säkerhetskopior och profilsignaturer
+
+Under **Inställningar → Säkerhetskopiering** kan automatisk lokal backup
+aktiveras. Ange intervall i timmar (1–8760) och antal sparade kopior (1–100).
+Appen kontrollerar vid start och varje minut medan den är öppen; en missad
+körning tas vid nästa start. Kopior ligger i `.data/automatic-backups/` och
+återställs med samma återställningsknapp som manuella ZIP-kopior. Lösenord
+rensas även i automatiska kopior. Äldre automatiska kopior raderas först
+sedan en ny kopia skapats korrekt; manuella kopior påverkas inte.
+
+Varje **avsändarprofil** har egen signaturtext, kontaktinformation och
+valfri PNG/JPG/GIF-logotyp (max 2 MB). Signaturen läggs till både svenska och
+engelska utskick, inklusive testmejl. Logotypen bäddas in i mejlet och kräver
+ingen extern bildserver. Använd **Spara profil** efter ändring. Signaturen
+läggs till sist i mejlet; ta bort eventuell gammal signatur i själva mallen
+för att undvika dubbla signaturer. Logotypfilen måste finnas kvar på angiven
+sökväg. Lägg den gärna i mallmappen så att den kommer med i säkerhetskopior.
+
+### Installera Thunderbird-tillägget
+
+1. Starta MailOffer en gång från dess permanenta installationsmapp för att
+   registrera native-messaging-kopplingen för den aktuella användaren.
+2. I Thunderbird: **Tillägg och teman → kugghjulet → Installera tillägg från
+   fil**, välj `thunderbird/MailOffer.xpi` från appmappen.
+3. Högerklicka på en e-postlänk (`mailto:`) och välj **Skicka e-postadressen
+   till E-postofferten**. Den klickade adressen skickas till appens kontakter,
+   inte automatiskt mejlets avsändare. Adresser i kontaktfliken uppdateras när
+   fliken öppnas igen eller med Uppdatera.
+4. För meddelandelistan finns även **Spara avsändare i E-postofferten**.
+
+Ingen e-post skickas av tillägget. Appen behöver inte vara öppen efter
+registreringen. Flyttas appmappen, starta appen igen för att uppdatera
+kopplingen. Bygg om XPI med `python tools/build_thunderbird.py` efter
+ändringar i tillägget. Thunderbird-integrationen behöver också provas i
+Thunderbird på den dator där den ska användas.

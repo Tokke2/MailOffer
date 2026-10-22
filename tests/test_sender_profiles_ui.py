@@ -92,6 +92,18 @@ class TestSenderProfilesUi(unittest.TestCase):
         self.addCleanup(win.close)
         return win, settings, profile_b_id
 
+    def test_signature_fields_follow_profile(self):
+        win, settings, profile_b_id = self._make_window()
+        profile = settings.get_sender_profile(profile_b_id) if hasattr(settings, "get_sender_profile") else next(p for p in settings.get_sender_profiles() if p["id"] == profile_b_id)
+        profile.update(signature_text="Hälsningar\nFöretag B", signature_contact="Telefon 123", signature_logo="")
+        settings.upsert_sender_profile(profile)
+        win._refresh_sender_profile_combos()
+        win._settings_profile_combo.setCurrentIndex(win._settings_profile_combo.findData(profile_b_id))
+        win._apply_sender_profile_to_settings_form(profile)
+        self.assertEqual(win._settings_widgets["signature_text"].toPlainText(), "Hälsningar\nFöretag B")
+        self.assertEqual(win._sender_profile_from_form()["signature_contact"], "Telefon 123")
+        self.assertIn("auto_backup_keep", win._settings_widgets)
+
     def test_send_combo_gather_uses_selected_profile(self):
         from core.i18n import tr
 

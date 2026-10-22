@@ -22,6 +22,9 @@ import unicodedata
 from typing import Any, Dict, Iterable, List, Mapping, Optional, Tuple
 
 SENDER_PROFILE_FIELDS: Tuple[str, ...] = (
+    "signature_text",
+    "signature_contact",
+    "signature_logo",
     "smtp_server",
     "smtp_port",
     "sender_email",
@@ -35,6 +38,9 @@ SENDER_PROFILE_FIELDS: Tuple[str, ...] = (
 )
 
 _STRING_FIELDS = (
+    "signature_text",
+    "signature_contact",
+    "signature_logo",
     "smtp_server",
     "sender_email",
     "sender_name",

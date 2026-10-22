@@ -182,6 +182,8 @@ def create_full_backup(
             count = 0
             for path in sorted(src.rglob("*")):
                 if path.is_file():
+                    if path.resolve() == dest.resolve() or (base / ".data" / "automatic-backups").resolve() in path.resolve().parents:
+                        continue
                     archive.write(
                         path, f"{dirname}/" + path.relative_to(src).as_posix()
                     )
