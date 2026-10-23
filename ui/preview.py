@@ -335,21 +335,8 @@ def _insert_free_text_plain(
     section_text: str, free_text: str, language: str
 ) -> str:
     """Placera fritext ovan signatur i plain text-sektion."""
-    section = (section_text or "").strip()
-    free = (free_text or "").strip()
-    if not section:
-        return free
-    if not free:
-        return section
-
-    body, signature = _split_signature_plain(section, language)
-    parts: List[str] = []
-    if body:
-        parts.append(body)
-    parts.append(free)
-    if signature:
-        parts.append(signature)
-    return "\n\n".join(part.strip() for part in parts if part and part.strip())
+    from core.free_text import insert_free_text
+    return insert_free_text(section_text, free_text)
 
 
 def _paragraphize(raw: str) -> str:

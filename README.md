@@ -389,3 +389,19 @@ mejlinnehåll eller inställningsobjekt dumpas av diagnostikmodulen.
 Strömavbrott, tvångsavslut och fel som fångas utan att loggas kan inte
 garanteras finnas i loggen. Om VBS är blockerat av Windows och aldrig körs
 kan det inte heller skapa någon launcher-logg.
+
+### Fritext före signatur och anpassad sändbekräftelse
+
+Fritext placeras före en igenkänd avslutningsrad i mallen, exempelvis
+"Tack på förhand!", "Med vänliga hälsningar", "Mvh" eller "Best regards".
+Samma hjälpfunktion används vid sändning och i förhandsvisning. Om mallen
+saknar igenkänd avslutningsrad läggs fritext sist i malltexten, fortfarande
+före eventuell separat profilsignatur. Lägg därför avslutningen på en egen
+rad/block för entydig placering. HTML-fritext behandlas som vanlig text,
+inte som körbar/formaterande HTML.
+
+Bekräftelserutan före sändning anpassas till skärmens arbetsyta. Lång
+sammanfattning, varningar och kontrollresultat ligger i ett rullningsbart
+område. Avbryt/Förhandsgranska/Skicka nu ligger kvar utanför området och
+knappraden kan radbrytas vid smalare fönster. Ämnen och adresser återges
+som vanlig text så att vinkelparenteser inte tolkas som HTML.

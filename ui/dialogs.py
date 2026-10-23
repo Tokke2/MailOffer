@@ -110,6 +110,7 @@ from PyQt6.QtWidgets import (
 
 # local
 from ui.styles import StyleEngine, get_colors
+from ui.responsive import WrapLayout
 
 log = logging.getLogger(__name__)
 
@@ -198,8 +199,11 @@ class SendConfirmDialog(QDialog):
             "🧪 Bekräfta testmail" if self._test_mode else "📤 Bekräfta e-postsändning"
         )
         self.setModal(True)
-        self.setMinimumWidth(600)
-        self.resize(720, 560)
+        self.setMinimumSize(360, 260)
+        screen = self.screen()
+        available = screen.availableGeometry() if screen else None
+        self.resize(min(760, max(360, available.width() - 60)) if available else 760,
+                    min(680, max(260, available.height() - 80)) if available else 680)
         self._build_ui()
 
     def _c(self) -> Dict[str, str]:
@@ -209,7 +213,15 @@ class SendConfirmDialog(QDialog):
 
     def _build_ui(self) -> None:
         colors = self._c()
-        layout = QVBoxLayout(self)
+        root = QVBoxLayout(self)
+        root.setContentsMargins(10, 10, 10, 10)
+        self._content_scroll = QScrollArea()
+        self._content_scroll.setWidgetResizable(True)
+        self._content_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        content = QWidget()
+        layout = QVBoxLayout(content)
+        self._content_scroll.setWidget(content)
+        root.addWidget(self._content_scroll, stretch=1)
         layout.setContentsMargins(16, 16, 16, 16)
         layout.setSpacing(12)
 
@@ -223,6 +235,7 @@ class SendConfirmDialog(QDialog):
         title = QLabel(
             "④ 🧪 Bekräfta testmail" if self._test_mode else "④ 📤 Bekräfta & skicka"
         )
+        title.setWordWrap(True)
         title.setStyleSheet(
             "color: #FFFFFF; font-size: 15pt; font-weight: bold; "
             "background: transparent;"
@@ -254,8 +267,11 @@ class SendConfirmDialog(QDialog):
 
         def row(label: str, value: str, color: str = "") -> None:
             label_widget = QLabel(label)
+            label_widget.setWordWrap(True)
             label_widget.setStyleSheet("font-weight: bold;")
             value_widget = QLabel(value)
+            value_widget.setTextFormat(Qt.TextFormat.PlainText)
+            value_widget.setMinimumWidth(0)
             value_widget.setWordWrap(True)
             if color:
                 value_widget.setStyleSheet(f"color: {color}; font-weight: bold;")
@@ -411,7 +427,7 @@ class SendConfirmDialog(QDialog):
 
         # v4.7 – checkbox för leverans-/läskvitto
         self._receipt_check = QCheckBox(
-            "📨 Begär leverans- och läskvitto (skickas med mailet)"
+            "📨 Begär leverans-/läskvitto"
         )
         self._receipt_check.setChecked(self._receipts)
         self._receipt_check.setToolTip(
@@ -433,7 +449,7 @@ class SendConfirmDialog(QDialog):
         layout.addWidget(question)
 
         # Knappar
-        buttons = QHBoxLayout()
+        buttons = WrapLayout()
         btn_cancel = QPushButton("❌ Avbryt")
         btn_cancel.setProperty("cssClass", "back")
         btn_cancel.clicked.connect(self._on_cancel)
@@ -452,7 +468,7 @@ class SendConfirmDialog(QDialog):
         self._btn_send.clicked.connect(self._on_send)
         self._btn_send.setEnabled(self._total > 0)
         buttons.addWidget(self._btn_send)
-        layout.addLayout(buttons)
+        root.addLayout(buttons)
 
     def keyPressEvent(self, event: Any) -> None:  # noqa: N802 - Qt API
         if event.key() == Qt.Key.Key_F5:

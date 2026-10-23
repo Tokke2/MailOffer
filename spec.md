@@ -2547,3 +2547,12 @@ Användaren valde från redan-valda: tema-knapp (§34 #6) och tydligare
   installations-/startfel och avslutningskod, med synligt felbesked.
 - Version fortsatt 1.0.0, bygg 2026102308. Windows-flödet behöver verifieras
   från faktisk dubbelklicksstart; loggning ersätter inte rotorsaksdiagnos.
+
+## V7.15 (APP 1.0.0)
+- Fritext infogas före identifierad mallavslutning/signatur (SV/EN), även
+  "Tack på förhand!". Delad logik för sändning/förhandsvisning, HTML-text
+  escapes säkert. Utan markör: sist i malltext före separat profilsignatur.
+- Förtydligat steg 4 avser sändbekräftelsedialogen: skärmanpassad storlek,
+  scrollbart innehåll och kvarliggande radbrytande knappar. Övriga steg
+  lämnas oförändrade i denna ändring.
+- Version fortsatt 1.0.0, intern byggstämpel 2026102309.

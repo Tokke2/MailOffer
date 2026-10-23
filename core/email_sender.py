@@ -614,6 +614,7 @@ def append_free_text(
     body:            str,
     free_text:       str,
     include_english: bool,
+    is_html: bool = False,
 ) -> str:
     """
     Appendar fritext till brödtexten.
@@ -628,7 +629,8 @@ def append_free_text(
     """
     if not free_text or not free_text.strip():
         return body
-    return f"{body}\n\n{free_text}"
+    from core.free_text import insert_free_text
+    return insert_free_text(body, free_text, is_html=is_html)
 
 
 def merge_recipients(
@@ -1481,7 +1483,7 @@ def send_email(
                 body_raw, str(repl.get("vin") or repl.get("VIN") or "")
             )
         if free_text:
-            body_raw = append_free_text(body_raw, free_text, use_en)
+            body_raw = append_free_text(body_raw, free_text, use_en, is_html=body_is_html)
             result.had_free_text = True
         if body_is_html:
             body_html_l: Optional[str] = body_raw
