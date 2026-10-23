@@ -1,6 +1,24 @@
 /* Högerklick på mail i Thunderbird → spara avsändare i E-postofferten */
 
 const NATIVE_HOST = "e_postofferten";
+const PROTOCOL_VERSION = 1;
+
+async function sendContacts(payload) {
+  // Check before writing: old hosts may otherwise accept the import silently.
+  const hello = await browser.runtime.sendNativeMessage(NATIVE_HOST, {
+    action: "ping", protocol_version: PROTOCOL_VERSION,
+  });
+  if (!hello || !hello.ok || hello.protocol_version !== PROTOCOL_VERSION) {
+    throw new Error("App och Thunderbird-tillägg är inte kompatibla. Uppdatera appen, installera dess MailOffer.xpi och registrera kopplingen igen.");
+  }
+  const result = await browser.runtime.sendNativeMessage(NATIVE_HOST, {
+    ...payload, protocol_version: PROTOCOL_VERSION,
+  });
+  if (!result || result.protocol_version !== PROTOCOL_VERSION) {
+    throw new Error("Inkompatibelt svar från appen. Installera senaste appen och XPI-filen.");
+  }
+  return result;
+}
 
 function parseAuthor(author) {
   const text = String(author || "").trim();
@@ -46,7 +64,7 @@ async function saveAuthors(messages) {
   if (!contacts.length) {
     throw new Error("Ingen avsändare hittades i det markerade mailet.");
   }
-  const result = await browser.runtime.sendNativeMessage(NATIVE_HOST, {
+  const result = await sendContacts({
     action: "add_contacts",
     contacts: contacts,
   });
@@ -118,7 +136,7 @@ browser.menus.onClicked.addListener(async (info) => {
     const address = decodeURIComponent(String(info.linkUrl || "").replace(/^mailto:/i, "").split("?")[0]);
     const contacts = address.split(/[,;]/).map(email => parseAuthor(email)).filter(Boolean);
     if (!contacts.length) throw new Error("Ingen giltig e-postadress hittades.");
-    const result = await browser.runtime.sendNativeMessage(NATIVE_HOST, {action: "add_contacts", contacts});
+    const result = await sendContacts({action: "add_contacts", contacts});
     if (!result || !result.ok) throw new Error((result && result.error) || "Starta appen en gång för att registrera kopplingen.");
     notify("E-postofferten", "Adressen har skickats till appens kontaktlista.");
   } catch (err) {

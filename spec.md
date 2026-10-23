@@ -2503,3 +2503,13 @@ Användaren valde från redan-valda: tema-knapp (§34 #6) och tydligare
 - WebSupport-varningar för port/kryptering och avvikande avsändarinloggning.
   DNS-guide tydligt märkt exempel; ingen garanti om skräppostfri leverans.
 - Version fortsatt 1.0.0, intern byggstämpel 2026102302.
+
+## V7.9 (APP 1.0.0)
+- Säker normaliserad profilfärg (#RRGGBB), färgikon i profilväljare och
+  kantmarkering vid mallval, preview och sändbekräftelse utan att färgen
+  påverkar mejlinnehållet eller ersätter profilnamn/adress.
+- Tangentbord: fokusmarkering, tabbordning, tillgängliga fältnamn, profil/mall/
+  testgenvägar och F1-hjälp. Dubbla Ctrl+Return/Ctrl+Q-bindningar borttagna.
+- Thunderbird-protokoll v1: handskakning före import, strikt kontroll på båda
+  sidor, kompatibilitetsmetadata i XPI och test av paketerad XPI/lokal host.
+  Äldre XPI måste installeras om. Appversion fortsatt 1.0.0, bygg 2026102303.

@@ -92,6 +92,24 @@ class TestSenderProfilesUi(unittest.TestCase):
         self.addCleanup(win.close)
         return win, settings, profile_b_id
 
+    def test_profile_colour_markers_and_keyboard_names(self):
+        win, settings, profile_b_id = self._make_window()
+        profile = next(p for p in settings.get_sender_profiles() if p["id"] == profile_b_id)
+        profile["profile_color"] = "#cc2277"
+        settings.upsert_sender_profile(profile)
+        win._refresh_sender_profile_combos()
+        win._send_profile_combo.setCurrentIndex(win._send_profile_combo.findData(profile_b_id))
+        win._refresh_preview()
+        self.assertIn("#cc2277", win._tpl_combo.styleSheet())
+        self.assertIn("#cc2277", win.preview_tab._preview_profile_marker.styleSheet())
+        self.assertIn("b@example.com", win._send_profile_marker.text())
+        self.assertFalse(win._send_profile_combo.itemIcon(win._send_profile_combo.currentIndex()).isNull())
+        self.assertTrue(win._tpl_combo.accessibleName())
+        sequences = [s.key().toString() for s in win._shortcuts]
+        self.assertIn("Ctrl+L", sequences)
+        self.assertIn("Ctrl+M", sequences)
+        self.assertEqual(len(sequences), len(set(sequences)))
+
     def test_template_restrictions_hide_and_block(self):
         win, settings, profile_b_id = self._make_window()
         directory = win._templates_dir()

@@ -265,6 +265,9 @@ from PyQt6.QtGui import (
     QClipboard,
     QDesktopServices,
     QFont,
+    QColor,
+    QIcon,
+    QPixmap,
     QKeySequence,
     QShortcut,
 )
@@ -272,6 +275,7 @@ from PyQt6.QtWidgets import (
     QAbstractItemView,
     QApplication,
     QCheckBox,
+    QColorDialog,
     QComboBox,
     QDialog,
     QDialogButtonBox,
@@ -1092,6 +1096,7 @@ class MainWindow(QMainWindow):
         self._build_ui()
         self._install_shortcuts()
         self._bind_events()
+        self._setup_keyboard_access()
         self._restore_geo()
 
         # (v5.4) Tyst GitHub-uppdateringssökning strax efter start
@@ -1274,6 +1279,7 @@ class MainWindow(QMainWindow):
             )
 
         help_menu = bar.addMenu(tr("menu.help"))
+        help_menu.addAction(tr("keys.title")).triggered.connect(self._show_keyboard_help)
         help_menu.addAction(tr("menu.deliverability")).triggered.connect(
             self._open_deliverability_guide
         )
@@ -1423,16 +1429,18 @@ class MainWindow(QMainWindow):
     def _install_shortcuts(self) -> None:
         """Tangentbord: Ctrl+Enter skicka, F5 preview, Ctrl+S, Ctrl+K, Ctrl+1–4, Ctrl+Q."""
         pairs = [
-            ("Ctrl+Return", self._send),
             ("Ctrl+Enter", self._send),
             ("F5", lambda: (self.select_tab("preview"), self._refresh_preview())),
             ("Ctrl+S", self._save_tpl),
             ("Ctrl+K", self._focus_contact_search),
+            ("Ctrl+L", lambda: self._focus_send_field("_send_profile_combo")),
+            ("Ctrl+M", lambda: self._focus_send_field("_tpl_combo")),
+            ("Ctrl+Shift+T", self._send_test_mail),
+            ("F1", self._show_keyboard_help),
             ("Ctrl+1", lambda: self._jump_wizard_step(0)),
             ("Ctrl+2", lambda: self._jump_wizard_step(1)),
             ("Ctrl+3", lambda: self._jump_wizard_step(2)),
             ("Ctrl+4", lambda: self._jump_wizard_step(3)),
-            ("Ctrl+Q", self._quit_app),
         ]
         self._shortcuts: List[Any] = []
         for seq, slot in pairs:
@@ -1443,6 +1451,29 @@ class MainWindow(QMainWindow):
                 self._shortcuts.append(sc)
             except Exception:
                 log.debug("Kunde inte binda %s", seq, exc_info=True)
+
+    def _setup_keyboard_access(self):
+        fields = [("_send_profile_combo", tr("profile.label")),
+                  ("_tpl_combo", tr("keys.template")), ("_subject", tr("keys.subject")),
+                  ("_editor", tr("keys.body")), ("_free_edit", tr("keys.free"))]
+        ordered = []
+        for name, label in fields:
+            widget = getattr(self, name, None)
+            if widget is not None:
+                widget.setAccessibleName(label)
+                ordered.append(widget)
+        for before, after in zip(ordered, ordered[1:]):
+            QWidget.setTabOrder(before, after)
+        self.setStyleSheet(self.styleSheet() + "\nQLineEdit:focus, QComboBox:focus, QTextEdit:focus, QPushButton:focus, QListWidget:focus { border: 2px solid #729fff; }")
+
+    def _focus_send_field(self, name):
+        self.select_tab("send")
+        widget = getattr(self, name, None)
+        if widget is not None:
+            widget.setFocus(Qt.FocusReason.ShortcutFocusReason)
+
+    def _show_keyboard_help(self):
+        QMessageBox.information(self, tr("keys.title"), tr("keys.help"))
 
     def _jump_wizard_step(self, index: int) -> None:
         self.select_tab("send")
@@ -1457,7 +1488,11 @@ class MainWindow(QMainWindow):
         except Exception:
             pass
         try:
-            widget.setFocus()
+            candidates = widget.findChildren(QWidget)
+            target = next((child for child in candidates if child.isEnabled()
+                           and child.isVisibleTo(widget)
+                           and child.focusPolicy() & Qt.FocusPolicy.TabFocus), widget)
+            target.setFocus(Qt.FocusReason.ShortcutFocusReason)
         except Exception:
             pass
 
@@ -2548,6 +2583,9 @@ class MainWindow(QMainWindow):
             self._on_send_profile_preview_changed
         )
         profile_row.addWidget(self._send_profile_combo, stretch=1)
+        self._send_profile_marker = QLabel()
+        self._send_profile_marker.setWordWrap(True)
+        profile_row.addWidget(self._send_profile_marker)
         layout.addLayout(profile_row)
         self._refresh_sender_profile_combos()
 
@@ -3840,11 +3878,35 @@ class MainWindow(QMainWindow):
         if preview is not None and profile.get("signature_logo"):
             preview.set_view("html")
 
+    def _update_profile_color_markers(self):
+        from core.sender_profiles import normalize_profile_color
+        profile = self._selected_sender_profile(getattr(self, "_send_profile_combo", None))
+        color = normalize_profile_color(profile.get("profile_color"))
+        text = self._sender_profile_display(profile)
+        for owner, attr in ((self, "_send_profile_marker"),
+                            (getattr(self, "preview_tab", None), "_preview_profile_marker")):
+            if owner is None:
+                continue
+            marker = getattr(owner, attr, None)
+            if marker is None:
+                marker = QLabel(owner)
+                marker.setWordWrap(True)
+                setattr(owner, attr, marker)
+                if owner is not self:
+                    owner.layout().insertWidget(0, marker)
+            marker.setText(text)
+            marker.setStyleSheet("border-left: 8px solid " + color + "; padding: 6px;")
+        for attr in ("_tpl_combo", "_tpl_tools_list"):
+            widget = getattr(self, attr, None)
+            if widget is not None:
+                widget.setStyleSheet("border-left: 6px solid " + color + ";")
+
     def _refresh_preview(self) -> None:
         preview = getattr(self, "preview_tab", None)
         if preview is None or not hasattr(preview, "render"):
             return
         try:
+            self._update_profile_color_markers()
             body = self._editor.toPlainText()
             free_text = (
                 self._free_edit.toPlainText().strip()
@@ -4749,6 +4811,14 @@ class MainWindow(QMainWindow):
         form.addRow("SMTP-port", self._make_settings_line("smtp_port", "SMTP-port"))
         form.addRow("Avsändaradress", self._make_settings_line("sender_email", "Avsändaradress"))
         form.addRow("Avsändarnamn", self._make_settings_line("sender_name", "Avsändarnamn"))
+        color_row = QHBoxLayout()
+        color_line = self._make_settings_line("profile_color", "#4f78b8")
+        color_line.setAccessibleName(tr("profile.color"))
+        color_row.addWidget(color_line)
+        color_button = QPushButton(tr("profile.choose_color"))
+        color_button.clicked.connect(self._choose_profile_color)
+        color_row.addWidget(color_button)
+        form.addRow(tr("profile.color"), color_row)
         signature = QTextEdit()
         signature.setPlainText(str(self.settings.get("signature_text", "") or ""))
         signature.setMaximumHeight(110)
@@ -5361,6 +5431,10 @@ class MainWindow(QMainWindow):
                     self._sender_profile_display(profile),
                     str(profile.get("id") or ""),
                 )
+                from core.sender_profiles import normalize_profile_color
+                pixmap = QPixmap(16, 16)
+                pixmap.fill(QColor(normalize_profile_color(profile.get("profile_color"))))
+                combo.setItemIcon(index, QIcon(pixmap))
                 if str(profile.get("id")) == wanted:
                     selected_index = index
             if profiles:
@@ -5398,6 +5472,13 @@ class MainWindow(QMainWindow):
             self._signature_preview.setHtml(html if has_signature else escape(tr("signature.empty")))
         except Exception as exc:
             self._signature_preview.setPlainText(tr("signature.error", error=str(exc)))
+
+    def _choose_profile_color(self):
+        from core.sender_profiles import normalize_profile_color
+        line = self._settings_widgets["profile_color"]
+        color = QColorDialog.getColor(QColor(normalize_profile_color(line.text())), self, tr("profile.color"))
+        if color.isValid():
+            line.setText(color.name())
 
     def _choose_signature_logo(self):
         path, _ = QFileDialog.getOpenFileName(self, "Välj logotyp", "", "Bilder (*.png *.jpg *.jpeg *.gif)")

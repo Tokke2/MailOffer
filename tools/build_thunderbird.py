@@ -7,7 +7,7 @@ def build(root=None):
     root = Path(root or Path(__file__).resolve().parents[1])
     target = root / 'thunderbird' / 'MailOffer.xpi'
     with ZipFile(target, 'w', ZIP_DEFLATED) as archive:
-        for name in ('manifest.json', 'background.js', 'icon.png', 'popup.html', 'popup.css'):
+        for name in ('manifest.json', 'protocol.json', 'background.js', 'icon.png', 'popup.html', 'popup.css'):
             info = ZipInfo(name, date_time=(2020, 1, 1, 0, 0, 0))
             info.compress_type = ZIP_DEFLATED
             info.external_attr = 0o644 << 16

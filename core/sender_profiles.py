@@ -22,6 +22,7 @@ import unicodedata
 from typing import Any, Dict, Iterable, List, Mapping, Optional, Tuple
 
 SENDER_PROFILE_FIELDS: Tuple[str, ...] = (
+    "profile_color",
     "signature_text",
     "signature_contact",
     "signature_logo",
@@ -38,6 +39,7 @@ SENDER_PROFILE_FIELDS: Tuple[str, ...] = (
 )
 
 _STRING_FIELDS = (
+    "profile_color",
     "signature_text",
     "signature_contact",
     "signature_logo",
@@ -119,6 +121,7 @@ def normalize_sender_profile(
     profile: Dict[str, Any] = {"id": profile_id, "name": name}
     for field in _STRING_FIELDS:
         profile[field] = str(source.get(field) or "").strip()
+    profile["profile_color"] = normalize_profile_color(source.get("profile_color"))
     profile["smtp_port"] = _as_port(source.get("smtp_port", 587))
     profile["use_ssl"] = _as_bool(source.get("use_ssl", False))
 
@@ -217,3 +220,8 @@ __all__ = [
     "slugify_profile_id",
     "unique_profile_id",
 ]
+
+
+def normalize_profile_color(value):
+    text = str(value or "").strip()
+    return text.lower() if re.fullmatch(r"#[0-9a-fA-F]{6}", text) else "#4f78b8"

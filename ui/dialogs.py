@@ -308,7 +308,11 @@ class SendConfirmDialog(QDialog):
             sender_text = self._sender_profile_name or self._sender_email
             if self._sender_email and self._sender_email != sender_text:
                 sender_text = f"{sender_text} <{self._sender_email}>"
-            row("👤 Avsändare:", sender_text, colors.get("accent", ""))
+            row("👤 Avsändare:", sender_text)
+            from core.sender_profiles import normalize_profile_color
+            color = normalize_profile_color((self._params.get("sender_profile") or {}).get("profile_color"))
+            value_widget = grid.itemAtPosition(self._grid_row - 1, 1).widget()
+            value_widget.setStyleSheet("border-left: 8px solid " + color + "; padding: 6px;")
         if self._test_mode:
             row(
                 "🧪 Testläge:",

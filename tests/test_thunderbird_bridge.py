@@ -23,7 +23,7 @@ class ThunderbirdBridgeTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / 'contacts.json'
             with mock.patch.object(module, 'CONTACTS_PATH', path):
-                self.assertTrue(module.handle({'action': 'ping'})['ok'])
+                self.assertTrue(module.handle({'action': 'ping', 'protocol_version': 1})['ok'])
                 self.assertFalse(path.exists())
 
     def test_preview_uses_local_logo_and_escapes_text(self):

@@ -104,7 +104,13 @@ def test_native_host(base_dir: Path) -> dict:
     """
     import struct
     import subprocess
-    payload = json.dumps({"action": "ping"}).encode("utf-8")
+    from core.tb_protocol import PROTOCOL_VERSION, compatible
+    from zipfile import ZipFile
+    with ZipFile(Path(base_dir) / "thunderbird" / "MailOffer.xpi") as package:
+        packaged = json.loads(package.read("protocol.json"))
+    if not compatible(packaged.get("protocol_version")):
+        raise RuntimeError("Inkompatibel XPI-fil. Hämta MailOffer.xpi från den aktuella appen.")
+    payload = json.dumps({"action": "ping", "protocol_version": PROTOCOL_VERSION}).encode("utf-8")
     completed = subprocess.run(
         [sys.executable, str(_host_py(Path(base_dir)))],
         input=struct.pack("<I", len(payload)) + payload,
@@ -116,6 +122,8 @@ def test_native_host(base_dir: Path) -> dict:
     if length > 1024 * 1024 or len(completed.stdout[4:]) != length:
         raise ValueError("Ogiltigt native-messaging-svar")
     result = json.loads(completed.stdout[4:].decode("utf-8"))
+    if not compatible(result.get("protocol_version")):
+        raise RuntimeError("Inkompatibel native host. Uppdatera appen och registrera kopplingen igen.")
     if not result.get("ok"):
         raise RuntimeError(result.get("error", "Native host misslyckades"))
     return result

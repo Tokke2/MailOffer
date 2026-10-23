@@ -13,6 +13,9 @@ from pathlib import Path
 from typing import Any, Dict, List
 
 APP_ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(APP_ROOT))
+from core.tb_protocol import PROTOCOL_VERSION, compatible
+
 CONTACTS_PATH = APP_ROOT / "adresslistor" / "contacts.json"
 _EMAIL_RE = re.compile(r"[^<\s@]+@[^>\s@]+\.[^>\s@]+")
 
@@ -101,8 +104,11 @@ def _upsert(contacts: List[Dict[str, Any]], item: Dict[str, Any]) -> str:
 
 def handle(msg: Dict[str, Any]) -> Dict[str, Any]:
     action = str(msg.get("action") or "add_contacts")
+    if not compatible(msg.get("protocol_version")):
+        return {"ok": False, "protocol_version": PROTOCOL_VERSION,
+                "error": "Inkompatibelt Thunderbird-tillägg. Installera senaste MailOffer.xpi från appmappen och registrera kopplingen igen."}
     if action == "ping":
-        return {"ok": True, "contacts_path": str(CONTACTS_PATH)}
+        return {"ok": True, "protocol_version": PROTOCOL_VERSION, "contacts_path": str(CONTACTS_PATH)}
     if action != "add_contacts":
         return {"ok": False, "error": "okänd åtgärd"}
     incoming = msg.get("contacts") or []
@@ -124,6 +130,7 @@ def handle(msg: Dict[str, Any]) -> Dict[str, Any]:
     _save(contacts)
     return {
         "ok": True,
+        "protocol_version": PROTOCOL_VERSION,
         "added": added,
         "updated": updated,
         "skipped": skipped,

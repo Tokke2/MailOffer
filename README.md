@@ -294,3 +294,35 @@ Authentication-Results: SPF, DKIM och DMARC ska verifieras där. Hämta
 DNS-värden för just er domän från WebSupport. Skapa inte dubbla SPF-poster.
 Ingen app eller DNS-inställning kan garantera att alla mejl undgår skräppost;
 rykte, mottagarnas samtycke, innehåll, volym och mottagarfilter spelar också in.
+
+### Profilfärg och tangentbord
+
+Under avsändarprofilens inställningar finns **Profilfärg → Välj färg …**.
+Spara profilen efter ändringen. Färgen visas som ikon i profilväljaren och
+som kantmarkering vid mallval, förhandsvisning och sändbekräftelse. Namn och
+avsändaradress visas fortfarande; färgen är en extra ledtråd, inte en
+behörighetsregel och påverkar inte mejlets innehåll. Ogiltig färg återställs
+till standardblått.
+
+**Hjälp → Tangentbord och genvägar**, eller F1, visar genvägarna:
+- Ctrl+L: välj avsändarprofil; Ctrl+M: välj mall.
+- Ctrl+K: sök kontakter; Ctrl+1–4: gå till ett steg i utskicket.
+- F5: förhandsvisa; Ctrl+Shift+T: öppna testmejlsflödet.
+- Ctrl+Enter: öppna sändflödet med kontroller och bekräftelse (skickar inte direkt).
+- Ctrl+S: spara mall; Ctrl+Q: avsluta.
+- Tab/Shift+Tab: flytta mellan fält, med tydlig fokusmarkering.
+
+### Kompatibilitet med Thunderbird-tillägget
+
+Installera om **thunderbird/MailOffer.xpi** från denna uppdatering i Thunderbird.
+Både host och XPI använder nu ett separat protokollnummer (oberoende av
+appversionen 1.0.0). Innan import gör tillägget en kontaktfri handskakning.
+Saknat eller felaktigt protokollnummer stoppar importen innan kontakter skrivs.
+Felmeddelandet ber användaren uppdatera appen, installera dess XPI och
+registrera kopplingen igen. Äldre XPI som saknar protokollnummer avvisas också.
+
+Appens **Testa lokal brygga** kontrollerar att medföljande XPI:s protokoll
+stämmer med appen och att den lokala hosten svarar med rätt protokoll. Det
+bevisar fortfarande inte vilken XPI som faktiskt är installerad i Thunderbird;
+den kontrolleras vid ett riktigt importförsök. En nyare XPI får inte skriva
+till en äldre host som inte stödjer protokollet.
