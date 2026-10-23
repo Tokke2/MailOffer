@@ -234,3 +234,26 @@ registreringen. Flyttas appmappen, starta appen igen för att uppdatera
 kopplingen. Bygg om XPI med `python tools/build_thunderbird.py` efter
 ändringar i tillägget. Thunderbird-integrationen behöver också provas i
 Thunderbird på den dator där den ska användas.
+
+### Thunderbird-panel och levande signaturförhandsvisning
+
+Under **Inställningar → Thunderbird-koppling** finns nu:
+- **Registrera kopplingen** för den aktuella användaren och appmappen.
+- **Installera Thunderbird-tillägg …** som öppnar XPI-mappen och visar hur
+  tillägget installeras i Thunderbird. Appen kan inte installera tillägget
+  utan Thunderbirds bekräftelse.
+- **Testa lokal brygga**, som provar riktig native-messaging-inramning utan
+  att lägga till testkontakter. Testet bekräftar den lokala hosten, inte att
+  Thunderbird har laddat tillägget. Prova därefter ett högerklick i Thunderbird.
+
+Kontaktfilen kontrolleras varannan sekund medan appen körs. Giltiga ändringar
+laddas automatiskt in även när kontaktfliken redan visas. Felaktig/ofullständig
+JSON laddas inte in. Om en egen adressmapp skiljer sig från bryggans adressmapp
+visar testpanelen en varning.
+
+Signaturen för vald profil visas direkt i inställningarna, även under
+redigering. Utskickets förhandsvisning uppdateras vid byte av avsändarprofil
+med samma signaturtext och bild som används vid sändning. Har profilen en
+logotyp väljs HTML-visning för att bilden ska synas; Text kan fortfarande
+väljas manuellt. Bilden läses lokalt i förhandsvisningen och bäddas in med
+CID i det skickade mejlet. Mottagarens mejlklient kan påverka utseendet.

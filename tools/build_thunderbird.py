@@ -1,6 +1,6 @@
 """Build installable Thunderbird extension without native host or private data."""
 from pathlib import Path
-from zipfile import ZipFile, ZIP_DEFLATED
+from zipfile import ZipFile, ZipInfo, ZIP_DEFLATED
 
 
 def build(root=None):
@@ -8,7 +8,10 @@ def build(root=None):
     target = root / 'thunderbird' / 'MailOffer.xpi'
     with ZipFile(target, 'w', ZIP_DEFLATED) as archive:
         for name in ('manifest.json', 'background.js', 'icon.png', 'popup.html', 'popup.css'):
-            archive.write(root / 'thunderbird' / name, name)
+            info = ZipInfo(name, date_time=(2020, 1, 1, 0, 0, 0))
+            info.compress_type = ZIP_DEFLATED
+            info.external_attr = 0o644 << 16
+            archive.writestr(info, (root / 'thunderbird' / name).read_bytes())
     return target
 
 

@@ -92,6 +92,39 @@ class TestSenderProfilesUi(unittest.TestCase):
         self.addCleanup(win.close)
         return win, settings, profile_b_id
 
+    def test_external_contact_refresh(self):
+        win, settings, _ = self._make_window()
+        import json
+        path = win._contacts_path()
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps({"contacts": [{"email": "new@example.com", "name": "New"}]}))
+        with mock.patch.object(win, "_reload_contacts_tab") as reload:
+            win._poll_external_contacts()
+            reload.assert_called_once()
+            win._poll_external_contacts()
+            reload.assert_called_once()
+        path.write_text("{")
+        with mock.patch.object(win, "_reload_contacts_tab") as reload:
+            win._poll_external_contacts()
+            reload.assert_not_called()
+
+    def test_signature_preview_tracks_send_profile(self):
+        win, settings, profile_b_id = self._make_window()
+        profile = next(p for p in settings.get_sender_profiles() if p["id"] == profile_b_id)
+        profile.update(signature_text="Unique signature B", signature_contact="Phone 987",
+                       signature_logo=str(ROOT / "thunderbird" / "icon.png"))
+        settings.upsert_sender_profile(profile)
+        win._send_profile_combo.setCurrentIndex(win._send_profile_combo.findData(profile_b_id))
+        QApplication.processEvents()
+        self.assertIn("Unique signature B", win.preview_tab._body_plain)
+        self.assertIn("Phone 987", win.preview_tab._body_html)
+        self.assertIn("file:", win.preview_tab._body_html)
+        first = win._send_profile_combo.findData(profile_b_id)
+        win._send_profile_combo.setCurrentIndex(0 if first else 1)
+        self.assertNotIn("Unique signature B", win.preview_tab._body_plain)
+        win._apply_sender_profile_to_settings_form(profile)
+        self.assertIn("Unique signature B", win._signature_preview.toPlainText())
+
     def test_signature_fields_follow_profile(self):
         win, settings, profile_b_id = self._make_window()
         profile = settings.get_sender_profile(profile_b_id) if hasattr(settings, "get_sender_profile") else next(p for p in settings.get_sender_profiles() if p["id"] == profile_b_id)

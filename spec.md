@@ -2483,3 +2483,13 @@ Användaren valde från redan-valda: tema-knapp (§34 #6) och tydligare
 - Installerbar thunderbird/MailOffer.xpi: högerklick på mailto-länk skickar den
   klickade adressen via befintlig native messaging till kontaktlistan.
 - Versionsnummer fortsatt 1.0.0, intern byggstämpel 2026102201.
+
+## V7.7 (APP 1.0.0)
+- Thunderbird-panel med registrering, XPI-installationshjälp och kontaktfri
+  protokolltest av lokal native host. Tilläggets status i Thunderbird påstås
+  inte vara verifierad. Varning vid avvikande kontaktmapp.
+- Kontaktfilen övervakas med tvåsekunders timer, giltiga externa ändringar
+  uppdaterar kontaktfliken utan manuell omladdning.
+- Levande signaturkort i profilinställningar och delad signatur-renderare i
+  utskicksförhandsvisning. Profilbyte uppdaterar signatur och lokal logotyp.
+- Appversion fortsatt 1.0.0, byggstämpel 2026102301.

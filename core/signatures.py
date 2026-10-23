@@ -36,3 +36,16 @@ def logo_part(path):
     part.add_header('Content-ID', '<mailoffer-signature>')
     part.add_header('Content-Disposition', 'inline', filename=file.name)
     return part
+
+
+def preview_signature(plain, html, profile):
+    """Use the sending renderer; resolve the CID image locally for preview."""
+    logo = str(profile.get('signature_logo') or '')
+    if logo:
+        logo_part(logo)  # same validation as actual send
+    plain, html = append_signature(
+        plain, html, profile.get('signature_text', ''),
+        profile.get('signature_contact', ''), bool(logo))
+    if logo and html:
+        html = html.replace('cid:mailoffer-signature', escape(Path(logo).resolve().as_uri(), quote=True))
+    return plain, html

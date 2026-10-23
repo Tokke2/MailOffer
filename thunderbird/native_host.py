@@ -101,6 +101,8 @@ def _upsert(contacts: List[Dict[str, Any]], item: Dict[str, Any]) -> str:
 
 def handle(msg: Dict[str, Any]) -> Dict[str, Any]:
     action = str(msg.get("action") or "add_contacts")
+    if action == "ping":
+        return {"ok": True, "contacts_path": str(CONTACTS_PATH)}
     if action != "add_contacts":
         return {"ok": False, "error": "okänd åtgärd"}
     incoming = msg.get("contacts") or []

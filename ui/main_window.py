@@ -298,6 +298,7 @@ from PyQt6.QtWidgets import (
     QTableWidgetItem,
     QTabWidget,
     QTextEdit,
+    QTextBrowser,
     QTreeWidget,
     QTreeWidgetItem,
     QVBoxLayout,
@@ -1095,6 +1096,10 @@ class MainWindow(QMainWindow):
         self._automatic_backup_timer.timeout.connect(self._run_automatic_backup)
         self._automatic_backup_timer.start(60_000)
         QTimer.singleShot(6000, self._run_automatic_backup)
+        self._contacts_stamp = self._contact_file_stamp()
+        self._contacts_poll = QTimer(self)
+        self._contacts_poll.timeout.connect(self._poll_external_contacts)
+        self._contacts_poll.start(2000)
 
         # (v5.5) Muskjulsskydd – idempotent (main.pyw installerar normalt)
         try:
@@ -2535,7 +2540,7 @@ class MainWindow(QMainWindow):
         self._send_profile_combo = QComboBox()
         self._send_profile_combo.setMinimumWidth(280)
         self._send_profile_combo.currentIndexChanged.connect(
-            lambda *_args: self._update_send_summary()
+            self._on_send_profile_preview_changed
         )
         profile_row.addWidget(self._send_profile_combo, stretch=1)
         layout.addLayout(profile_row)
@@ -3804,6 +3809,13 @@ class MainWindow(QMainWindow):
     # Preview och sändsammanfattning
     # ────────────────────────────────────────────────────────────────
 
+    def _on_send_profile_preview_changed(self, _index=-1):
+        self._refresh_preview()
+        profile = self._selected_sender_profile(getattr(self, "_send_profile_combo", None))
+        preview = getattr(self, "preview_tab", None)
+        if preview is not None and profile.get("signature_logo"):
+            preview.set_view("html")
+
     def _refresh_preview(self) -> None:
         preview = getattr(self, "preview_tab", None)
         if preview is None or not hasattr(preview, "render"):
@@ -3816,18 +3828,23 @@ class MainWindow(QMainWindow):
                 else ""
             )
             if free_text:
-                body = (
-                    f"{body}\n\n{free_text}\n\n"
-                    f"(Signaturen placeras efter detta vid sändning.)"
-                )
+                from core.email_sender import append_free_text
+                body = append_free_text(body, free_text, False)
+            from core.signatures import preview_signature
+            from core.email_sender import text_to_html
+            from script.templates import apply_placeholders
+            body = apply_placeholders(body, self._get_ph())
+            profile = self._selected_sender_profile(getattr(self, "_send_profile_combo", None))
+            body, body_html = preview_signature(body, text_to_html(body), profile)
             subject_for_preview = self._ensure_subject_contains_model_and_reg(
                 update_field=False
             )
             preview.render(
-                subject_for_preview, body, placeholders=self._get_ph()
+                subject_for_preview, body, body_html=body_html, placeholders=self._get_ph()
             )
             self._update_send_summary()
-        except Exception:
+        except Exception as exc:
+            preview.render(subject_for_preview if "subject_for_preview" in locals() else "", tr("signature.error", error=str(exc)))
             log.debug("Kunde inte uppdatera preview", exc_info=True)
 
     def _update_send_summary(self) -> None:
@@ -4599,6 +4616,7 @@ class MainWindow(QMainWindow):
 
         self._settings_widgets = {}
         layout.addWidget(self._build_settings_group_smtp())
+        layout.addWidget(self._build_thunderbird_group())
         layout.addWidget(self._build_settings_group_paths())
         layout.addWidget(self._build_settings_group_templates())
         layout.addWidget(self._build_settings_group_ui())
@@ -4717,6 +4735,14 @@ class MainWindow(QMainWindow):
         logo_button.clicked.connect(self._choose_signature_logo)
         logo_row.addWidget(logo_button)
         form.addRow("Logotyp", logo_row)
+        self._signature_preview = QTextBrowser()
+        self._signature_preview.setOpenExternalLinks(False)
+        self._signature_preview.setMaximumHeight(180)
+        form.addRow(tr("signature.preview"), self._signature_preview)
+        signature.textChanged.connect(self._refresh_signature_preview)
+        for key in ("signature_contact", "signature_logo"):
+            self._settings_widgets[key].textChanged.connect(self._refresh_signature_preview)
+        self._refresh_signature_preview()
         form.addRow("Användarnamn", self._make_settings_line("username", "Användarnamn"))
         form.addRow("Lösenord", self._make_settings_line("password", "Lösenord", password=True))
         form.addRow("Reply-To", self._make_settings_line("reply_to", "Reply-To"))
@@ -4732,6 +4758,68 @@ class MainWindow(QMainWindow):
                 self._autodetect_smtp_provider
             )
         return group
+
+    def _contact_file_stamp(self):
+        try:
+            stat = self._contacts_path().stat()
+            return (stat.st_mtime_ns, stat.st_size)
+        except OSError:
+            return None
+
+    def _poll_external_contacts(self):
+        stamp = self._contact_file_stamp()
+        if stamp == self._contacts_stamp:
+            return
+        # Do not reload a partially written or invalid external file.
+        try:
+            import json
+            json.loads(self._contacts_path().read_text(encoding="utf-8-sig"))
+        except (OSError, ValueError):
+            return
+        self._contacts_stamp = stamp
+        self._reload_contacts_tab()
+        self._tb_status.setText(tr("tb.received"))
+
+    def _build_thunderbird_group(self):
+        group = QGroupBox(tr("tb.title"))
+        layout = QVBoxLayout(group)
+        self._tb_status = QLabel(tr("tb.unknown"))
+        self._tb_status.setWordWrap(True)
+        layout.addWidget(self._tb_status)
+        for key, callback in (("tb.register", self._register_thunderbird_ui),
+                              ("tb.xpi", self._open_thunderbird_xpi),
+                              ("tb.test", self._test_thunderbird_ui)):
+            button = QPushButton(tr(key))
+            button.clicked.connect(callback)
+            layout.addWidget(button)
+        info = QLabel(tr("tb.help"))
+        info.setWordWrap(True)
+        layout.addWidget(info)
+        return group
+
+    def _register_thunderbird_ui(self):
+        from core.tb_bridge import register_thunderbird_host
+        path = register_thunderbird_host(self._base_dir())
+        self._tb_status.setText(tr("tb.registered", path=str(path)) if path else tr("tb.failed"))
+
+    def _open_thunderbird_xpi(self):
+        path = self._base_dir() / "thunderbird" / "MailOffer.xpi"
+        if path.is_file():
+            self._explorer(path.parent)
+            QMessageBox.information(self, tr("tb.title"), tr("tb.install", path=str(path)))
+        else:
+            self._tb_status.setText(tr("tb.failed"))
+
+    def _test_thunderbird_ui(self):
+        from core.tb_bridge import test_native_host
+        try:
+            result = test_native_host(self._base_dir())
+            if Path(result["contacts_path"]).resolve() != self._contacts_path().resolve():
+                self._tb_status.setText(tr("tb.path_mismatch"))
+            else:
+                self._tb_status.setText(tr("tb.test_ok"))
+        except Exception as exc:
+            self._tb_status.setText(tr("tb.test_error", error=str(exc)))
 
     def _build_settings_group_paths(self) -> QGroupBox:
         group = QGroupBox("📂 Sökvägar")
@@ -5270,6 +5358,20 @@ class MainWindow(QMainWindow):
             elif isinstance(widget, QCheckBox):
                 widget.setChecked(bool(value))
         self._sync_smtp_provider_combo()
+        self._refresh_signature_preview()
+
+    def _refresh_signature_preview(self):
+        if not hasattr(self, "_signature_preview"):
+            return
+        try:
+            from core.signatures import preview_signature
+            from html import escape
+            values = self._collect_settings_form()
+            _, html = preview_signature("", "<div></div>", values)
+            has_signature = any(values.get(key) for key in ("signature_text", "signature_contact", "signature_logo"))
+            self._signature_preview.setHtml(html if has_signature else escape(tr("signature.empty")))
+        except Exception as exc:
+            self._signature_preview.setPlainText(tr("signature.error", error=str(exc)))
 
     def _choose_signature_logo(self):
         path, _ = QFileDialog.getOpenFileName(self, "Välj logotyp", "", "Bilder (*.png *.jpg *.jpeg *.gif)")

@@ -95,3 +95,27 @@ def register_thunderbird_host(base_dir: Path) -> Optional[Path]:
 
 
 __all__ = ["register_thunderbird_host", "HOST_NAME", "EXTENSION_ID"]
+
+
+def test_native_host(base_dir: Path) -> dict:
+    """Exercise real native-message framing without modifying contacts.
+
+    This tests the local Python host, NOT whether Thunderbird has loaded the XPI.
+    """
+    import struct
+    import subprocess
+    payload = json.dumps({"action": "ping"}).encode("utf-8")
+    completed = subprocess.run(
+        [sys.executable, str(_host_py(Path(base_dir)))],
+        input=struct.pack("<I", len(payload)) + payload,
+        capture_output=True, timeout=5,
+    )
+    if completed.returncode or len(completed.stdout) < 4:
+        raise RuntimeError("Native host svarade inte")
+    length = struct.unpack("<I", completed.stdout[:4])[0]
+    if length > 1024 * 1024 or len(completed.stdout[4:]) != length:
+        raise ValueError("Ogiltigt native-messaging-svar")
+    result = json.loads(completed.stdout[4:].decode("utf-8"))
+    if not result.get("ok"):
+        raise RuntimeError(result.get("error", "Native host misslyckades"))
+    return result
