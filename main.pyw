@@ -313,6 +313,8 @@ def _safe_show_critical(title: str, message: str) -> None:
         if app is None:
             temp_app = QApplication(sys.argv)
             app = temp_app
+        from ui.screen_fit import install_screen_fit
+        install_screen_fit(app)
         # (v4.7) App-ikonen även på kritiska dialoger
         try:
             from core.app_icon import set_app_icon
@@ -608,6 +610,8 @@ def main() -> None:
         app.setApplicationName(APP_NAME)
         app.setApplicationVersion(APP_VERSION)
         app.setQuitOnLastWindowClosed(False)
+        from ui.screen_fit import install_screen_fit
+        install_screen_fit(app)
 
         # Saknade/för gamla Python-tillägg – progressbar, sedan vidare
         try:

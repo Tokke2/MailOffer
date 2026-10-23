@@ -405,3 +405,22 @@ sammanfattning, varningar och kontrollresultat ligger i ett rullningsbart
 område. Avbryt/Förhandsgranska/Skicka nu ligger kvar utanför området och
 knappraden kan radbrytas vid smalare fönster. Ämnen och adresser återges
 som vanlig text så att vinkelparenteser inte tolkas som HTML.
+
+### Skärmanpassning för appfönster
+
+En gemensam Qt-kontroll håller huvudfönster och dialoger inom skärmens
+**tillgängliga arbetsyta**, med hänsyn till aktivitetsfält och Qt:s logiska
+pixlar vid DPI-/Windows-skalning. För stora eller bortflyttade sparade
+fönsterstorlekar begränsas; negativ position på en ansluten vänsterskärm
+är däremot giltig och behålls när fönstret ryms.
+
+Kontrollen körs vid visning, storleksändring, skärmbyte och förändrad
+arbetsyta. Minimerade och maximerade fönster lämnas åt fönsterhanteraren.
+När innehåll inte ryms får vanliga dialoger rullning; wizard-sidor rullas
+separat så att navigeringen ligger kvar. Befintliga dialoger med egen
+rullning, till exempel sändbekräftelsen, behåller den. Vid behov kan även
+huvudfönstrets innehåll rullas i stället för att kapas. Inga automatiska
+ändringar av textstorleken görs.
+
+Verifierat med offscreen-Qt på små arbetsytor; faktisk Windows-skalning
+på flera fysiska skärmar behöver också provas på användardatorn.

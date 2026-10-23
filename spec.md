@@ -2556,3 +2556,12 @@ Användaren valde från redan-valda: tema-knapp (§34 #6) och tydligare
   scrollbart innehåll och kvarliggande radbrytande knappar. Övriga steg
   lämnas oförändrade i denna ändring.
 - Version fortsatt 1.0.0, intern byggstämpel 2026102309.
+
+## V7.16 (APP 1.0.0)
+- Gemensam DPI-medveten skärmanpassning installerad på QApplication:
+  dialoger och huvudfönster hålls inom tillgänglig arbetsyta, sparade
+  positioner utanför anslutna skärmar återförs, innehåll kan rullas.
+- Skärm-/arbetsytebyte följs; wizard-sidor får separat rullning och befintliga
+  rullningsdialoger behåller sin layout. Inga automatisk ändrade typsnitt.
+- Offscreen-regressionstester för små ytor, negativ skärmposition,
+  dialog-/wizard-/huvudfönsterinnehåll. Version 1.0.0, bygg 2026102310.
