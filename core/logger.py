@@ -211,6 +211,8 @@ def setup_logging(
     )
 
     _install_excepthook(root_logger)
+    from core.diagnostics import attach_root
+    attach_root()
     _register_atexit()
 
     root_logger.info(

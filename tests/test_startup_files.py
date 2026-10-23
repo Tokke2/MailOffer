@@ -62,12 +62,12 @@ class TestStartVbs(unittest.TestCase):
     def test_runs_installer_hidden_and_waits(self):
         self.assertIn("Installera_Python.bat", self.src)
         self.assertIn("/silent", self.src)
-        self.assertIn(", 0, True", self.src)  # 0 = dolt fönster, True = vänta
+        self.assertIn(", 0, True)", self.src)  # 0 = dolt fönster, True = vänta
 
     def test_starts_main_pyw_hidden_with_args(self):
         self.assertIn("main.pyw", self.src)
         self.assertIn("WScript.Arguments", self.src)
-        self.assertIn(", 1, False", self.src)
+        self.assertIn(", 1, True)", self.src)
         self.assertNotIn(", 0, False", self.src)
 
     def test_local_environment_preferred(self):

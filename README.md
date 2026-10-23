@@ -363,3 +363,29 @@ inte dolt visningsläge (`0`). Ingen konsol öppnas. Installationssteget kan
 fortfarande köras dolt. Uppdaterad startkod känns igen på loggraderna
 "Startfönster visas" och "Bygg=…". En äldre installation med version-only
 uppdaterare kan behöva en första manuell uppdatering trots samma 1.0.0.
+
+### Avancerad start- och feldiagnostik
+
+Dubbelklicksstarten loggar nu även innan Python körs. Vid fel: skicka
+`logs/launcher.log`, `logs/diagnostics.log` och de sista raderna i
+`logs/email_app.log` från samma försök. Innehållet kan innehålla lokala
+sökvägar och felmeddelanden; granska det före delning.
+
+- `launcher.log`: sökta/tillgängliga Python-tolkar, installationssteg,
+  startfel och processens avslutningskod. UTF-16, roterar vid 1 MB.
+- `diagnostics.log`: start före Qt-import, process-id, tråd, Python-sökväg,
+  arbetsmapp, varningar, Qt-meddelanden, ofångade huvud-/bakgrundstrådsfel,
+  unraisable-fel och fångade exceptions som loggas även på DEBUG-nivå.
+  Fullständiga stackspår, utan dump av lokala variabler. 5 MB, fem arkiv.
+- `native-crash-<pid>.log`: faulthandler för vissa lågnivåkrascher, högst
+  tio filer. Kan vara tom efter normal körning.
+- Om appmappen inte är skrivbar försöker Python använda
+  `%TEMP%/MailOffer-logs`; startfilen använder `%TEMP%/MailOffer-launcher.log`.
+
+Den fristående diagnostiken överlever ominitiering av den vanliga loggern.
+Vanliga lösenords-/tokenfält och SMTP AUTH-data maskeras i diagnostikloggen,
+men godtyckliga feltexter kan innehålla andra känsliga uppgifter. Inget
+mejlinnehåll eller inställningsobjekt dumpas av diagnostikmodulen.
+Strömavbrott, tvångsavslut och fel som fångas utan att loggas kan inte
+garanteras finnas i loggen. Om VBS är blockerat av Windows och aldrig körs
+kan det inte heller skapa någon launcher-logg.

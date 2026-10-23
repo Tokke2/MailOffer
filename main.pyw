@@ -108,6 +108,11 @@ BASE_DIR = Path(__file__).resolve().parent
 if str(BASE_DIR) not in sys.path:
     sys.path.insert(0, str(BASE_DIR))
 
+# Diagnostics must precede third-party imports, especially pythonw import failures.
+from core.diagnostics import install as install_diagnostics
+_diagnostics = install_diagnostics(BASE_DIR)
+_diagnostics.info("STAGE: importing Qt")
+
 # Qt runtime-env måste sättas före QApplication skapas.
 os.environ.setdefault("QT_ENABLE_HIGHDPI_SCALING", "1")
 os.environ.setdefault("QT_AUTO_SCREEN_SCALE_FACTOR", "1")
@@ -115,6 +120,9 @@ os.environ.setdefault("QT_AUTO_SCREEN_SCALE_FACTOR", "1")
 # third-party
 from PyQt6.QtCore import QTimer
 from PyQt6.QtWidgets import QApplication, QMessageBox
+from core.diagnostics import install_qt
+install_qt()
+_diagnostics.info("STAGE: Qt imports complete")
 
 # Tidig logging – denna modul måste finnas för att bootstrap ska kunna logga.
 from core.logger import get_logger, setup_logging
@@ -492,7 +500,10 @@ def main() -> None:
         "🚀 %s v%s startar på %s",
         APP_NAME, APP_VERSION, platform.platform(),
     )
-    sys.excepthook = handle_uncaught_exception
+    def combined_exception_hook(kind, value, tb):
+        _diagnostics.critical("Unhandled exception after logger setup", exc_info=(kind, value, tb))
+        handle_uncaught_exception(kind, value, tb)
+    sys.excepthook = combined_exception_hook
 
     acquired = False
     instance: Optional[Any] = None
@@ -688,9 +699,12 @@ def main() -> None:
         log.info(
             "✅ %s v%s redo – enter app.exec().", APP_NAME, APP_VERSION
         )
+        _diagnostics.info("STAGE: entering Qt event loop; visible=%s", main_window.isVisible())
         exit_code = app.exec()
+        _diagnostics.info("STAGE: Qt event loop exited code=%s", exit_code)
 
     except Exception as exc:
+        _diagnostics.exception("STARTUP FAILED")
         _write_startup_crash_file(exc)
         log.exception("Kritiskt fel vid uppstart av %s.", APP_NAME)
         _safe_show_critical(
@@ -717,7 +731,7 @@ def main() -> None:
                 tray.shutdown()
                 log.debug("SystemTray stoppad.")
             except Exception as exc:
-                log.debug("tray.shutdown() fel: %s", exc)
+                log.exception("tray.shutdown() fel")
 
         if event_bus is not None:
             try:
@@ -737,14 +751,14 @@ def main() -> None:
                 cache.cleanup()
                 log.debug("CacheManager cleanup klar.")
             except Exception as exc:
-                log.debug("cache.cleanup() fel: %s", exc)
+                log.exception("cache.cleanup() fel")
 
         if event_bus is not None:
             try:
                 event_bus.shutdown()
                 log.debug("EventBus stoppad.")
             except Exception as exc:
-                log.debug("bus.shutdown() fel: %s", exc)
+                log.exception("bus.shutdown() fel")
 
         # (v4.6) Töm logg-kön – annars tappas poster vid avslut
         try:
@@ -786,6 +800,7 @@ def main() -> None:
             except Exception:
                 pass
 
+        _diagnostics.info("STAGE: shutdown complete exit_code=%s", exit_code)
         try:
             log.info("✅ %s avslutad.", APP_NAME)
         except Exception:

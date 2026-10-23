@@ -2537,3 +2537,13 @@ Användaren valde från redan-valda: tema-knapp (§34 #6) och tydligare
 ## V7.13 (APP 1.0.0)
 - VBS startar pythonw med normalt visningsläge i stället för SW_HIDE.
 - Bygg 2026102307; version fortsatt 1.0.0.
+
+## V7.14 (APP 1.0.0)
+- Tidig oberoende roterande diagnostik före Qt-import, tråd-/unraisable-hooks,
+  Python-varningar, Qt-meddelanden och faulthandler för vissa native-krascher.
+- Diagnostik tar emot loggade exceptions även på DEBUG; maskering av vanliga
+  autentiseringsfält, inga variabeldumpar.
+- VBS loggar från första startsteget, vald/sökt Python (inklusive 3.14),
+  installations-/startfel och avslutningskod, med synligt felbesked.
+- Version fortsatt 1.0.0, bygg 2026102308. Windows-flödet behöver verifieras
+  från faktisk dubbelklicksstart; loggning ersätter inte rotorsaksdiagnos.
