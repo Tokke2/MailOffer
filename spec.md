@@ -2533,3 +2533,7 @@ Användaren valde från redan-valda: tema-knapp (§34 #6) och tydligare
 - Gemensam befintlig ikon i app/dialoger/tray, explicit ikon på huvudfönstret
   och stabilt Windows app-ID före Qt-start. Null-ikon går vidare till fallback.
 - Appversion fortsatt 1.0.0, intern byggstämpel 2026102306.
+
+## V7.13 (APP 1.0.0)
+- VBS startar pythonw med normalt visningsläge i stället för SW_HIDE.
+- Bygg 2026102307; version fortsatt 1.0.0.

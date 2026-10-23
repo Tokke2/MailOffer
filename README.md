@@ -357,3 +357,9 @@ versionsoberoende app-ID före Qt-start för korrekt gruppering i aktivitetsfäl
 Systembrickans statusmarkeringar läggs ovanpå samma grundikon. Thunderbird
 använder samma motiv i sin paketerade ikon. Windows kan cachelagra gamla
 ikoner för fästa genvägar; lossa och fäst om en gammal genväg vid behov.
+
+Manuell VBS-start använder normalt Windows-visningsläge (`1`) med pythonw,
+inte dolt visningsläge (`0`). Ingen konsol öppnas. Installationssteget kan
+fortfarande köras dolt. Uppdaterad startkod känns igen på loggraderna
+"Startfönster visas" och "Bygg=…". En äldre installation med version-only
+uppdaterare kan behöva en första manuell uppdatering trots samma 1.0.0.

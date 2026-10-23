@@ -67,7 +67,8 @@ class TestStartVbs(unittest.TestCase):
     def test_starts_main_pyw_hidden_with_args(self):
         self.assertIn("main.pyw", self.src)
         self.assertIn("WScript.Arguments", self.src)
-        self.assertIn(", 0, False", self.src)
+        self.assertIn(", 1, False", self.src)
+        self.assertNotIn(", 0, False", self.src)
 
     def test_local_environment_preferred(self):
         self.assertLess(self.src.index(r"\.venv\Scripts\pythonw.exe"), self.src.index('localAppData & "\\Programs'))

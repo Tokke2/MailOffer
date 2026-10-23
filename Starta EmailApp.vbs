@@ -5,7 +5,7 @@
 '   1. Leta pythonw.exe (Python 3.12 forst, sedan ovriga 3.x-installationer).
 '   2. Saknas Python: kor Installera_Python.bat /silent DOLT och vanta
 '      tills installationen ar klar, leta sedan igen.
-'   3. Starta main.pyw med pythonw (dolt fonster). Argument skickas
+'   3. Starta main.pyw med pythonw (ingen konsol). Argument skickas
 '      vidare, t.ex. --background fran autostarten.
 '
 ' All text i filen ar medvetet ASCII (inga svenska tecken) sa att den
@@ -35,11 +35,11 @@ Next
 
 shell.CurrentDirectory = scriptDir
 If pythonw <> "" Then
-    shell.Run """" & pythonw & """ """ & scriptDir & "\main.pyw""" & args, 0, False
+    shell.Run """" & pythonw & """ """ & scriptDir & "\main.pyw""" & args, 1, False
 Else
     ' Sista utvag: Python Launcher (pyw.exe) om den finns i PATH.
     On Error Resume Next
-    shell.Run "pyw.exe -3.12 """ & scriptDir & "\main.pyw""" & args, 0, False
+    shell.Run "pyw.exe -3.12 """ & scriptDir & "\main.pyw""" & args, 1, False
     If Err.Number <> 0 Then
         MsgBox "Python 3.12 kunde inte hittas eller installeras." & vbCrLf & _
                "Kor Installera_Python.bat manuellt och forsok igen.", _
