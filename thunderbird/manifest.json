@@ -3,7 +3,7 @@
   "name": "MailOffer – skicka e-postadress",
   "version": "1.0.0",
   "description": "Högerklicka på ett mail i Thunderbird och spara avsändaren i E-postofferten.",
-  "author": "E-postofferten",
+  "author": "Rickard Längkvist",
   "background": {
     "scripts": [
       "background.js"

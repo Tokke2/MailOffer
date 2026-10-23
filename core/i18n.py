@@ -456,6 +456,7 @@ _SV: Dict[str, str] = {
     "about.title": "Om E-postofferten",
     "about.text": (
         "📧 E-postofferten v{version}\nPyQt6 + Python 3.10+\n\n"
+        "Skapad av Rickard Längkvist\n© 2026 Rickard Längkvist\n\n"
         "4-stegs wizard utan CC.\nMallar, offertförfrågan, To/Bcc.\n\n🐙 {repo_url}"
     ),
     # Inställningar (nya/ändrade rader)
@@ -891,6 +892,7 @@ _EN: Dict[str, str] = {
     "about.title": "About E-postofferten",
     "about.text": (
         "📧 E-postofferten v{version}\nPyQt6 + Python 3.10+\n\n"
+        "Created by Rickard Längkvist\n© 2026 Rickard Längkvist\n\n"
         "4-step wizard without CC.\nTemplates, quote requests, To/Bcc.\n\n🐙 {repo_url}"
     ),
     # Settings (new/changed rows)

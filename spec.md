@@ -2522,3 +2522,9 @@ Användaren valde från redan-valda: tema-knapp (§34 #6) och tydligare
   privat repo utan autentisering fungerar inte på vanlig användarinstallation;
   offentlig distribution/åtkomstlösning kräver ägarbeslut.
 - Version fortsatt 1.0.0, bygg 2026102304.
+
+
+## V7.11 (APP 1.0.0)
+- Skapare/copyright: Rickard Längkvist i Om-dialog (SV/EN), README och
+  Thunderbird-metadata/popup; central metadata i core/version.py.
+- Ingen licens vald eller ändrad. Appversion fortsatt 1.0.0, bygg 2026102305.

@@ -25,7 +25,7 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 log = logging.getLogger(__name__)
 
 VERSION = "1.0"
-AUTHOR = "EmailApp"
+AUTHOR = "Rickard Längkvist"
 
 # pip-namn, import-namn, pinnad version
 REQUIRED: List[Tuple[str, str, str]] = [

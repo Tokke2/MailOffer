@@ -1,5 +1,11 @@
 # 📧 E-postofferten (MailOffer)
 
+**Skapad av Rickard Längkvist**
+
+**© 2026 Rickard Längkvist**
+
+Tredjepartsbibliotek och deras material omfattas av respektive rättighetsinnehavares villkor.
+
 Skrivbordsapp (PyQt6) för offertmail: mallar med ifyllnadsfält, mottagare
 med språk per kontakt (SV/EN), bilagor/bilder, To/Bcc-sändning via SMTP
 samt Thunderbird-koppling. Guidat fyrastegsflöde:

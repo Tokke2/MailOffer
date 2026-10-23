@@ -15,6 +15,8 @@ FIL: core/version.py
 from __future__ import annotations
 
 APP_NAME = "E-postofferten"
+AUTHOR = "Rickard Längkvist"
+COPYRIGHT = "© 2026 Rickard Längkvist"
 
 # App-version (SemVer). Motsvarande GitHub-release-tagg: "v" + __version__.
 # (1.0.0 = första publika releasen; äldre 5.x-nummer var interna byggen.)
@@ -25,7 +27,7 @@ __version__ = "1.0.0"
 # versionsnummer (t.ex. v1.0.0). Uppdateraren jämför den mot
 # "build:"-markeringen i GitHub-releasens text, så att uppdaterade filer
 # upptäcks trots att versionsnumret är oförändrat.
-BUILD_ID = "2026102304"
+BUILD_ID = "2026102305"
 
 # GitHub-repo som autouppdateraren hämtar releaser från ("ägare/repo").
 GITHUB_REPO = "Tokke2/MailOffer"
@@ -39,6 +41,8 @@ def get_version() -> str:
 
 __all__ = [
     "APP_NAME",
+    "AUTHOR",
+    "COPYRIGHT",
     "__version__",
     "BUILD_ID",
     "GITHUB_REPO",
