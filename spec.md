@@ -2513,3 +2513,12 @@ Användaren valde från redan-valda: tema-knapp (§34 #6) och tydligare
 - Thunderbird-protokoll v1: handskakning före import, strikt kontroll på båda
   sidor, kompatibilitetsmetadata i XPI och test av paketerad XPI/lokal host.
   Äldre XPI måste installeras om. Appversion fortsatt 1.0.0, bygg 2026102303.
+
+## V7.10 (APP 1.0.0)
+- Manuell start visar fönstret även med äldre framtvingad start_minimized.
+  Bakgrundsstart döljs endast med fungerande systembricka.
+- VBS prioriterar lokal Python-miljö. Loggar bygg/Python/startläge på INFO.
+- HTTP 404 för release förklarar även privat repo. Autouppdatering från
+  privat repo utan autentisering fungerar inte på vanlig användarinstallation;
+  offentlig distribution/åtkomstlösning kräver ägarbeslut.
+- Version fortsatt 1.0.0, bygg 2026102304.

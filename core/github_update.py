@@ -310,7 +310,7 @@ def check_for_update(
 
     if status == 404:
         info.no_releases = True
-        log.info("Ingen publicerad release på GitHub ännu (%s).", repo)
+        log.info("GitHub-release ej tillgänglig (HTTP 404): saknad release eller privat repo utan autentisering (%s).", repo)
         return info
     if status != 200:
         info.error = f"GitHub svarade HTTP {status}"

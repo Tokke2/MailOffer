@@ -69,6 +69,9 @@ class TestStartVbs(unittest.TestCase):
         self.assertIn("WScript.Arguments", self.src)
         self.assertIn(", 0, False", self.src)
 
+    def test_local_environment_preferred(self):
+        self.assertLess(self.src.index(r"\.venv\Scripts\pythonw.exe"), self.src.index('localAppData & "\\Programs'))
+
     def test_pythonw_search_prefers_312(self):
         self.assertIn("Python312", self.src)
         self.assertLess(self.src.index("Python312"), self.src.index("Python310"))
@@ -98,6 +101,17 @@ class TestMainPythonGuard(unittest.TestCase):
         namespace: Dict[str, Any] = {"Any": Any, "sys": sys}
         exec(compile(module, "main.pyw<python-guard>", "exec"), namespace)
         return namespace
+
+    def test_manual_start_visible_even_with_old_settings(self):
+        tree = ast.parse((ROOT / "main.pyw").read_text(encoding="utf-8"))
+        function = next(n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == "_should_start_hidden")
+        module = ast.Module(body=[function], type_ignores=[])
+        namespace = {}
+        exec(compile(module, "startup-policy", "exec"), namespace)
+        hidden = namespace["_should_start_hidden"]
+        self.assertFalse(hidden(False, True))
+        self.assertFalse(hidden(True, False))
+        self.assertTrue(hidden(True, True))
 
     def test_minimum_is_310(self):
         self.assertEqual(self._load()["MIN_PYTHON_VERSION"], (3, 10))

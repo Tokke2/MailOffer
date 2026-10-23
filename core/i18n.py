@@ -398,8 +398,8 @@ _SV: Dict[str, str] = {
     "update.release_page": "🌐 Releasesida",
     "update.up_to_date": "Du har redan senaste versionen ({current}). ✅",
     "update.no_releases": (
-        "Det finns ingen publicerad release på GitHub ännu.\n\n"
-        "Appen kan autouppdateras först när en release har publicerats "
+        "GitHub-releasen kunde inte nås (HTTP 404).\n\n"
+        "Det kan bero på en saknad release eller ett privat repo. Appen har ingen GitHub-inloggning. Kontrollera åtkomsten "
         "på {repo_url}/releases."
     ),
     "update.check_failed": "Kunde inte söka efter uppdateringar:\n{error}",
@@ -833,8 +833,8 @@ _EN: Dict[str, str] = {
     "update.release_page": "🌐 Release page",
     "update.up_to_date": "You already have the latest version ({current}). ✅",
     "update.no_releases": (
-        "There is no published release on GitHub yet.\n\n"
-        "The app can auto-update once a release has been published "
+        "The GitHub release could not be accessed (HTTP 404).\n\n"
+        "The release may be missing or the repository private. The app has no GitHub authentication. Check access "
         "at {repo_url}/releases."
     ),
     "update.check_failed": "Could not check for updates:\n{error}",

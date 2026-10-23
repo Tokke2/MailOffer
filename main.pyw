@@ -123,9 +123,10 @@ APP_NAME = "E-postofferten"
 # (v5.4) Versionen bor i core/version.py – enda sanningskällan
 # (GitHub-uppdateraren jämför release-taggar mot samma värde).
 try:
-    from core.version import __version__ as APP_VERSION
+    from core.version import __version__ as APP_VERSION, BUILD_ID
 except Exception:  # pragma: no cover – nödfall om core/version saknas
-    APP_VERSION = "5.4.0"
+    APP_VERSION = "1.0.0"
+    BUILD_ID = "unknown"
 IS_WINDOWS = sys.platform.startswith("win")
 IS_MACOS = sys.platform == "darwin"
 BACKGROUND_FLAGS = frozenset({"--background", "--minimized", "-background"})
@@ -188,6 +189,11 @@ def _find_pythonw() -> Optional[str]:
     except Exception:
         pass
     return None
+
+
+def _should_start_hidden(background: bool, tray_available: bool) -> bool:
+    """Manual launch is always visible; never hide without a working tray."""
+    return bool(background and tray_available)
 
 
 def _consume_background_flag(argv: list) -> bool:
@@ -658,8 +664,10 @@ def main() -> None:
         except Exception:
             log.debug("Kunde inte publicera app.startup", exc_info=True)
 
-        # Visa/dölj vid start (--background tvingar tray, ingen splash)
-        if background_start or settings.get("start_minimized", True):
+        # Explicit background launches only; old settings must not hide manual starts.
+        tray_icon = getattr(tray, "_tray", None)
+        tray_available = bool(tray_icon is not None and tray_icon.isVisible())
+        if _should_start_hidden(background_start, tray_available):
             main_window.hide()
             log.debug(
                 "Startar minimerat (background=%s, start_minimized=%s).",
@@ -668,8 +676,11 @@ def main() -> None:
             )
         else:
             main_window.show()
-            log.debug("Fönster visas (start_minimized=False).")
+            main_window.raise_()
+            main_window.activateWindow()
+            log.info("Startfönster visas (manuell start eller systembricka saknas).")
 
+        log.info("Bygg=%s | Python=%s | bakgrund=%s | bricka=%s", BUILD_ID, sys.executable, background_start, tray_available)
         log.info(
             "✅ %s v%s redo – enter app.exec().", APP_NAME, APP_VERSION
         )

@@ -326,3 +326,19 @@ stämmer med appen och att den lokala hosten svarar med rätt protokoll. Det
 bevisar fortfarande inte vilken XPI som faktiskt är installerad i Thunderbird;
 den kontrolleras vid ett riktigt importförsök. En nyare XPI får inte skriva
 till en äldre host som inte stödjer protokollet.
+
+### Startfönster och åtkomst till uppdateringar
+
+Manuell start visar alltid huvudfönstret. Endast explicit `--background` eller
+`--minimized` startar i brickan, och bara om brickikonen är tillgänglig.
+Äldre `start_minimized`-inställningar kan inte längre dölja manuell start.
+VBS-starten prioriterar `.venv`, `venv` och portabel `python` i appmappen före
+systeminstallationer. Byggstämpel, vald Python och startläge skrivs i loggen.
+
+GitHub-uppdateraren skickar ingen autentisering. **Privata GitHub-releaser är
+inte åtkomliga för en vanlig installation utan en separat åtkomstlösning.**
+HTTP 404 kan därför betyda antingen saknad release eller privat repo, inte
+att appen redan är uppdaterad. GitHub-åtkomst via utvecklarens inloggade
+verktyg är inte bevis på att en användares app kan ladda ner releasen.
+Repoägaren måste besluta om offentlig release-distribution eller annan säker
+åtkomstlösning; inga GitHub-token ska bäddas in i appen.

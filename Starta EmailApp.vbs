@@ -53,6 +53,9 @@ Function FindPythonw()
     FindPythonw = ""
     localAppData = shell.ExpandEnvironmentStrings("%LOCALAPPDATA%")
     candidates = Array( _
+        scriptDir & "\.venv\Scripts\pythonw.exe", _
+        scriptDir & "\venv\Scripts\pythonw.exe", _
+        scriptDir & "\python\pythonw.exe", _
         localAppData & "\Programs\Python\Python312\pythonw.exe", _
         localAppData & "\Programs\Python\Python313\pythonw.exe", _
         localAppData & "\Programs\Python\Python311\pythonw.exe", _

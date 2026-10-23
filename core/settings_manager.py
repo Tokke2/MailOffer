@@ -191,7 +191,7 @@ def get_defaults() -> Dict[str, Any]:
         # Autostart & tray
         "startup": False,
         "autostart": False,
-        "start_minimized": True,
+        "start_minimized": False,
         "close_to_tray": True,
         "minimize_to_tray": True,
 
@@ -439,7 +439,7 @@ class SettingsManager:
         data = dict(raw)
 
         if version < 13:
-            data.setdefault("start_minimized", True)
+            data.setdefault("start_minimized", False)
             data.setdefault("close_to_tray", True)
 
         if version < 15:
@@ -572,8 +572,7 @@ class SettingsManager:
             except Exception:
                 d[key] = defaults.get(key, False)
 
-        # Alltid enligt aktuell design
-        d["start_minimized"] = True
+        # Manual startup visibility is controlled by explicit command-line flags.
 
         if d.get("startup") and not d.get("autostart"):
             d["autostart"] = True
