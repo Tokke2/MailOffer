@@ -2528,3 +2528,8 @@ Användaren valde från redan-valda: tema-knapp (§34 #6) och tydligare
 - Skapare/copyright: Rickard Längkvist i Om-dialog (SV/EN), README och
   Thunderbird-metadata/popup; central metadata i core/version.py.
 - Ingen licens vald eller ändrad. Appversion fortsatt 1.0.0, bygg 2026102305.
+
+## V7.12 (APP 1.0.0)
+- Gemensam befintlig ikon i app/dialoger/tray, explicit ikon på huvudfönstret
+  och stabilt Windows app-ID före Qt-start. Null-ikon går vidare till fallback.
+- Appversion fortsatt 1.0.0, intern byggstämpel 2026102306.

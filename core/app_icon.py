@@ -34,6 +34,7 @@ log = logging.getLogger(__name__)
 
 ICON_FILE_NAME = "app_icon.png"
 ICON_ICO_NAME = "app_icon.ico"
+WINDOWS_APP_ID = "RickardLangkvist.MailOffer"
 
 # Ikon-cache (laddas en gång)
 _icon_cache: Optional[object] = None  # QIcon
@@ -88,7 +89,9 @@ def get_app_icon() -> object:
             from PyQt6.QtGui import QIcon
 
             icon = QIcon(str(png))
-            if not icon.isNull():
+            if icon.isNull():
+                icon = None
+            else:
                 log.debug("App-ikon laddad: %s", png)
         except Exception:
             log.debug("Kunde inte ladda PNG-ikon", exc_info=True)
@@ -101,7 +104,9 @@ def get_app_icon() -> object:
                 from PyQt6.QtGui import QIcon
 
                 icon = QIcon(str(ico))
-                if not icon.isNull():
+                if icon.isNull():
+                    icon = None
+                else:
                     log.debug("App-ikon laddad (ICO): %s", ico)
             except Exception:
                 log.debug("Kunde inte ladda ICO-ikon", exc_info=True)
@@ -206,3 +211,19 @@ __all__ = [
     "project_root",
     "clear_icon_cache",
 ]
+
+
+def set_windows_app_id() -> bool:
+    """Stable taskbar identity, set before any Qt window is created.
+
+    Version-independent so upgrades keep the same taskbar grouping.
+    """
+    if sys.platform != "win32":
+        return False
+    try:
+        import ctypes
+        result = ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(WINDOWS_APP_ID)
+        return result == 0
+    except Exception:
+        log.warning("Kunde inte sätta Windows app-ID", exc_info=True)
+        return False

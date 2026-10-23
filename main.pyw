@@ -591,6 +591,8 @@ def main() -> None:
         log.debug("CacheManager initierad: %s", cache)
 
         # QApplication
+        from core.app_icon import set_windows_app_id
+        set_windows_app_id()
         app = QApplication.instance() or QApplication(sys.argv)
         app.setApplicationName(APP_NAME)
         app.setApplicationVersion(APP_VERSION)
@@ -623,6 +625,8 @@ def main() -> None:
 
         # MainWindow
         main_window = MainWindow(settings, event_bus, recovery)
+        from core.app_icon import get_app_icon
+        main_window.setWindowIcon(get_app_icon())
         log.debug("MainWindow initierad.")
 
         # SystemTray

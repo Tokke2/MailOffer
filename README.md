@@ -348,3 +348,12 @@ att appen redan är uppdaterad. GitHub-åtkomst via utvecklarens inloggade
 verktyg är inte bevis på att en användares app kan ladda ner releasen.
 Repoägaren måste besluta om offentlig release-distribution eller annan säker
 åtkomstlösning; inga GitHub-token ska bäddas in i appen.
+
+### Samma ikon i appen och Windows
+
+`core/app_icon.py` är den gemensamma ikonkällan för app, dialoger och
+systembricka. Huvudfönstret får även ikonen explicit och Windows får ett
+versionsoberoende app-ID före Qt-start för korrekt gruppering i aktivitetsfältet.
+Systembrickans statusmarkeringar läggs ovanpå samma grundikon. Thunderbird
+använder samma motiv i sin paketerade ikon. Windows kan cachelagra gamla
+ikoner för fästa genvägar; lossa och fäst om en gammal genväg vid behov.
