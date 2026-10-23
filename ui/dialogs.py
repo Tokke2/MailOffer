@@ -1019,7 +1019,9 @@ class SettingsDialog(QDialog):
 
 # DNS-poster att kopiera – WebSupport-värden (samma som i guiden)
 _DNS_RECORDS_TO_COPY = """\
-=== E-postautentisering – DNS-poster (WebSupport) ===
+=== E-postautentisering – EXEMPEL, verifiera i WebSupports kontrollpanel ===
+Skapa inte flera SPF-poster. Ersätt inte befintliga poster utan granskning.
+DMARC-rapportadressen måste finnas och tillhöra er.
 
 1) SPF (TXT-post på din domän, t.ex. bilrutan.se):
 v=spf1 include:_spf.websupport.se ~all
@@ -1162,8 +1164,9 @@ class DeliverabilityGuideDialog(QDialog):
 <h2 style="color:{accent};">1️⃣ SPF – vilka servrar får skicka för er domän</h2>
 <p>Lägg till en TXT-post på er domän (t.ex. <code>bilrutan.se</code>):</p>
 <pre style="background:#1E1E2E; color:{success}; padding:8px; border-radius:6px;">v=spf1 include:_spf.websupport.se ~all</pre>
-<p style="color:{sub};">Värdet är exakt vad WebSupport anger i sin kontrollpanel.
-Kopiera gärna värdet därifrån om ni har fler e-postsystem.</p>
+<p style="color:{sub};">Detta är ett exempel, inte en verifierad post för er domän.
+Hämta exakta värden i WebSupports kontrollpanel. Ha endast en SPF-post
+och inkludera alla legitima avsändare.</p>
 
 <h2 style="color:{accent};">2️⃣ DKIM – digital signatur på varje mail</h2>
 <p>Aktivera DKIM i WebSupports kontrollpanel (E-post → DKIM) och lägg till
@@ -1173,6 +1176,8 @@ den TXT-post de visar, t.ex.:</p>
 <h2 style="color:{accent};">3️⃣ DMARC – vad servern ska göra med misstänkta mail</h2>
 <p>Lägg till TXT-post på <code>_dmarc.bilrutan.se</code>:</p>
 <pre style="background:#1E1E2E; color:{success}; padding:8px; border-radius:6px;">v=DMARC1; p=none; rua=mailto:dmarc@bilrutan.se</pre>
+<p>Rapportadressen ovan är ett exempel och måste bytas till en adress ni äger.
+Ingen inställning garanterar att mejl aldrig hamnar i skräppost.</p>
 <p>Börja med <code>p=none</code> (bara rapportering), kontrollera att
 mail-tester.com ger grönt, och skärp sedan till <code>p=quarantine</code>.</p>
 

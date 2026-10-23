@@ -2493,3 +2493,13 @@ Användaren valde från redan-valda: tema-knapp (§34 #6) och tydligare
 - Levande signaturkort i profilinställningar och delad signatur-renderare i
   utskicksförhandsvisning. Profilbyte uppdaterar signatur och lokal logotyp.
 - Appversion fortsatt 1.0.0, byggstämpel 2026102301.
+
+## V7.8 (APP 1.0.0)
+- Malltillgång per stabilt profil-id, standard alla. Filtrering vid profilbyte,
+  skydd i preflight och sändtråd. Återställbara regler via mallhantering.
+- Innehållsfingeravtryck i lyckad sändhistorik; varning med Nej som standard
+  vid samma innehåll/mottagare inom 24 timmar. Äldre historik och partiella
+  misslyckanden omfattas inte.
+- WebSupport-varningar för port/kryptering och avvikande avsändarinloggning.
+  DNS-guide tydligt märkt exempel; ingen garanti om skräppostfri leverans.
+- Version fortsatt 1.0.0, intern byggstämpel 2026102302.

@@ -236,6 +236,7 @@ def get_defaults() -> Dict[str, Any]:
         "auto_backup_hours": "24",
         "auto_backup_keep": "10",
         "auto_backup_last": "",
+        "template_profile_rules": {},
         "sender_profiles": [],
         "active_sender_profile_id": "",
 

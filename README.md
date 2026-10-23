@@ -257,3 +257,40 @@ med samma signaturtext och bild som används vid sändning. Har profilen en
 logotyp väljs HTML-visning för att bilden ska synas; Text kan fortfarande
 väljas manuellt. Bilden läses lokalt i förhandsvisningen och bäddas in med
 CID i det skickade mejlet. Mottagarens mejlklient kan påverka utseendet.
+
+### Profilbundna mallar och dubblettskydd
+
+På **Mallar**: välj **Tillåtna profiler för vald mall …**, välj mall och
+markera vilka avsändarprofiler som får använda den. Standard är alla profiler.
+Avmarkeras alla profiler (och även "Tillåt alla") spärras mallen för samtliga.
+Mallhanteringsdialogen visar alltid alla mallar så att en spärr kan tas bort.
+Sändlistan och mallfliken visar däremot bara den aktuella profilens mallar.
+Regeln kontrolleras även i förhandskontrollen och sändtråden, inklusive testmejl.
+Detta skyddar mot felval i appen, men är ingen behörighetsgräns mot personer
+som kan redigera inställningsfilen eller kopiera mallfiler själva.
+
+Före ett nytt utskick jämförs innehållsfingeravtryck och mottagare med
+lyckade utskick de senaste 24 timmarna. Matchning visar en separat varning
+med **Nej** som standardval. Mallinnehåll, ersättningsfält, fritext, signatur
+ och bilagors innehåll ingår. Testutskick registreras inte för detta skydd.
+Äldre historik utan fingeravtryck samt misslyckade/delvis lyckade utskick
+kan inte användas av detta skydd. Raderad historik innebär också att
+motsvarande dubblettskydd försvinner. Kontrollen är en varning, inte en
+leveransgaranti eller exakt jämförelse av serverns slutliga MIME-meddelande.
+
+### WebSupport och skräppost
+
+Förhandskontrollen varnar för avvikande SMTP-port/kryptering och när
+avsändaren skiljer sig från SMTP-inloggningen. En legitim aliasadress kan
+fungera men måste vara godkänd hos leverantören. Behåll exakt servernamn
+från kontrollpanelen (även exempelvis smtp.m101.websupport.se).
+
+Kör DNS-kontrollen under Inställningar. Den kontrollerar publicerade
+SPF/DMARC-poster och ett antal vanliga DKIM-selektorer; ett ej hittat
+DKIM-värde bevisar inte att DKIM saknas. DNS-poster bevisar inte heller att
+ett visst mejl skickats med fungerande signering eller DMARC-alignment.
+Skicka ett test till en extern mottagare och granska mottagarens
+Authentication-Results: SPF, DKIM och DMARC ska verifieras där. Hämta
+DNS-värden för just er domän från WebSupport. Skapa inte dubbla SPF-poster.
+Ingen app eller DNS-inställning kan garantera att alla mejl undgår skräppost;
+rykte, mottagarnas samtycke, innehåll, volym och mottagarfilter spelar också in.

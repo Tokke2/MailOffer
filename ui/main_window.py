@@ -824,6 +824,11 @@ class SendWorker(QThread):
 
     def run(self) -> None:
         try:
+            from core.send_safety import template_allowed
+            name = Path(str(self.p.get("template_path") or "")).name
+            if not template_allowed(name, self.p.get("sender_profile_id") or self._sender_profile().get("id", ""), self.s.get("template_profile_rules", {})):
+                self.error.emit(tr("safety.forbidden"))
+                return
             include_english = bool(self.p.get("include_english", False))
             replacements_sv = dict(self.p.get("replacements", {}))
             replacements_en = {
@@ -2578,7 +2583,7 @@ class MainWindow(QMainWindow):
     # Mallar / placeholders
     # ────────────────────────────────────────────────────────────────
 
-    def _template_names(self) -> List[str]:
+    def _template_names(self, all_profiles=False) -> List[str]:
         """Alla mallfiler i Mallar/-mappen (utan ~$, .bak, .tmp)."""
         templates_dir = self._base_dir() / str(
             self.settings.get("template_dir", "Mallar")
@@ -2592,6 +2597,11 @@ class MainWindow(QMainWindow):
                     if path.name.endswith((".bak", ".tmp")):
                         continue
                     templates.append(path.name)
+        if not all_profiles:
+            from core.send_safety import template_allowed
+            profile = self._selected_sender_profile(getattr(self, "_send_profile_combo", None))
+            rules = self.settings.get("template_profile_rules", {})
+            templates = [name for name in templates if template_allowed(name, profile.get("id", ""), rules)]
         return templates
 
     def _apply_default_template(self) -> None:
@@ -2613,6 +2623,7 @@ class MainWindow(QMainWindow):
 
     def _scan_tpls(self) -> None:
         templates = self._template_names()
+        previous = self._last_tpl.name if self._last_tpl else ""
 
         self._tpl_combo.blockSignals(True)
         self._tpl_combo.clear()
@@ -2646,15 +2657,25 @@ class MainWindow(QMainWindow):
             else:
                 # Omskanning (t.ex. "🔄 Sök"): behåll användarens val
                 # om mallen fortfarande finns – byt inte tillbaka.
-                current = self._tpl_combo.currentText()
+                current = previous
+                if current in templates:
+                    self._tpl_combo.setCurrentIndex(self._tpl_combo.findText(current))
                 if not current or current not in templates:
                     self._tpl_combo.setCurrentIndex(0)
                     self._on_tpl_sel(templates[0])
         else:
+            self._last_tpl = None
+            self._editor.clear()
+            self._subject.clear()
             self._tpl_badge.setText("⚠️ Inga mallar hittades")
             self._status("⚠️ Inga mallar hittades", "warning")
 
     def _on_tpl_sel(self, name: str) -> None:
+        from core.send_safety import template_allowed
+        profile = self._selected_sender_profile(getattr(self, "_send_profile_combo", None))
+        if not template_allowed(name, profile.get("id", ""), self.settings.get("template_profile_rules", {})):
+            self._status(tr("safety.forbidden"), "error")
+            return
         if not name:
             return
         path = (
@@ -3810,6 +3831,9 @@ class MainWindow(QMainWindow):
     # ────────────────────────────────────────────────────────────────
 
     def _on_send_profile_preview_changed(self, _index=-1):
+        if hasattr(self, "_tpl_combo"):
+            self._scan_tpls()
+            self._refresh_template_tools_list()
         self._refresh_preview()
         profile = self._selected_sender_profile(getattr(self, "_send_profile_combo", None))
         preview = getattr(self, "preview_tab", None)
@@ -4287,6 +4311,8 @@ class MainWindow(QMainWindow):
                 Path(path).name for path in params.get("attachments", [])
             ],
             "attachments_count": len(params.get("attachments", [])),
+            "content_fingerprint": params.get("content_fingerprint", ""),
+            "delivered_recipients": params.get("delivered_recipients", []),
             "success": bool(getattr(result, "success", False)),
             "elapsed_seconds": float(
                 getattr(result, "elapsed_seconds", 0) or 0
@@ -4957,9 +4983,9 @@ class MainWindow(QMainWindow):
         layout.addWidget(btn_guide, alignment=Qt.AlignmentFlag.AlignLeft)
 
         tip = QLabel(
-            "Guiden innehåller SPF/DKIM/DMARC-poster för WebSupport, "
-            "SMTP-tips och innehållsråd – kopiera DNS-posterna direkt "
-            "därifrån."
+            "Guiden innehåller exempel och råd för WebSupport. Hämta alltid "
+            "exakta DNS-värden från er kontrollpanel. Testa även ett mottaget "
+            "mejls SPF/DKIM/DMARC-resultat; DNS-kontroll garanterar inte inkorg."
         )
         tip.setProperty("cssClass", "muted")
         tip.setWordWrap(True)
@@ -5742,6 +5768,7 @@ class MainWindow(QMainWindow):
         )
         if report.ok_count < 3:
             text += "\n\n" + tr("smtp.dns_hint")
+        text += "\n\n" + tr("safety.dns_limit")
         return text
 
     def _on_dns_checked(self, report: Any) -> None:
@@ -5987,6 +6014,9 @@ class MainWindow(QMainWindow):
         btn_versions = QPushButton(tr("templates_tab.versions_btn"))
         btn_versions.clicked.connect(self._show_selected_template_versions)
         actions.addWidget(btn_versions)
+        access_button = QPushButton(tr("safety.templates"))
+        access_button.clicked.connect(self._edit_template_access)
+        actions.addWidget(access_button)
         btn_packs = QPushButton(tr("templates_tab.pack_btn"))
         btn_packs.clicked.connect(self._open_template_pack_dialog)
         actions.addWidget(btn_packs)
@@ -6006,6 +6036,49 @@ class MainWindow(QMainWindow):
 
         self._refresh_template_tools_list()
         return widget
+
+    def _edit_template_access(self):
+        names = self._template_names(all_profiles=True)
+        if not names:
+            return
+        current = self._selected_template_tool_name()
+        name, ok = QInputDialog.getItem(self, tr("safety.templates"),
+            tr("safety.choose_template"), names, names.index(current) if current in names else 0, False)
+        if not ok or not name:
+            return
+        dialog = QDialog(self)
+        dialog.setWindowTitle(tr("safety.templates") + " – " + name)
+        layout = QVBoxLayout(dialog)
+        unrestricted = QCheckBox(tr("safety.all_profiles"))
+        rules = dict(self.settings.get("template_profile_rules", {}))
+        unrestricted.setChecked(name not in rules)
+        layout.addWidget(unrestricted)
+        boxes = []
+        for profile in self.settings.get_sender_profiles():
+            box = QCheckBox(self._sender_profile_display(profile))
+            box.setChecked(profile["id"] in rules.get(name, []))
+            box.setEnabled(not unrestricted.isChecked())
+            unrestricted.toggled.connect(lambda checked, b=box: b.setEnabled(not checked))
+            boxes.append((profile["id"], box))
+            layout.addWidget(box)
+        buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
+        buttons.accepted.connect(dialog.accept)
+        buttons.rejected.connect(dialog.reject)
+        layout.addWidget(buttons)
+        if dialog.exec() != QDialog.DialogCode.Accepted:
+            return
+        if unrestricted.isChecked():
+            rules.pop(name, None)
+        else:
+            rules[name] = [pid for pid, box in boxes if box.isChecked()]
+        previous = self.settings.get("template_profile_rules", {})
+        self.settings.set("template_profile_rules", rules)
+        if not self.settings.save():
+            self.settings.set("template_profile_rules", previous)
+            QMessageBox.warning(self, tr("safety.templates"), tr("safety.save_failed"))
+            return
+        self._scan_tpls()
+        self._refresh_preview()
 
     def _refresh_template_tools_list(self) -> None:
         """Uppdatera mallistan på Mall-fliken (tål att anropas tidigt)."""
@@ -6274,13 +6347,33 @@ class MainWindow(QMainWindow):
         return f"{size:.1f} GB"
 
     def _preflight_report(self, params: Dict[str, Any]) -> Any:
-        return build_send_preflight(
+        report = build_send_preflight(
             params,
             bcc_batch_size=self.settings.get("bcc_batch_size", 0),
             skip_invalid_recipients=bool(
                 self.settings.get("skip_invalid_recipients", True)
             ),
         )
+        from core.send_safety import template_allowed, content_fingerprint, recent_duplicates
+        name = Path(str(params.get("template_path") or "")).name
+        if not template_allowed(name, params.get("sender_profile_id", ""), self.settings.get("template_profile_rules", {})):
+            report.blockers.append(("profile_template", {}))
+        fingerprint = content_fingerprint(params)
+        params["content_fingerprint"] = fingerprint
+        params["delivered_recipients"] = report.to_final + report.bcc_final
+        duplicates = recent_duplicates(fingerprint, params["delivered_recipients"], self._load_history())
+        if duplicates and not params.get("test_mode"):
+            report.warnings.append(("recent_duplicate", {"emails": duplicates}))
+        profile = params.get("sender_profile") or {}
+        server = str(profile.get("smtp_server", "")).lower()
+        if server.endswith("websupport.se"):
+            if (not profile.get("use_ssl") and (report.smtp_port != 587 or self.settings.get("disable_tls", False))) or (profile.get("use_ssl") and report.smtp_port != 465):
+                report.warnings.append(("websupport_tls", {}))
+            sender = str(profile.get("sender_email", "")).lower()
+            if sender != str(profile.get("username", "")).lower():
+                report.warnings.append(("websupport_sender", {}))
+            report.warnings.append(("websupport_dns", {}))
+        return report
 
     @staticmethod
     def _format_preflight_issue(issue: Any) -> str:
@@ -6296,6 +6389,11 @@ class MainWindow(QMainWindow):
             else:
                 joined[key] = value
         key_map = {
+            "profile_template": "safety.forbidden",
+            "recent_duplicate": "safety.duplicate",
+            "websupport_tls": "safety.tls",
+            "websupport_sender": "safety.sender",
+            "websupport_dns": "safety.dns",
             "no_recipients": "send.issue.no_recipients",
             "missing_smtp_server": "send.issue.missing_smtp_server",
             "invalid_smtp_port": "send.issue.invalid_smtp_port",
@@ -6543,6 +6641,12 @@ class MainWindow(QMainWindow):
             self._status("⛔ Förhandskontrollen stoppar sändningen", "error")
             return
 
+        duplicates = [issue for issue in report.warnings if issue[0] == "recent_duplicate"]
+        if duplicates and QMessageBox.question(self, tr("safety.duplicate_title"),
+                self._format_preflight_issue(duplicates[0]),
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.No) != QMessageBox.StandardButton.Yes:
+            return
         if not self._confirm_send(params, total):
             self._status("❌ Sändning avbruten")
             return

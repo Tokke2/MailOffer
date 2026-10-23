@@ -92,6 +92,35 @@ class TestSenderProfilesUi(unittest.TestCase):
         self.addCleanup(win.close)
         return win, settings, profile_b_id
 
+    def test_template_restrictions_hide_and_block(self):
+        win, settings, profile_b_id = self._make_window()
+        directory = win._templates_dir()
+        directory.mkdir(parents=True, exist_ok=True)
+        (directory / "Private.txt").write_text("Subject: Private\nBody")
+        active = settings.get_active_sender_profile()["id"]
+        settings.set("template_profile_rules", {"Private.txt": [active]})
+        win._scan_tpls()
+        self.assertIn("Private.txt", win._template_names())
+        win._send_profile_combo.setCurrentIndex(win._send_profile_combo.findData(profile_b_id))
+        self.assertNotIn("Private.txt", win._template_names())
+        params = win._gather_send_params()
+        params.update(template_path=str(directory / "Private.txt"), sender_profile_id=profile_b_id)
+        self.assertIn("profile_template", [code for code, _ in win._preflight_report(params).blockers])
+        self.assertIsNone(win._last_tpl)
+
+    def test_recent_duplicate_warning(self):
+        win, settings, _ = self._make_window()
+        from core.send_safety import content_fingerprint
+        import datetime
+        params = win._gather_send_params()
+        params["recipients_to"] = ["same@example.com"]
+        row = {"timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+               "success": True, "content_fingerprint": content_fingerprint(params),
+               "delivered_recipients": ["same@example.com"]}
+        with mock.patch.object(win, "_load_history", return_value=[row]):
+            report = win._preflight_report(params)
+        self.assertIn("recent_duplicate", [code for code, _ in report.warnings])
+
     def test_external_contact_refresh(self):
         win, settings, _ = self._make_window()
         import json
@@ -202,6 +231,18 @@ class TestSendWorkerProfile(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
         cls.app = QApplication.instance() or QApplication(sys.argv[:1])
+
+    def test_worker_rechecks_template_profile(self):
+        import ui.main_window as main_window
+        settings = mock.Mock()
+        settings.get.side_effect = lambda key, default=None: {"Private.txt": ["profile-a"]} if key == "template_profile_rules" else default
+        worker = main_window.SendWorker(settings, {"template_path": "Private.txt", "sender_profile_id": "profile-b"})
+        errors = []
+        worker.error.connect(errors.append)
+        with mock.patch.object(main_window, "send_email") as send:
+            worker.run()
+            send.assert_not_called()
+        self.assertEqual(len(errors), 1)
 
     def test_worker_uses_profile_and_test_mode_guards(self):
         import ui.main_window as main_window
