@@ -51,7 +51,7 @@ _English summary below._
 - 🌐 **Gränssnitt på svenska/engelska** (nytt i 5.4) – byt i menyn
   **Språk** eller i Inställningar (omstart erbjuds)
 - 🔄 **Autouppdatering från GitHub Releases** (nytt i 5.4) – tyst sökning
-  vid start (max 1 gång/dygn, kan stängas av) + manuell knapp under
+  vid start och sedan var 12:e timme (kan stängas av) + manuell knapp under
   *Arkiv → Sök efter uppdateringar* och i Inställningar; även uppdaterade
   filer inom samma versionsnummer upptäcks och erbjuds
 - ❤️ **Donation via Ko-fi** (nytt i 5.4) – hjärtknapp i verktygsraden;
@@ -195,7 +195,7 @@ versions of the same template), attachments and To/Bcc batch sending.
 
 New in 5.4: a step-by-step **template wizard** (TXT/HTML/DOCX), a **Swedish/
 English UI** (Language menu), **auto-update from GitHub Releases** (silent
-daily check + manual button; user templates/JSON/settings are never
+12-hour silent check + manual button; user templates/JSON/settings are never
 overwritten) and **Ko-fi donations**. New in 1.0: **sender profiles** (pick the
 sending account per send) plus a **preflight check & test mode**
 (final recipient counts, To/Bcc overlaps, attachment sizes; test
@@ -424,3 +424,26 @@ huvudfönstrets innehåll rullas i stället för att kapas. Inga automatiska
 
 Verifierat med offscreen-Qt på små arbetsytor; faktisk Windows-skalning
 på flera fysiska skärmar behöver också provas på användardatorn.
+
+
+### Tyst sökning två gånger per dygn och tyst omstart
+
+Automatisk uppdateringssökning görs när 12 timmar gått sedan senaste
+kontrollen, även när appen varit öppen länge. Appen kontrollerar tiden
+varje minut och gör en kontroll strax efter start om det är dags. När
+appen är stängd körs ingen sökning; förfallen sökning tas vid nästa start.
+Automatiken visar ingen popup, tray-notis eller fråga när fönstret öppnas.
+Statusrad/logg kan visa att uppdaterade filer finns. Manuella sökningar
+visar fortfarande resultat och erbjudande om installation.
+
+Installation kräver fortfarande godkännande. Efter lyckad installation
+startar appen om utan separat fråga. Om sändning eller en modal dialog
+pågår väntar omstarten. Installation väntar också på pågående sändning.
+Arbetsläget (text, mottagare, språk, profil-id, fält och bilagesökvägar)
+sparas lokalt och återställs efter omstart; inga SMTP-profiler/lösenord
+sparas i sessionsfilen. Bilagornas filer måste fortfarande finnas kvar.
+Sessionsfilen innehåller mejlutkast och raderas efter lyckad återställning.
+Om sparandet misslyckas avbryts omstarten och felet loggas. Partiellt
+misslyckad installation startar inte automatiskt om och ger felbesked.
+Tidigare synligt fönster visas igen; tray/minimerat läge återstartar i
+bakgrunden utan konsolfönster. Versionen förblir 1.0.0 även vid nya byggen.

@@ -12,6 +12,7 @@ import os
 import sys
 import tempfile
 import unittest
+from unittest import mock
 from pathlib import Path
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
@@ -160,7 +161,7 @@ class TestDonateDialogUi(unittest.TestCase):
 
 @unittest.skipUnless(HAS_QT, "PyQt6 saknas – hoppar UI-tester")
 class TestUpdateDeferralUi(unittest.TestCase):
-    """Autouppdatering i tray-läge: notis direkt, fråga när fönstret öppnas."""
+    """Tyst autosökning, manuell installation och säker tyst omstart."""
 
     @classmethod
     def setUpClass(cls) -> None:
@@ -216,12 +217,12 @@ class TestUpdateDeferralUi(unittest.TestCase):
         win._update_check_manual = False
         win._on_update_checked(info)
         self.assertEqual(prompted, [])                 # ingen modal i tray-läge
-        self.assertEqual(len(notices), 1)              # tray-notis i stället
-        self.assertIs(win._pending_update_info, info)  # frågan är uppskjuten
+        self.assertEqual(len(notices), 0)              # ingen tray-notis
+        self.assertIs(win._pending_update_info, info)  # information finns kvar för manuell kontroll
         win.show()
         QApplication.processEvents()
         win._maybe_prompt_pending_update()  # samma anrop som timern i show()
-        self.assertEqual(prompted, [info])
+        self.assertEqual(prompted, [])
 
     def test_same_version_check_baselines_fingerprint(self) -> None:
         from core.github_update import UpdateInfo
@@ -267,19 +268,69 @@ class TestUpdateDeferralUi(unittest.TestCase):
 
         import ui.main_window as main_mod
 
-        original = main_mod.QMessageBox.question
-        main_mod.QMessageBox.question = staticmethod(
-            lambda *a, **k: main_mod.QMessageBox.StandardButton.No
-        )
-        try:
+        with mock.patch.object(win, "_finish_update_restart") as restart, mock.patch.object(main_mod.QMessageBox, "question", side_effect=AssertionError("No restart question")):
             win._on_update_installed(
                 {"copied": ["main.pyw"], "errors": [], "fingerprint": "fp-ny"}
             )
-        finally:
-            main_mod.QMessageBox.question = original
+            restart.assert_called_once()
         self.assertEqual(
             win.settings.get("installed_release_fingerprint"), "fp-ny"
         )
+
+    def test_periodic_timer_and_quiet_visible_check(self):
+        win = self._make_window()
+        self.assertTrue(win._update_schedule.isActive())
+        self.assertEqual(win._update_schedule.interval(), 60_000)
+        win.show()
+        with mock.patch.object(win, "_prompt_update_install") as prompt, mock.patch.object(win, "_notify_update_via_tray") as notify:
+            win._update_check_manual = False
+            win._on_update_checked(self._info())
+            win._maybe_prompt_pending_update()
+            prompt.assert_not_called()
+            notify.assert_not_called()
+
+    def test_silent_restart_saves_and_restores_compose_state(self):
+        win = self._make_window()
+        win._free_edit.setPlainText("Unsent text")
+        win._editor.setPlainText("Unsent body")
+        win._add_recipient("to", email="draft@example.com", show_warning=False, lang="en")
+        path = win._update_session_path()
+        self.addCleanup(lambda: path.unlink(missing_ok=True))
+        with mock.patch.dict(os.environ, {}, clear=False), mock.patch.object(win, "_restart_app") as restart:
+            win._finish_update_restart()
+            restart.assert_called_once()
+        self.assertNotIn("password", path.read_text())
+        win._free_edit.clear()
+        win._to_list.clear()
+        win._restore_update_session()
+        self.assertEqual(win._free_edit.toPlainText(), "Unsent text")
+        self.assertIn("draft@example.com", win._list_items(win._to_list))
+        self.assertFalse(path.exists())
+
+    def test_restart_waits_for_active_send(self):
+        win = self._make_window()
+        worker = mock.Mock()
+        worker.isRunning.return_value = True
+        win._worker = worker
+        with mock.patch("ui.main_window.QTimer.singleShot") as later, mock.patch.object(win, "_restart_app") as restart:
+            win._finish_update_restart()
+            restart.assert_not_called()
+            later.assert_called_once()
+        win._worker = None
+
+    def test_restart_aborts_if_session_cannot_be_saved(self):
+        win = self._make_window()
+        with mock.patch("core.update_session.save_session", side_effect=OSError("disk full")), mock.patch.object(win, "_restart_app") as restart:
+            win._finish_update_restart()
+            restart.assert_not_called()
+
+    def test_partial_update_does_not_restart(self):
+        win = self._make_window()
+        import ui.main_window as main_mod
+        with mock.patch.object(main_mod.QMessageBox, "warning"), mock.patch.object(win, "_finish_update_restart") as restart:
+            win._on_update_installed({"copied": ["a.py"], "errors": ["locked file"], "fingerprint": "not-installed"})
+            restart.assert_not_called()
+        self.assertNotEqual(win.settings.get("installed_release_fingerprint"), "not-installed")
 
     def test_manual_check_prompts_immediately(self) -> None:
         win = self._make_window()

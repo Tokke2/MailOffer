@@ -54,7 +54,7 @@ log = logging.getLogger(__name__)
 
 API_BASE = "https://api.github.com"
 MAX_ZIP_BYTES = 200 * 1024 * 1024  # 200 MB – skydd mot trasiga svar
-AUTO_CHECK_INTERVAL_HOURS = 24
+AUTO_CHECK_INTERVAL_HOURS = 12
 
 Fetcher = Callable[[str, float], Tuple[int, bytes]]
 

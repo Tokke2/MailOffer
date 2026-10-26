@@ -110,6 +110,10 @@ class TestShouldAutoCheck(unittest.TestCase):
         old = now_iso(self.NOW - dt.timedelta(hours=25))
         self.assertTrue(should_auto_check(old, now=self.NOW))
 
+    def test_twelve_hour_boundary(self):
+        self.assertFalse(should_auto_check(now_iso(self.NOW - dt.timedelta(hours=11, minutes=59)), now=self.NOW))
+        self.assertTrue(should_auto_check(now_iso(self.NOW - dt.timedelta(hours=12)), now=self.NOW))
+
     def test_future_timestamp_runs(self) -> None:
         future = now_iso(self.NOW + dt.timedelta(days=2))
         self.assertTrue(should_auto_check(future, now=self.NOW))

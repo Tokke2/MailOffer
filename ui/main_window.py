@@ -1100,8 +1100,12 @@ class MainWindow(QMainWindow):
         self._restore_geo()
 
         # (v5.4) Tyst GitHub-uppdateringssökning strax efter start
-        # (respekterar auto_update_check + max 1 gång/dygn).
+        # (respekterar auto_update_check, var tolfte timme).
         QTimer.singleShot(4000, self._maybe_auto_check_update)
+        self._update_schedule = QTimer(self)
+        self._update_schedule.timeout.connect(self._maybe_auto_check_update)
+        self._update_schedule.start(60_000)
+        self._restore_update_session()
         self._automatic_backup_timer = QTimer(self)
         self._automatic_backup_timer.timeout.connect(self._run_automatic_backup)
         self._automatic_backup_timer.start(60_000)
@@ -1751,7 +1755,7 @@ class MainWindow(QMainWindow):
     # ────────────────────────────────────────────────────────────────
 
     def _maybe_auto_check_update(self) -> None:
-        """Tyst autosökning vid start – max 1 gång/dygn, bara om aktiverad."""
+        """Tyst autosökning var tolfte timme medan appen körs, om aktiverad."""
         try:
             if not bool(self.settings.get("auto_update_check", True)):
                 return
@@ -1872,12 +1876,10 @@ class MainWindow(QMainWindow):
                 ),
                 "success",
             )
-            if manual or self.isVisible():
+            if manual:
                 self._prompt_update_install(info)
             else:
-                # Appen startade minimerad i trayen: notis nu –
-                # installationsfrågan visas när fönstret öppnas (show()).
-                self._notify_update_via_tray(info)
+                log.info("Tyst autosökning: uppdatering finns, bygg=%s", getattr(info, "build_id", ""))
             return
         self._remember_installed_release_fingerprint(info)
         self._status_reset()
@@ -1973,13 +1975,18 @@ class MainWindow(QMainWindow):
     def _maybe_prompt_pending_update(self) -> None:
         """Visa uppskjuten installationsfråga när fönstret blivit synligt."""
         info = self._pending_update_info
-        if info is not None and self.isVisible():
+        if info is not None and self.isVisible() and self._update_check_manual:
             self._prompt_update_install(info)
 
     def _install_update(self, info: Any) -> None:
         """Ladda ner + installerad vald release i bakgrunden."""
         if self._update_worker is not None and self._update_worker.isRunning():
             return
+        if self._worker is not None and self._worker.isRunning():
+            log.info("Godkänd uppdatering väntar tills sändningen är klar")
+            QTimer.singleShot(5000, lambda: self._install_update(info))
+            return
+        self._update_install_active = True
         progress = QProgressDialog(
             tr("update.downloading", latest=getattr(info, "latest_version", "")),
             None, 0, 0, self,
@@ -2006,12 +2013,14 @@ class MainWindow(QMainWindow):
             self._update_progress = None
 
     def _on_update_installed(self, result: Any) -> None:
+        self._update_install_active = False
         self._close_update_progress()
+        self._completed_update_worker = self._update_worker
         self._update_worker = None
         result = result if isinstance(result, dict) else {}
         copied = len(result.get("copied") or [])
         errors = result.get("errors") or []
-        if copied == 0 and errors:
+        if copied == 0 or errors:
             QMessageBox.warning(
                 self,
                 tr("update.title"),
@@ -2025,17 +2034,71 @@ class MainWindow(QMainWindow):
         # filändringar i samma versionsnummer.
         self._save_release_fingerprint(result.get("fingerprint"))
         self._status(tr("update.installed_title"), "success")
-        reply = QMessageBox.question(
-            self,
-            tr("update.installed_title"),
-            tr("update.installed", count=copied),
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-            QMessageBox.StandardButton.Yes,
-        )
-        if reply == QMessageBox.StandardButton.Yes:
-            self._restart_app()
+        self._finish_update_restart()
+
+    def _update_session_path(self):
+        return Path(self.settings.settings_path).parent / "update-session.json"
+
+    def _finish_update_restart(self):
+        completed = getattr(self, "_completed_update_worker", None)
+        if completed is not None:
+            try:
+                if completed.isRunning():
+                    QTimer.singleShot(100, self._finish_update_restart)
+                    return
+            except RuntimeError:
+                pass  # deleteLater already ran after the thread finished
+            self._completed_update_worker = None
+        if (self._worker is not None and self._worker.isRunning()) or QApplication.activeModalWidget() is not None:
+            QTimer.singleShot(5000, self._finish_update_restart)
+            return
+        try:
+            from core.update_session import save_session
+            params = self._gather_send_params()
+            # Explicit allowlist: never persist SMTP credentials.
+            state = {"template_name": params["template_name"],
+                     "subject": params["subject"], "body": params["body_plain"],
+                     "free_text": params["free_text"], "replacements": params["replacements"],
+                     "to": params["recipients_to"], "bcc": params["recipients_bcc"],
+                     "to_lang": params["recipients_to_lang"], "bcc_lang": params["recipients_bcc_lang"],
+                     "attachment_paths": params["attachments"],
+                     "profile_id": params["sender_profile_id"], "tab": self.tabs.currentIndex()}
+            save_session(self._update_session_path(), state)
+        except Exception:
+            log.exception("Uppdaterad, men tyst omstart avbruten: kunde inte spara arbetsläget")
+            return
+        os.environ["EMAILAPP_RELAUNCH_BACKGROUND"] = "1" if not self.isVisible() or self.isMinimized() else "0"
+        self._restart_app()
+
+    def _restore_update_session(self):
+        from core.update_session import read_session
+        path = self._update_session_path()
+        try:
+            state = read_session(path)
+            if state is None:
+                return
+            index = self._send_profile_combo.findData(state.get("profile_id", ""))
+            if index >= 0:
+                self._send_profile_combo.setCurrentIndex(index)
+            if self._tpl_combo.findText(str(state.get("template_name", ""))) < 0:
+                self._last_tpl = None
+                self._tpl_combo.setCurrentIndex(-1)
+            previous_rows = self._history_rows
+            try:
+                self._history_rows = [state]
+                self._clr_att()
+                self._free_edit.clear()
+                self._open_history_for_edit(0)
+                self.tabs.setCurrentIndex(max(0, min(int(state.get("tab", 0)), self.tabs.count() - 1)))
+            finally:
+                self._history_rows = previous_rows
+            path.unlink()
+            log.info("Arbetsläge återställt efter tyst uppdateringsomstart")
+        except Exception:
+            log.exception("Kunde inte återställa arbetsläge; sessionsfilen behålls")
 
     def _on_update_failed(self, message: str) -> None:
+        self._update_install_active = False
         was_install = self._update_progress is not None
         self._close_update_progress()
         self._restore_update_cursor()
@@ -6653,6 +6716,9 @@ class MainWindow(QMainWindow):
                     pass
 
     def _send(self, test_recipient: Optional[str] = None) -> None:
+        if getattr(self, "_update_install_active", False):
+            self._status(tr("update.checking"), "warning")
+            return
         if not isinstance(test_recipient, str) or not test_recipient.strip():
             test_recipient = None
         if self._worker is not None and self._worker.isRunning():

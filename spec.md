@@ -2565,3 +2565,12 @@ Användaren valde från redan-valda: tema-knapp (§34 #6) och tydligare
   rullningsdialoger behåller sin layout. Inga automatisk ändrade typsnitt.
 - Offscreen-regressionstester för små ytor, negativ skärmposition,
   dialog-/wizard-/huvudfönsterinnehåll. Version 1.0.0, bygg 2026102310.
+
+## V7.17 (APP 1.0.0)
+- Tyst autosökning var 12:e timme med återkommande timer under körning;
+  inga automatiska popup-/tray-notiser. Manuell kontroll/installation kvar.
+- Lyckad godkänd uppdatering startar om utan omstartsfråga, med återställt
+  lokalt arbetsläge och synligt/tray-läge. Väntar på sändning/modaler och
+  färdig uppdateringstråd; ingen omstart vid partiella kopieringsfel.
+- Sessionsfil med explicit fältlista, atomär skrivning, inga SMTP-profiler.
+- Appversion fortsatt 1.0.0, bygg 2026102311.

@@ -800,7 +800,8 @@ def main() -> None:
                 }
                 if IS_WINDOWS:
                     relaunch_kwargs["creationflags"] = CREATE_NO_WINDOW
-                subprocess.Popen([exe, str(script)], **relaunch_kwargs)
+                background_args = ["--background"] if os.environ.pop("EMAILAPP_RELAUNCH_BACKGROUND", "0") == "1" else []
+                subprocess.Popen([exe, str(script)] + background_args, **relaunch_kwargs)
             except Exception:
                 pass
 
