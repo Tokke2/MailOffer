@@ -2582,3 +2582,12 @@ Användaren valde från redan-valda: tema-knapp (§34 #6) och tydligare
 - Python CLI-syskon används vid behov av fångad hjälputdata.
 - Version fortsatt 1.0.0, bygg 2026102312. Windows-beteendet behöver provas
   på användardatorn; befintlig manuellt öppnad konsol stängs inte.
+
+## V7.19 (APP 1.0.0)
+- Gemensam körväg för Python-hjälpprocesser: konsolfritt på Windows,
+  fångad utdata, timeout, stängd standardinmatning och feltolerant avkodning.
+- ensurepip:s returkod kontrolleras; efter lyckad bootstrap verifieras att
+  pip faktiskt fungerar. Misslyckande stoppar paketinstallation och loggas.
+- Regressionstester för felkoder, timeout, återhämtning, pythonw-syskon,
+  konsolflaggor och paketinstallation. Inga ändrade UI-flöden.
+- Version fortsatt 1.0.0, bygg 2026102313.

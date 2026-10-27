@@ -17,11 +17,10 @@ from __future__ import annotations
 
 import importlib
 import logging
-import os
 import subprocess
-from core.process_utils import quiet_process_options, python_cli_executable
-import sys
 from typing import Any, Callable, Dict, List, Optional, Tuple
+
+from core.process_utils import python_cli_executable, quiet_process_options
 
 log = logging.getLogger(__name__)
 
@@ -124,34 +123,46 @@ def pyqt6_available() -> bool:
         return False
 
 
-def _pip_cmd() -> List[str]:
-    return [python_cli_executable(), "-m", "pip"]
+def _run_python_module(
+    module: str, args: List[str], timeout: int,
+) -> subprocess.CompletedProcess:
+    """Capture helper output without a terminal or interactive stdin."""
+    return subprocess.run(
+        [python_cli_executable(), "-m", module, *args],
+        stdin=subprocess.DEVNULL,
+        capture_output=True,
+        text=True,
+        errors="replace",
+        timeout=timeout,
+        **quiet_process_options(),
+    )
+
+
+def _pip_available() -> bool:
+    try:
+        return _run_python_module("pip", ["--version"], timeout=60).returncode == 0
+    except Exception:
+        log.debug("pip --version misslyckades", exc_info=True)
+        return False
 
 
 def ensure_pip() -> bool:
-    try:
-        r = subprocess.run(
-            _pip_cmd() + ["--version"],
-            capture_output=True,
-            text=True,
-            timeout=60,
-            **quiet_process_options(),
-        )
-        if r.returncode == 0:
-            return True
-    except Exception:
-        log.debug("pip --version misslyckades", exc_info=True)
-    try:
-        subprocess.run(
-            [python_cli_executable(), "-m", "ensurepip", "--upgrade"],
-            capture_output=True,
-            timeout=120,
-            **quiet_process_options(),
-        )
+    """Only report success when pip actually works in this Python environment."""
+    if _pip_available():
         return True
+    try:
+        result = _run_python_module("ensurepip", ["--upgrade"], timeout=120)
     except Exception:
         log.exception("ensurepip misslyckades")
         return False
+    if result.returncode != 0:
+        error = (result.stderr or result.stdout or "")[-800:]
+        log.warning("ensurepip misslyckades (kod %s): %s", result.returncode, error)
+        return False
+    if not _pip_available():
+        log.warning("pip är fortfarande inte tillgängligt efter ensurepip")
+        return False
+    return True
 
 
 def install_spec(
@@ -164,17 +175,8 @@ def install_spec(
     if on_progress:
         on_progress(index, total, "Installerar %s…" % spec)
     log.info("pip install %s", spec)
-    kwargs: Dict[str, Any] = {
-        "capture_output": True,
-        "text": True,
-        "timeout": 600,
-    }
-    kwargs.update(quiet_process_options())
     try:
-        result = subprocess.run(
-            _pip_cmd() + ["install", "--upgrade", spec],
-            **kwargs,
-        )
+        result = _run_python_module("pip", ["install", "--upgrade", spec], timeout=600)
     except Exception:
         log.exception("pip install kraschade: %s", spec)
         return False

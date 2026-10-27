@@ -460,3 +460,8 @@ Bakgrundskontroller av pip/ensurepip, paketinstallation och test av
 Thunderbird-bryggan använder nu `CREATE_NO_WINDOW` på Windows. När hjälpen
 behöver läsa Pythons stdout används tillgänglig python.exe bredvid pythonw,
 men utan konsolfönster och med omdirigerad utdata. Loggarna ligger kvar i filer.
+
+Beroendekontrollen verifierar även att pip fungerar efter en lyckad
+ensurepip-körning. Felkod eller timeout rapporteras som fel, inte som lyckad
+installation. Hjälpprocesserna har stängd standardinmatning och tidsgränser,
+så att en dold process inte väntar på terminalinmatning.
