@@ -465,3 +465,20 @@ Beroendekontrollen verifierar även att pip fungerar efter en lyckad
 ensurepip-körning. Felkod eller timeout rapporteras som fel, inte som lyckad
 installation. Hjälpprocesserna har stängd standardinmatning och tidsgränser,
 så att en dold process inte väntar på terminalinmatning.
+
+### Automatisk cacherensning med smartfilter
+
+I **Inställningar → Loggning & drift** finns automatisk rensning en gång
+per 24 timmar (aktiverad som standard) och **Rensa cache med smartfilter nu**.
+Även den manuella knappen behåller färska cachefiler. Endast vanliga `.pyc`-filer
+äldre än 24 timmar i `__pycache__` direkt under appens rot, `core`, `ui`
+och `script` tas bort. Inga rekursiva sökningar, symlänkar/junctions eller
+systemets temporära katalog rensas av smartfiltret. Låsta filer lämnas kvar
+med fel i loggen.
+
+Kontrollen sker tyst under körning och strax efter nästa start om den är
+förfallen; ingen schemalagd uppgift körs när appen är stängd. Pågående sändning
+eller uppdateringsinstallation får avslutas först. Tidpunkten sparas i
+inställningarna, så omstarter startar inte nya dygnsrensningar. Vid avslut
+rensas endast registrerade temporära filer, inte längre all Python-cache.
+Mallar, bilagor, kontakter, loggar, inställningar och backuper lämnas orörda.

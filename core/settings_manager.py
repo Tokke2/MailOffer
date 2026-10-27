@@ -187,6 +187,8 @@ def get_defaults() -> Dict[str, Any]:
         "settings_version": CURRENT_SETTINGS_VERSION,
         "mode": "prod",
         "smart_cache": True,
+        "auto_cache_cleanup": True,
+        "cache_cleanup_last": "",
 
         # Autostart & tray
         "startup": False,
@@ -555,6 +557,7 @@ class SettingsManager:
             "generate_html_from_plain",
             "use_ssl",
             "smart_cache",
+            "auto_cache_cleanup",
             "clear_form_after_send",
             "save_last_recipients",
             "translate_placeholders",

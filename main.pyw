@@ -752,10 +752,12 @@ def main() -> None:
 
         if cache is not None:
             try:
-                cache.cleanup()
-                log.debug("CacheManager cleanup klar.")
+                # Daily smart cleanup owns bytecode eviction; do not bypass
+                # its age filter with a full sweep at every shutdown.
+                cache.clear_temp_files()
+                log.debug("Registrerade temporära filer rensade.")
             except Exception as exc:
-                log.exception("cache.cleanup() fel")
+                log.exception("cache.clear_temp_files() fel")
 
         if event_bus is not None:
             try:

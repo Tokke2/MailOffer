@@ -2591,3 +2591,14 @@ Användaren valde från redan-valda: tema-knapp (§34 #6) och tydligare
 - Regressionstester för felkoder, timeout, återhämtning, pythonw-syskon,
   konsolflaggor och paketinstallation. Inga ändrade UI-flöden.
 - Version fortsatt 1.0.0, bygg 2026102313.
+
+## V7.20 (APP 1.0.0)
+- Tyst smart cacherensning en gång per 24 timmar medan appen körs, inklusive
+  förfallen kontroll vid nästa start. Inställning aktiverad som standard.
+- Manuell knapp i Loggning & drift använder samma säkra åldersfilter.
+- Allowlist: gamla reguljära .pyc i fyra kända __pycache__-mappar. Inga
+  rekursiva svep; symboliska länkar/junctions och färska filer hoppas över.
+- Sparad tidpunkt, loggade filfel, väntar under sändning/uppdatering.
+- Avslut gör inte längre ofiltrerad cache-rensning; registrerade tempfiler
+  städas som tidigare. Användardata och systemets tempkatalog berörs inte
+  av den nya smarta rensningen. Version fortsatt 1.0.0, bygg 2026102314.

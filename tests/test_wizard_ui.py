@@ -277,6 +277,28 @@ class TestUpdateDeferralUi(unittest.TestCase):
             win.settings.get("installed_release_fingerprint"), "fp-ny"
         )
 
+    def test_cache_cleanup_timer_and_manual_smart_filter(self):
+        win = self._make_window()
+        self.assertTrue(win._cache_cleanup_timer.isActive())
+        self.assertEqual(win._cache_cleanup_timer.interval(), 60_000)
+        with mock.patch("core.smart_cache.run_due_cleanup", return_value={"removed": 1, "bytes": 20, "errors": 0}) as clean:
+            win._run_cache_cleanup(manual=True)
+            clean.assert_called_once_with(win._base_dir(), win.settings, force=True)
+
+    def test_cache_cleanup_waits_for_sending_and_install(self):
+        win = self._make_window()
+        with mock.patch("core.smart_cache.run_due_cleanup") as clean:
+            worker = mock.Mock()
+            worker.isRunning.return_value = True
+            win._worker = worker
+            win._run_cache_cleanup()
+            clean.assert_not_called()
+            win._worker = None
+            win._update_install_active = True
+            win._run_cache_cleanup()
+            clean.assert_not_called()
+            win._update_install_active = False
+
     def test_periodic_timer_and_quiet_visible_check(self):
         win = self._make_window()
         self.assertTrue(win._update_schedule.isActive())

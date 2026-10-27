@@ -1105,6 +1105,10 @@ class MainWindow(QMainWindow):
         self._update_schedule = QTimer(self)
         self._update_schedule.timeout.connect(self._maybe_auto_check_update)
         self._update_schedule.start(60_000)
+        self._cache_cleanup_timer = QTimer(self)
+        self._cache_cleanup_timer.timeout.connect(self._run_cache_cleanup)
+        self._cache_cleanup_timer.start(60_000)
+        QTimer.singleShot(8000, self._run_cache_cleanup)
         self._restore_update_session()
         self._automatic_backup_timer = QTimer(self)
         self._automatic_backup_timer.timeout.connect(self._run_automatic_backup)
@@ -5164,7 +5168,17 @@ class MainWindow(QMainWindow):
         form.addRow("Debug logging", self._make_settings_checkbox("debug_logging", "Aktivera debug logging"))
         form.addRow("Loggnivå", self._make_settings_combo("log_level", ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]))
         form.addRow("Mode", self._make_settings_combo("mode", ["prod", "dev"]))
-        form.addRow("Smart cache", self._make_settings_checkbox("smart_cache", "Smart cache"))
+        form.addRow("Cacherensning", self._make_settings_checkbox(
+            "auto_cache_cleanup", "Rensa gammal cache automatiskt en gång per dygn"))
+        clean_button = QPushButton("🧹 Rensa cache med smartfilter nu")
+        clean_button.clicked.connect(lambda: self._run_cache_cleanup(manual=True))
+        form.addRow(clean_button)
+        info = QLabel("Smartfilter: endast Python-cache äldre än 24 timmar i appens "
+                      "egna cachemappar. Mallar, bilagor, kontakter, loggar, "
+                      "inställningar och säkerhetskopior rensas inte. "
+                      "Automatiken körs bara medan appen är öppen.")
+        info.setWordWrap(True)
+        form.addRow(info)
         return group
 
     def _build_settings_group_updates(self) -> QGroupBox:
@@ -5935,6 +5949,24 @@ class MainWindow(QMainWindow):
         if label is not None:
             label.setText(tr("smtp.dns_failed", error=error))
         self._status("⚠️ DNS-kontrollen misslyckades", "warning")
+
+    def _run_cache_cleanup(self, manual=False):
+        from core.smart_cache import run_due_cleanup
+        worker = getattr(self, "_worker", None)
+        if (worker is not None and worker.isRunning()) or getattr(self, "_update_install_active", False):
+            if manual:
+                self._status("Cacherensningen får vänta tills sändning/uppdatering är klar.", "info")
+            return
+        try:
+            result = run_due_cleanup(self._base_dir(), self.settings, force=manual)
+            if manual and result is not None:
+                self._status(
+                    f"Cache: {result['removed']} filer rensade, {result['bytes']} byte frigjorda, "
+                    f"{result['errors']} fel.", "warning" if result["errors"] else "success")
+        except Exception:
+            log.exception("Cacherensning misslyckades")
+            if manual:
+                self._status("Cacherensning misslyckades – se loggen.", "error")
 
     def _run_automatic_backup(self):
         from core.auto_backup import run_due_backup
