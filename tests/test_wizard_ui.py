@@ -181,6 +181,7 @@ class TestUpdateDeferralUi(unittest.TestCase):
 
         tmp = tempfile.TemporaryDirectory()
         self.addCleanup(tmp.cleanup)
+        (Path(tmp.name) / ".portable").touch()
         settings = SettingsManager(Path(tmp.name))
         settings.set("auto_update_check", False)
         settings.set("ui_language", "sv")
@@ -276,6 +277,34 @@ class TestUpdateDeferralUi(unittest.TestCase):
         self.assertEqual(
             win.settings.get("installed_release_fingerprint"), "fp-ny"
         )
+
+    def test_template_bcc_switch_does_not_pollute_manual_recipients(self):
+        win = self._make_window()
+        win.settings.set("default_bcc", ["global@example.com"])
+        win.settings.set("template_bcc_rules", {"A.txt": ["a@example.com"], "B.txt": ["b@example.com"]})
+        win._last_tpl = Path("A.txt")
+        first = win._gather_send_params()
+        self.assertIn("a@example.com", first["default_bcc"])
+        self.assertIn("global@example.com", first["default_bcc"])
+        win._last_tpl = Path("B.txt")
+        second = win._gather_send_params()
+        self.assertIn("b@example.com", second["default_bcc"])
+        self.assertNotIn("a@example.com", second["default_bcc"])
+        self.assertNotIn("a@example.com", second["recipients_bcc"])
+        win._last_tpl = None
+        self.assertEqual(win._gather_send_params()["default_bcc"], ["global@example.com"])
+
+    def test_template_bcc_label_and_archive_deduplication(self):
+        win = self._make_window()
+        win.settings.set("default_bcc", ["a@example.com"])
+        win.settings.set("template_bcc_rules", {"A.txt": ["A@example.com", "b@example.com"]})
+        win._last_tpl = Path("A.txt")
+        self.assertEqual(win._default_bcc_with_archive({"archive_copy_email": "b@example.com"}), ["a@example.com", "b@example.com"])
+        win._refresh_template_bcc_label()
+        self.assertIn("b@example.com", win._template_bcc_label.text())
+        win._last_tpl = None
+        win._refresh_template_bcc_label()
+        self.assertEqual(win._template_bcc_label.text(), "")
 
     def test_send_locks_before_preflight_and_blocks_reentry(self):
         win = self._make_window()

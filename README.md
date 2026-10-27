@@ -498,3 +498,19 @@ mellanslag och bindestreck ignoreras. Äldre historik med registreringsnummer
 i formulärfälten stöds; nummer gissas inte från fri ämnes-/brödtext.
 Testmail utlöser inte registreringsvarningen. Befintlig varning för samma
 innehåll till samma mottagare inom 24 timmar finns kvar.
+
+### Standard-BCC för vissa mallar
+
+Öppna **Mallar → Standard-BCC per mall**, välj mall och markera de kontakter
+som alltid ska få en dold kopia med den mallen. Spara med OK. Avmarkera alla
+för att ta bort kopplingen. Lägg först till nya adresser under Kontakter.
+Sparade adresser kan avmarkeras även om kontakten senare tagits bort.
+
+Mallens BCC visas under mallvalet och standard-BCC-adresserna visas även i
+sändbekräftelsen. Dessa adresser kompletterar global standard-BCC och vald
+profils arkivkopia. De läggs inte i den manuella mottagarlistan, så byte till
+en annan mall lämnar inte kvar föregående malls adresser. Dubbletter hanteras
+av samma mottagarkontroll som övriga adresser. Testmail får inga mallbundna
+kopior. Kopplingen sparas per mallfilnamn och e-postadress, inte som en
+följande kontaktidentitet; ändrad kontaktadress kräver nytt val. Byter mallen
+namn behöver kopplingen också göras för det nya namnet.

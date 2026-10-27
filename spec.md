@@ -2614,3 +2614,13 @@ Användaren valde från redan-valda: tema-knapp (§34 #6) och tydligare
   svenska fältnamn. Ingen gissning ur fri text; testmail undantas.
 - Registreringsnummer sparas även explicit i nya historikrader.
 - Version fortsatt 1.0.0, bygg 2026102315.
+
+## V7.22 (APP 1.0.0)
+- Mallbundna standard-BCC via kontaktval under Mallar. Tomt val tar bort
+  regeln; tidigare val går att avmarkera även om kontakten är borttagen.
+- Validerad, deduplicerad template_bcc_rules i inställningarna. Återställning
+  till tidigare värde vid sparfel. Koppling per exakt mallfilnamn/adress.
+- Slås samman med standard-BCC/arkivkopia i sändparametrarna, inte i manuell
+  mottagarlista. Ingen kvarhängande BCC från föregående mall. Testmail undantas.
+- Adressindikering under mallval och full adresslista i sändbekräftelsen.
+- Version fortsatt 1.0.0, bygg 2026102316.

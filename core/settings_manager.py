@@ -239,6 +239,7 @@ def get_defaults() -> Dict[str, Any]:
         "auto_backup_keep": "10",
         "auto_backup_last": "",
         "template_profile_rules": {},
+        "template_bcc_rules": {},
         "sender_profiles": [],
         "active_sender_profile_id": "",
 
@@ -666,6 +667,8 @@ class SettingsManager:
         ]
         d["default_bcc"] = [item for item in cleaned_bcc if item]
         d.pop("default_cc", None)
+        from core.template_bcc import normalize_template_bcc
+        d["template_bcc_rules"] = normalize_template_bcc(d.get("template_bcc_rules", {}))
 
         recent = d.get("recent_recipients", [])
         if not isinstance(recent, list):

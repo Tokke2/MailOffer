@@ -2388,6 +2388,9 @@ class MainWindow(QMainWindow):
         self._tpl_badge.setProperty("cssClass", "pill")
         top.addWidget(self._tpl_badge)
         outer.addLayout(top)
+        self._template_bcc_label = QLabel()
+        self._template_bcc_label.setWordWrap(True)
+        outer.addWidget(self._template_bcc_label)
 
         subject_row = QHBoxLayout()
         subject_row.addWidget(QLabel("Ämne:"))
@@ -2795,6 +2798,7 @@ class MainWindow(QMainWindow):
             return
 
         self._last_tpl = path
+        self._refresh_template_bcc_label()
         try:
             subject, body = self._read_template(path)
             self._subject.setText(subject)
@@ -3971,6 +3975,7 @@ class MainWindow(QMainWindow):
                 widget.setStyleSheet("border-left: 6px solid " + color + ";")
 
     def _refresh_preview(self) -> None:
+        self._refresh_template_bcc_label()
         preview = getattr(self, "preview_tab", None)
         if preview is None or not hasattr(preview, "render"):
             return
@@ -6197,6 +6202,9 @@ class MainWindow(QMainWindow):
         access_button = QPushButton(tr("safety.templates"))
         access_button.clicked.connect(self._edit_template_access)
         actions.addWidget(access_button)
+        bcc_button = QPushButton(tr("template_bcc.button"))
+        bcc_button.clicked.connect(self._edit_template_bcc)
+        actions.addWidget(bcc_button)
         btn_packs = QPushButton(tr("templates_tab.pack_btn"))
         btn_packs.clicked.connect(self._open_template_pack_dialog)
         actions.addWidget(btn_packs)
@@ -6216,6 +6224,73 @@ class MainWindow(QMainWindow):
 
         self._refresh_template_tools_list()
         return widget
+
+    def _refresh_template_bcc_label(self):
+        from core.template_bcc import template_bcc
+        label = getattr(self, "_template_bcc_label", None)
+        if label is None:
+            return
+        name = self._last_tpl.name if self._last_tpl else ""
+        emails = template_bcc(name, self.settings.get("template_bcc_rules", {}))
+        label.setTextFormat(Qt.TextFormat.PlainText)
+        label.setText(tr("template_bcc.active", emails=", ".join(emails)) if emails else "")
+        label.setVisible(bool(emails))
+
+    def _edit_template_bcc(self):
+        from core.template_bcc import normalize_template_bcc, template_bcc
+        names = self._template_names(all_profiles=True)
+        if not names:
+            return
+        current = self._selected_template_tool_name()
+        name, ok = QInputDialog.getItem(self, tr("template_bcc.button"),
+            tr("safety.choose_template"), names, names.index(current) if current in names else 0, False)
+        if not ok or not name:
+            return
+        rules = normalize_template_bcc(self.settings.get("template_bcc_rules", {}))
+        selected = template_bcc(name, rules)
+        contacts = {}
+        if self._contact_store is not None:
+            for contact in self._contact_store.all():
+                email = str(getattr(contact, "email", "") or "").strip()
+                if _looks_like_email(email):
+                    contacts[email.lower()] = (email, str(getattr(contact, "name", "") or email))
+        for email in selected:
+            contacts.setdefault(email.lower(), (email, email))
+        dialog = QDialog(self)
+        dialog.setWindowTitle(tr("template_bcc.button") + " – " + name)
+        layout = QVBoxLayout(dialog)
+        info = QLabel(tr("template_bcc.info"))
+        info.setWordWrap(True)
+        layout.addWidget(info)
+        choices = QListWidget()
+        picked = {email.lower() for email in selected}
+        for key, (email, display) in sorted(contacts.items()):
+            item = QListWidgetItem(f"{display} <{email}>" if display != email else email)
+            item.setData(Qt.ItemDataRole.UserRole, email)
+            item.setFlags(item.flags() | Qt.ItemFlag.ItemIsUserCheckable)
+            item.setCheckState(Qt.CheckState.Checked if key in picked else Qt.CheckState.Unchecked)
+            choices.addItem(item)
+        layout.addWidget(choices)
+        buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
+        buttons.accepted.connect(dialog.accept)
+        buttons.rejected.connect(dialog.reject)
+        layout.addWidget(buttons)
+        if dialog.exec() != QDialog.DialogCode.Accepted:
+            return
+        emails = [choices.item(i).data(Qt.ItemDataRole.UserRole) for i in range(choices.count())
+                  if choices.item(i).checkState() == Qt.CheckState.Checked]
+        if emails:
+            rules[name] = emails
+        else:
+            rules.pop(name, None)
+        previous = self.settings.get("template_bcc_rules", {})
+        self.settings.set("template_bcc_rules", rules)
+        if not self.settings.save():
+            self.settings.set("template_bcc_rules", previous)
+            QMessageBox.warning(self, tr("template_bcc.button"), tr("safety.save_failed"))
+            return
+        self._refresh_template_bcc_label()
+        self._refresh_preview()
 
     def _edit_template_access(self):
         names = self._template_names(all_profiles=True)
@@ -6438,7 +6513,10 @@ class MainWindow(QMainWindow):
         self, profile: Optional[Mapping[str, Any]] = None
     ) -> List[str]:
         """Standard-Bcc + vald profils arkivkopia (deduplicerat)."""
+        from core.template_bcc import template_bcc
         default_bcc = list(self.settings.get("default_bcc", []) or [])
+        name = self._last_tpl.name if self._last_tpl else ""
+        default_bcc.extend(template_bcc(name, self.settings.get("template_bcc_rules", {})))
         archive_source = (
             profile.get("archive_copy_email")
             if profile is not None
@@ -6449,7 +6527,7 @@ class MainWindow(QMainWindow):
             lowered = {str(email).lower() for email in default_bcc}
             if archive.lower() not in lowered:
                 default_bcc.append(archive)
-        return default_bcc
+        return _dedupe(default_bcc)
 
     def _gather_send_params(self) -> Dict[str, Any]:
         recipients_to = _dedupe(self._list_items(self._to_list))
@@ -6934,6 +7012,7 @@ class MainWindow(QMainWindow):
             f"Skicka e-post nu?\n\n"
             f"Till: {len(params['recipients_to'])}\n"
             f"Bcc: {len(params['recipients_bcc'])}\n"
+            f"Standard-Bcc: {', '.join(params.get('default_bcc', [])) or '–'}\n"
             f"Totalt: {total}\n\n"
             f"Ämne: {params['subject'] or '(tomt)'}\n"
             f"Mall: {params['template_name']}\n"

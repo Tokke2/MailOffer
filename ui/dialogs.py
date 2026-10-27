@@ -310,7 +310,7 @@ class SendConfirmDialog(QDialog):
         if self._def_bcc:
             row(
                 "📌 Standard-Bcc:",
-                f"{len(self._def_bcc)} st alltid inkluderade",
+                f"{len(self._def_bcc)} st: " + ", ".join(self._def_bcc),
                 colors.get("accent", ""),
             )
         row(
