@@ -19,6 +19,7 @@ import importlib
 import logging
 import os
 import subprocess
+from core.process_utils import quiet_process_options, python_cli_executable
 import sys
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
@@ -124,7 +125,7 @@ def pyqt6_available() -> bool:
 
 
 def _pip_cmd() -> List[str]:
-    return [sys.executable, "-m", "pip"]
+    return [python_cli_executable(), "-m", "pip"]
 
 
 def ensure_pip() -> bool:
@@ -134,6 +135,7 @@ def ensure_pip() -> bool:
             capture_output=True,
             text=True,
             timeout=60,
+            **quiet_process_options(),
         )
         if r.returncode == 0:
             return True
@@ -141,9 +143,10 @@ def ensure_pip() -> bool:
         log.debug("pip --version misslyckades", exc_info=True)
     try:
         subprocess.run(
-            [sys.executable, "-m", "ensurepip", "--upgrade"],
+            [python_cli_executable(), "-m", "ensurepip", "--upgrade"],
             capture_output=True,
             timeout=120,
+            **quiet_process_options(),
         )
         return True
     except Exception:
@@ -166,8 +169,7 @@ def install_spec(
         "text": True,
         "timeout": 600,
     }
-    if os.name == "nt":
-        kwargs["creationflags"] = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+    kwargs.update(quiet_process_options())
     try:
         result = subprocess.run(
             _pip_cmd() + ["install", "--upgrade", spec],

@@ -104,6 +104,7 @@ def test_native_host(base_dir: Path) -> dict:
     """
     import struct
     import subprocess
+    from core.process_utils import quiet_process_options, python_cli_executable
     from core.tb_protocol import PROTOCOL_VERSION, compatible
     from zipfile import ZipFile
     with ZipFile(Path(base_dir) / "thunderbird" / "MailOffer.xpi") as package:
@@ -112,9 +113,9 @@ def test_native_host(base_dir: Path) -> dict:
         raise RuntimeError("Inkompatibel XPI-fil. Hämta MailOffer.xpi från den aktuella appen.")
     payload = json.dumps({"action": "ping", "protocol_version": PROTOCOL_VERSION}).encode("utf-8")
     completed = subprocess.run(
-        [sys.executable, str(_host_py(Path(base_dir)))],
+        [python_cli_executable(), str(_host_py(Path(base_dir)))],
         input=struct.pack("<I", len(payload)) + payload,
-        capture_output=True, timeout=5,
+        capture_output=True, timeout=5, **quiet_process_options(),
     )
     if completed.returncode or len(completed.stdout) < 4:
         raise RuntimeError("Native host svarade inte")

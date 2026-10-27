@@ -2574,3 +2574,11 @@ Användaren valde från redan-valda: tema-knapp (§34 #6) och tydligare
   färdig uppdateringstråd; ingen omstart vid partiella kopieringsfel.
 - Sessionsfil med explicit fältlista, atomär skrivning, inga SMTP-profiler.
 - Appversion fortsatt 1.0.0, bygg 2026102311.
+
+## V7.18 (APP 1.0.0)
+- Gemensamma Windows-flaggor för konsolfria hjälpprocesser: pip-kontroll,
+  ensurepip, installation och Thunderbird-bryggtest. Normal VBS/pythonw-start
+  och uppdateringsomstart förblir utan konsol; GUI-fönstret döljs inte.
+- Python CLI-syskon används vid behov av fångad hjälputdata.
+- Version fortsatt 1.0.0, bygg 2026102312. Windows-beteendet behöver provas
+  på användardatorn; befintlig manuellt öppnad konsol stängs inte.

@@ -447,3 +447,16 @@ Om sparandet misslyckas avbryts omstarten och felet loggas. Partiellt
 misslyckad installation startar inte automatiskt om och ger felbesked.
 Tidigare synligt fönster visas igen; tray/minimerat läge återstartar i
 bakgrunden utan konsolfönster. Versionen förblir 1.0.0 även vid nya byggen.
+
+### Ingen konsol vid normal Windows-start
+
+Starta med `Starta EmailApp.vbs` (wscript/pythonw) för appfönster utan
+terminal. Om `.pyw` är associerad med konsol-Python i Windows kan den
+associationen skapa en konsol innan appkoden hinner köra; VBS-starten
+undviker det. En redan öppnad terminal som användaren själv startat stängs
+inte av appen.
+
+Bakgrundskontroller av pip/ensurepip, paketinstallation och test av
+Thunderbird-bryggan använder nu `CREATE_NO_WINDOW` på Windows. När hjälpen
+behöver läsa Pythons stdout används tillgänglig python.exe bredvid pythonw,
+men utan konsolfönster och med omdirigerad utdata. Loggarna ligger kvar i filer.
