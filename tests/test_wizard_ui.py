@@ -277,6 +277,63 @@ class TestUpdateDeferralUi(unittest.TestCase):
             win.settings.get("installed_release_fingerprint"), "fp-ny"
         )
 
+    def test_send_locks_before_preflight_and_blocks_reentry(self):
+        win = self._make_window()
+        label = win.btn_send.text()
+        def prepare(*args):
+            self.assertTrue(win._send_busy)
+            self.assertFalse(win.btn_send.isEnabled())
+            self.assertFalse(win._btn_send_step.isEnabled())
+            self.assertIn("⏳", win.btn_send.text())
+            win._send()  # Simulate a shortcut during a nested modal event loop.
+            return False
+        with mock.patch.object(win, "_begin_send", side_effect=prepare) as begin:
+            win._send()
+            begin.assert_called_once()
+        self.assertFalse(win._send_busy)
+        self.assertTrue(win.btn_send.isEnabled())
+        self.assertEqual(win.btn_send.text(), label)
+
+    def test_send_start_exception_unlocks_buttons(self):
+        win = self._make_window()
+        with mock.patch.object(win, "_begin_send", side_effect=RuntimeError("start failed")), mock.patch("ui.main_window.QMessageBox.critical"):
+            win._send()
+        self.assertFalse(win._send_busy)
+        self.assertTrue(win.btn_send.isEnabled())
+
+    def test_send_lock_held_until_worker_and_result_handling_finish(self):
+        win = self._make_window()
+        with mock.patch.object(win, "_begin_send", return_value=True):
+            win._send()
+        self.assertTrue(win._send_busy)
+        with mock.patch.object(win, "_handle_send_done") as done:
+            win._send_done(mock.Mock())
+            done.assert_called_once()
+        self.assertFalse(win._send_busy)
+        self.assertTrue(win.btn_send.isEnabled())
+
+    def test_registration_warning_is_in_preflight(self):
+        win = self._make_window()
+        params = win._gather_send_params()
+        params["replacements"] = {"reg": "abc-123"}
+        with mock.patch.object(win, "_load_history", return_value=[{"replacements": {"reg": "ABC123"}}]):
+            report = win._preflight_report(params)
+        self.assertIn(("registration_duplicate", {"reg": "ABC123", "count": 1}), report.warnings)
+
+    def test_registration_warning_no_cancels_without_worker(self):
+        from types import SimpleNamespace
+        from PyQt6.QtWidgets import QMessageBox
+        win = self._make_window()
+        params = win._gather_send_params()
+        params.update(recipients_to=["a@example.com"], recipients_bcc=[], include_english=False)
+        report = SimpleNamespace(total=1, blockers=[], warnings=[("registration_duplicate", {"reg": "ABC123", "count": 1})])
+        with mock.patch.object(win, "_gather_send_params", return_value=params), mock.patch.object(win, "_preflight_report", return_value=report), mock.patch.object(win, "_format_preflight_text", return_value="warning"), mock.patch("ui.main_window.QMessageBox.question", return_value=QMessageBox.StandardButton.No), mock.patch("ui.main_window.SendWorker") as worker, mock.patch.object(win, "_confirm_send") as confirm:
+            win._send()
+            worker.assert_not_called()
+            confirm.assert_not_called()
+        self.assertFalse(win._send_busy)
+        self.assertTrue(win.btn_send.isEnabled())
+
     def test_cache_cleanup_timer_and_manual_smart_filter(self):
         win = self._make_window()
         self.assertTrue(win._cache_cleanup_timer.isActive())

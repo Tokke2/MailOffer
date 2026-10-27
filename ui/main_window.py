@@ -1042,6 +1042,8 @@ class MainWindow(QMainWindow):
         self._ph_row_widgets: Dict[str, Tuple[QWidget, ...]] = {}
         self._attachments: List[str] = []
         self._last_tpl: Optional[Path] = None
+        self._send_busy = False
+        self._send_button_labels = {}
         self._worker: Optional[SendWorker] = None
         self._last_send_params: Dict[str, Any] = {}
         self._view_actions: List[QAction] = []
@@ -4418,6 +4420,7 @@ class MainWindow(QMainWindow):
         )
 
     def _append_send_history(self, result: SendResult) -> None:
+        from core.send_safety import registration_number
         params = dict(self._last_send_params or {})
         row = {
             "timestamp": datetime.datetime.now().isoformat(
@@ -4440,6 +4443,7 @@ class MainWindow(QMainWindow):
                 Path(path).name for path in params.get("attachments", [])
             ],
             "attachments_count": len(params.get("attachments", [])),
+            "registration_number": registration_number(params),
             "content_fingerprint": params.get("content_fingerprint", ""),
             "delivered_recipients": params.get("delivered_recipients", []),
             "success": bool(getattr(result, "success", False)),
@@ -6530,14 +6534,18 @@ class MainWindow(QMainWindow):
                 self.settings.get("skip_invalid_recipients", True)
             ),
         )
-        from core.send_safety import template_allowed, content_fingerprint, recent_duplicates
+        from core.send_safety import template_allowed, content_fingerprint, recent_duplicates, registration_history_matches, registration_number
         name = Path(str(params.get("template_path") or "")).name
         if not template_allowed(name, params.get("sender_profile_id", ""), self.settings.get("template_profile_rules", {})):
             report.blockers.append(("profile_template", {}))
         fingerprint = content_fingerprint(params)
         params["content_fingerprint"] = fingerprint
         params["delivered_recipients"] = report.to_final + report.bcc_final
-        duplicates = recent_duplicates(fingerprint, params["delivered_recipients"], self._load_history())
+        history = self._load_history()
+        matches = registration_history_matches(params, history)
+        if matches:
+            report.warnings.append(("registration_duplicate", {"reg": registration_number(params), "count": len(matches)}))
+        duplicates = recent_duplicates(fingerprint, params["delivered_recipients"], history)
         if duplicates and not params.get("test_mode"):
             report.warnings.append(("recent_duplicate", {"emails": duplicates}))
         profile = params.get("sender_profile") or {}
@@ -6567,6 +6575,7 @@ class MainWindow(QMainWindow):
         key_map = {
             "profile_template": "safety.forbidden",
             "recent_duplicate": "safety.duplicate",
+            "registration_duplicate": "safety.registration_duplicate",
             "websupport_tls": "safety.tls",
             "websupport_sender": "safety.sender",
             "websupport_dns": "safety.dns",
@@ -6709,6 +6718,9 @@ class MainWindow(QMainWindow):
         return test_params
 
     def _send_test_mail(self) -> None:
+        if getattr(self, "_send_busy", False):
+            self._status("⏳ En sändning förbereds eller pågår redan…", "warning")
+            return
         if self._worker is not None and self._worker.isRunning():
             self._status("⏳ En sändning pågår redan…", "warning")
             return
@@ -6743,19 +6755,55 @@ class MainWindow(QMainWindow):
             button = getattr(self, attr, None)
             if button is not None:
                 try:
+                    labels = self._send_button_labels
+                    if enabled:
+                        if attr in labels:
+                            button.setText(labels.pop(attr))
+                    else:
+                        labels.setdefault(attr, button.text())
+                        button.setText("⏳ Förbereder / skickar…")
                     button.setEnabled(bool(enabled))
                 except Exception:
                     pass
 
+    def _release_send_lock(self) -> None:
+        worker = self._worker
+        if worker is not None and worker.isRunning():
+            QTimer.singleShot(100, self._release_send_lock)
+            return
+        self._send_busy = False
+        self._set_send_buttons_enabled(True)
+
     def _send(self, test_recipient: Optional[str] = None) -> None:
+        # Lock before preflight and nested modal event loops, not just SMTP.
+        if getattr(self, "_send_busy", False):
+            self._status("⏳ En sändning förbereds eller pågår redan…", "warning")
+            return
+        if self._worker is not None and self._worker.isRunning():
+            self._status("⏳ En sändning pågår redan…", "warning")
+            return
+        self._send_busy = True
+        self._set_send_buttons_enabled(False)
+        self._status("⏳ Förbereder sändning…", "info")
+        started = False
+        try:
+            started = bool(self._begin_send(test_recipient))
+        except Exception as exc:
+            log.exception("Kunde inte starta sändningen")
+            self._send_err(str(exc))
+        finally:
+            if not started:
+                self._release_send_lock()
+
+    def _begin_send(self, test_recipient: Optional[str] = None) -> bool:
         if getattr(self, "_update_install_active", False):
             self._status(tr("update.checking"), "warning")
-            return
+            return False
         if not isinstance(test_recipient, str) or not test_recipient.strip():
             test_recipient = None
         if self._worker is not None and self._worker.isRunning():
             self._status("⏳ En sändning pågår redan…", "warning")
-            return
+            return False
 
         params = self._gather_send_params()
         if test_recipient:
@@ -6782,7 +6830,7 @@ class MainWindow(QMainWindow):
                 "Lägg till minst en mottagare i steg ③.",
             )
             self.select_tab("send")
-            return
+            return False
 
         invalid = [
             email
@@ -6795,7 +6843,7 @@ class MainWindow(QMainWindow):
                 "Ogiltiga mottagare",
                 "Kontrollera:\n" + "\n".join(invalid[:10]),
             )
-            return
+            return False
 
         if vin_required_missing(
             params.get("replacements") or {},
@@ -6809,7 +6857,7 @@ class MainWindow(QMainWindow):
                 "Fyll i fältet 🔢 VIN (obligatoriskt för EN) i steg ①.",
             )
             self.select_tab("send")
-            return
+            return False
 
         if getattr(report, "blockers", None):
             QMessageBox.warning(
@@ -6818,17 +6866,17 @@ class MainWindow(QMainWindow):
                 str(params.get("preflight_text") or ""),
             )
             self._status("⛔ Förhandskontrollen stoppar sändningen", "error")
-            return
+            return False
 
-        duplicates = [issue for issue in report.warnings if issue[0] == "recent_duplicate"]
+        duplicates = [issue for issue in report.warnings if issue[0] in ("recent_duplicate", "registration_duplicate")]
         if duplicates and QMessageBox.question(self, tr("safety.duplicate_title"),
-                self._format_preflight_issue(duplicates[0]),
+                "\n\n".join(self._format_preflight_issue(issue) for issue in duplicates),
                 QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
                 QMessageBox.StandardButton.No) != QMessageBox.StandardButton.Yes:
-            return
+            return False
         if not self._confirm_send(params, total):
             self._status("❌ Sändning avbruten")
-            return
+            return False
 
         self._last_send_params = dict(params)
         self._set_send_buttons_enabled(False)
@@ -6848,6 +6896,7 @@ class MainWindow(QMainWindow):
         self._worker.finished.connect(self._send_done)
         self._worker.error.connect(self._send_err)
         self._worker.start()
+        return True
 
     def _confirm_send(self, params: Dict[str, Any], total: int) -> bool:
         if SendConfirmDialog is not None:
@@ -6907,7 +6956,12 @@ class MainWindow(QMainWindow):
 
     @pyqtSlot(object)
     def _send_done(self, result: SendResult) -> None:
-        self._set_send_buttons_enabled(True)
+        try:
+            self._handle_send_done(result)
+        finally:
+            self._release_send_lock()
+
+    def _handle_send_done(self, result: SendResult) -> None:
         success = bool(getattr(result, "success", False))
 
         if self._tray_ref is not None and hasattr(
@@ -6966,7 +7020,12 @@ class MainWindow(QMainWindow):
 
     @pyqtSlot(str)
     def _send_err(self, message: str) -> None:
-        self._set_send_buttons_enabled(True)
+        try:
+            self._handle_send_err(message)
+        finally:
+            self._release_send_lock()
+
+    def _handle_send_err(self, message: str) -> None:
         if self._tray_ref is not None and hasattr(
             self._tray_ref, "update_icon"
         ):

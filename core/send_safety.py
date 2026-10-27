@@ -55,3 +55,27 @@ def recent_duplicates(fingerprint, recipients, rows, now=None, hours=24):
             continue
         matches.update(requested.intersection(str(x).strip().lower() for x in row.get('delivered_recipients', [])))
     return sorted(matches)
+
+
+def registration_number(params):
+    """Canonical form: case-, whitespace- and hyphen-insensitive, no guessing."""
+    import re
+    values = params.get('replacements') or {}
+    candidates = [params.get('registration_number')]
+    if isinstance(values, dict):
+        lowered = {str(k).strip().lower(): v for k, v in values.items()}
+        candidates.extend(lowered.get(key) for key in ('reg', 'registration', 'registreringsnummer'))
+    for value in candidates:
+        normalized = re.sub(r'[\s-]+', '', str(value or '')).upper()
+        if normalized:
+            return normalized
+    return ''
+
+
+def registration_history_matches(params, rows):
+    """Search all retained history, independently of content, recipient or age."""
+    number = registration_number(params)
+    if not number or params.get('test_mode'):
+        return []
+    return [row for row in rows if isinstance(row, dict) and not row.get('test_mode')
+            and registration_number(row) == number]

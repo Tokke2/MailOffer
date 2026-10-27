@@ -482,3 +482,19 @@ eller uppdateringsinstallation får avslutas först. Tidpunkten sparas i
 inställningarna, så omstarter startar inte nya dygnsrensningar. Vid avslut
 rensas endast registrerade temporära filer, inte längre all Python-cache.
 Mallar, bilagor, kontakter, loggar, inställningar och backuper lämnas orörda.
+
+### Skydd mot dubbla utskick
+
+Skicka-knapparna låses direkt, redan före förhandskontroll och bekräftelse,
+och visar att sändning förbereds/pågår. Även kortkommandon spärras mot ny
+sändning medan den första förbereds eller körs. Knapparna återställs efter
+avbrott eller fel, och efter att sändning och resultathantering avslutats.
+
+Finns samma registreringsnummer i den sparade sändhistoriken visas en
+extra varning med **Nej som standard**. Du kan godkänna en avsiktlig
+återsändning. Kontrollen gäller hela tillgängliga historiken (högst 500
+utskick), oavsett ålder, mottagare eller innehåll. Versaler/gemener,
+mellanslag och bindestreck ignoreras. Äldre historik med registreringsnummer
+i formulärfälten stöds; nummer gissas inte från fri ämnes-/brödtext.
+Testmail utlöser inte registreringsvarningen. Befintlig varning för samma
+innehåll till samma mottagare inom 24 timmar finns kvar.

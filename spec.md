@@ -2602,3 +2602,15 @@ Användaren valde från redan-valda: tema-knapp (§34 #6) och tydligare
 - Avslut gör inte längre ofiltrerad cache-rensning; registrerade tempfiler
   städas som tidigare. Användardata och systemets tempkatalog berörs inte
   av den nya smarta rensningen. Version fortsatt 1.0.0, bygg 2026102314.
+
+## V7.21 (APP 1.0.0)
+- Omedelbart sändlås före förhandskontroll och modala dialoger. Knappar
+  inaktiveras med pågående-text; återinträde via kortkommandon blockeras.
+- Låset frigörs vid valideringsfel, avbrott, startfel och avslutad
+  resultathantering; pågående QThread måste också ha avslutats.
+- Varning vid samma reg i hela sparade historiken, oberoende av innehåll,
+  ålder och mottagare. Nej förvalt, avsiktlig återsändning tillåten.
+- Normaliserade reg-fält med stöd för äldre replacements och engelska/
+  svenska fältnamn. Ingen gissning ur fri text; testmail undantas.
+- Registreringsnummer sparas även explicit i nya historikrader.
+- Version fortsatt 1.0.0, bygg 2026102315.
