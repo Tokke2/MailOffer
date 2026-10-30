@@ -2657,3 +2657,18 @@ Användaren valde från redan-valda: tema-knapp (§34 #6) och tydligare
 - Anonym livekontroll mot publik release: identiskt arkiv ger ingen
   uppdatering; ändrad main.pyw ger uppdatering vid samma version/bygg.
 - Version fortsatt 1.0.0, bygg 2026102318.
+
+## V7.25 (APP 1.0.0)
+- Samlad lokal errors.log med källfil, insamlingstid, fel/varningar och
+  stackspår från befintliga app-, diagnostik-, launcher- och kraschloggar.
+- Fristående standardbiblioteksinsamling startas av tidig diagnostik före
+  Qt, körs var femte sekund och töms vid normalt avslut. Nästa start kan
+  importera kraschdata/startfel som skrevs efter föregående process slut.
+- UTF-8/Windows UTF-16-launcher, återupptagning efter omstart och loggrotation,
+  atomärt cursor-index utan meddelandetext och OS-lås mot samtidiga insamlare.
+- Original ändras inte. Egen utdata/rotationer utesluts för att undvika loop.
+  Rotering 5 MB/fem kopior; avgränsade källor och läsmängder; filfel får inte
+  krascha appen. Vanliga hemligheter maskeras också i diagnostikformattering.
+- Knapp i Loggar och valfri `python -m core.error_log` utan Qt. Begränsningar
+  och behov att granska personuppgifter före delning dokumenterade.
+- Version fortsatt 1.0.0, bygg 2026102319.

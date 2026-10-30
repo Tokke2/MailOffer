@@ -571,3 +571,39 @@ Kontrollen körs i bakgrunden men hämtar nu ett arkiv vid varje förfallen
 12-timmarskontroll, vilket använder mer nättrafik än enbart metadata.
 Tyst sökning, godkännande före installation och automatisk säker omstart
 är oförändrade. Versionsnumret ligger kvar på **1.0.0**.
+
+### Samlad fellogg för snabb felsökning
+
+**`logs/errors.log`** samlar identifierade fel, varningar och stackspår från
+appens tillgängliga `.log`-filer och deras roterade kopior: bland annat
+`email_app.log`, `diagnostics.log`, `launcher.log`, `startup_crash.log` och
+`native-crash-*.log`. Varje post anger källfil och insamlingstid; ursprunglig
+tid och feltext behålls. Originalfilerna ändras inte av insamlaren.
+
+Loggarna läses inkrementellt i en bakgrundstråd ungefär var femte sekund,
+vid nästa start och en sista gång vid normalt avslut. Läspositioner sparas
+i `logs/errors.state.json` så omstarter/vanlig loggrotation inte återimporterar
+samma innehåll. Indexet lagrar positioner och hashvärden, inte feltexter.
+Samma fel kan finnas under flera källfiler om originalen loggat det på
+flera ställen. Normal start/avslut med felkod 0 tas inte med.
+
+Öppna **Loggar → Öppna samlad fellogg** för att uppdatera och öppna filen.
+Om den ordinarie loggmappen inte kan användas vid appstart används
+`%TEMP%\MailOffer-logs\errors.log`. Insamlaren läser även appens befintliga
+reservloggar där och `%TEMP%\MailOffer-launcher.log`, inte hela tempmappen.
+
+Felloggen roteras vid 5 MB, med upp till fem äldre kopior. För att begränsa
+resursåtgång läses högst 1 MB per källfil och omgång och de 128 senast
+ändrade loggfilerna bevakas. Stora gamla loggar kan därför ta flera omgångar
+att samla in. Mycket stora enskilda felposter begränsas med markering.
+
+Vanliga lösenords-, token- och AUTH-värden maskeras, men loggen kan innehålla
+andra person- och ärendeuppgifter: **granska den innan du delar den**.
+Ingen automatisk uppladdning sker. Fel som aldrig loggats, raderade eller
+oläsbara loggar, full disk och en hård process-/strömavstängning kan inte
+garanteras fångade. Native-krascher och startfel som skrivs efter att appen
+stannat samlas tidigast vid nästa start/manuell insamling.
+
+Om appens gränssnitt inte går att öppna kan insamlingen köras utan Qt:
+`python -m core.error_log --base-dir "D:\Program\MailOffer"`.
+Vid skrivskyddad appmapp kan `--output-dir` ange en skrivbar mapp.

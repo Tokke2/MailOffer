@@ -4735,6 +4735,9 @@ class MainWindow(QMainWindow):
         btn_open = QPushButton("📂 Öppna")
         btn_open.clicked.connect(self._open_log)
         buttons.addWidget(btn_open)
+        btn_errors = QPushButton("🛠 Öppna samlad fellogg")
+        btn_errors.clicked.connect(self._open_combined_errors)
+        buttons.addWidget(btn_errors)
 
         btn_clear = QPushButton("🧹 Rensa")
         btn_clear.setProperty("cssClass", "danger")
@@ -4756,6 +4759,15 @@ class MainWindow(QMainWindow):
         cursor = self._log_edit.textCursor()
         cursor.movePosition(cursor.MoveOperation.End)
         self._log_edit.setTextCursor(cursor)
+
+    def _open_combined_errors(self) -> None:
+        try:
+            from core.diagnostics import collect_errors
+            path = collect_errors(self._base_dir())
+            self._explorer(path)
+        except Exception:
+            log.exception("Kunde inte öppna samlad fellogg")
+            self._status("Kunde inte öppna felloggen – kontrollera skrivbehörighet och ledigt diskutrymme.", "error")
 
     def _open_log(self) -> None:
         path = self._log_path()

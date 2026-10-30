@@ -13,13 +13,13 @@ import warnings
 
 _logger = None
 _fault_file = None
+_error_collector = None
 
 
 class RedactingFormatter(logging.Formatter):
     def format(self, record):
-        text = super().format(record)
-        text = re.sub(r'(?i)((?:password|passwd|token|authorization|secret)\s*[=:]\s*)[^\s,;]+', r'\1[REDACTED]', text)
-        return re.sub(r'(?i)(AUTH\s+(?:PLAIN|LOGIN)\s+)\S+', r'\1[REDACTED]', text)
+        from core.error_log import redact
+        return redact(super().format(record))
 
 
 class ErrorFilter(logging.Filter):
@@ -28,7 +28,7 @@ class ErrorFilter(logging.Filter):
 
 
 def install(base):
-    global _logger, _fault_file
+    global _logger, _fault_file, _error_collector
     if _logger is not None:
         return _logger
     for directory in (Path(base) / 'logs', Path(tempfile.gettempdir()) / 'MailOffer-logs'):
@@ -76,6 +76,12 @@ def install(base):
     except (OSError, RuntimeError):
         _logger.exception('Could not enable native crash diagnostics')
     atexit.register(lambda: _logger.info('PROCESS EXIT (Python atexit reached)'))
+    try:
+        from core.error_log import ErrorLogCollector
+        _error_collector = ErrorLogCollector(base, directory)
+        _error_collector.start()
+    except Exception:
+        _logger.exception('Could not start combined error log')
     return _logger
 
 
@@ -113,3 +119,13 @@ def install_qt():
             level = logging.CRITICAL
         _logger.log(level, 'Qt %s: %s (%s:%s)', kind.name, text, context.file, context.line)
     qInstallMessageHandler(message)
+
+
+def collect_errors(base):
+    """Refresh the combined log on demand; do not reconfigure logging/hooks."""
+    from core.error_log import ErrorLogCollector
+    collector = _error_collector
+    if collector is None or Path(base).resolve() != collector.base.resolve():
+        collector = ErrorLogCollector(base)
+    collector.collect(final=True)
+    return collector.path

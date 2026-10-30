@@ -256,6 +256,14 @@ class TestUpdateDeferralUi(unittest.TestCase):
         win._on_update_checked(info)
         self.assertEqual(win.settings.get("installed_release_commit"), "a" * 40)
 
+    def test_combined_error_log_button_opens_collected_file(self):
+        win = self._make_window()
+        path = win._base_dir() / "logs/errors.log"
+        with mock.patch("core.diagnostics.collect_errors", return_value=path) as collect, mock.patch.object(win, "_explorer") as open_file:
+            win._open_combined_errors()
+            collect.assert_called_once_with(win._base_dir())
+            open_file.assert_called_once_with(path)
+
     def test_update_worker_passes_installation_and_commit_to_real_file_check(self):
         from ui.main_window import UpdateWorker
         from core.github_update import UpdateInfo

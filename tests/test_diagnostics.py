@@ -39,6 +39,9 @@ log.info('normal shutdown marker')
             text = (Path(tmp) / 'logs' / 'diagnostics.log').read_text()
             for marker in ('PROCESS START', 'diagnostic warning', 'thread-failure-marker', 'caught-failure-marker', 'Traceback', 'normal shutdown marker', 'PROCESS EXIT'):
                 self.assertIn(marker, text)
+            combined = (Path(tmp) / 'logs' / 'errors.log').read_text()
+            for marker in ('thread-failure-marker', 'caught-failure-marker', 'diagnostic warning', 'Traceback'):
+                self.assertIn(marker, combined)
 
     def test_early_import_failure_logged_without_qt(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -46,3 +49,4 @@ log.info('normal shutdown marker')
             result = subprocess.run([sys.executable, '-c', script], cwd=ROOT, capture_output=True, timeout=15)
             self.assertNotEqual(result.returncode, 0)
             self.assertIn('ModuleNotFoundError', (Path(tmp) / 'logs' / 'diagnostics.log').read_text())
+            self.assertIn('ModuleNotFoundError', (Path(tmp) / 'logs' / 'errors.log').read_text())
