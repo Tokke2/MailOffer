@@ -388,3 +388,158 @@ class TestDownloadExtractApply(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestVerifiedReleaseContents(unittest.TestCase):
+    A = 'a' * 40
+    B = 'b' * 40
+
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.base = Path(self.temp.name)
+        (self.base / 'main.pyw').write_bytes(b'original')
+        self.payload = _release_payload(tag_name='v1.0.0', target_commitish='main', body='build: 100')
+        self.calls = []
+        self.sha = self.A
+        self.files = {'release/main.pyw': b'original'}
+
+    def fetch(self, url, timeout):
+        self.calls.append(url)
+        if url.endswith('/releases/latest'):
+            return 200, json.dumps(self.payload).encode()
+        if '/git/ref/tags/' in url:
+            return 200, json.dumps({'object': {'type': 'commit', 'sha': self.sha}}).encode()
+        if '/zipball/' in url or url.endswith('/app.zip'):
+            return 200, _make_zip_bytes(self.files)
+        raise AssertionError('Unexpected URL: ' + url)
+
+    def check(self, **kwargs):
+        return check_for_update(current_version='1.0.0', current_build_id='100',
+                                fetcher=self.fetch, base_dir=self.base, **kwargs)
+
+    def test_identical_files_seed_baseline_without_false_update(self):
+        info = self.check(installed_fingerprint='legacy-fingerprint')
+        self.assertFalse(info.available)
+        self.assertFalse(info.error)
+        self.assertTrue(info.files_compared)
+        self.assertEqual(info.commit_sha, self.A)
+        self.assertEqual(info.changed_files, [])
+        self.assertTrue(info.download_url.endswith('/zipball/' + self.A))
+        self.assertFalse(any(url.endswith('/main') for url in self.calls))
+
+    def test_changed_files_detected_without_version_build_or_saved_baseline(self):
+        self.files['release/main.pyw'] = b'new code, same version'
+        info = self.check()
+        self.assertTrue(info.available)
+        self.assertTrue(info.same_version_files_changed)
+        self.assertEqual(info.changed_files, ['main.pyw'])
+
+    def test_moved_tag_is_detected_even_when_release_metadata_is_unchanged(self):
+        self.sha = self.B
+        info = self.check(installed_commit=self.A)
+        self.assertTrue(info.available)
+        self.assertEqual(info.commit_sha, self.B)
+        self.assertEqual(info.changed_files, [])
+        self.assertTrue(info.download_url.endswith(self.B))
+
+    def test_missing_file_detected_but_user_data_and_extra_files_retained(self):
+        self.files.update({'release/Mallar/mine.txt': b'new', 'release/logs/test.log': b'new',
+                           'release/.data/settings.json': b'new', 'release/adresslistor/contact.txt': b'new',
+                           'release/core/new.py': b'new'})
+        (self.base / 'local-only.txt').write_text('user file')
+        info = self.check()
+        self.assertEqual(info.changed_files, ['core/new.py'])
+        self.assertTrue((self.base / 'local-only.txt').exists())
+
+    def test_notes_only_never_triggers_update(self):
+        self.payload['body'] = 'build: 100\nEdited notes'
+        info = self.check(installed_commit=self.A, installed_fingerprint='old-metadata')
+        self.assertFalse(info.available)
+
+    def test_changed_asset_content_with_unchanged_metadata_is_detected(self):
+        self.payload['assets'] = [{'name': 'app.zip', 'browser_download_url': 'https://example.invalid/app.zip'}]
+        self.files['release/main.pyw'] = b'new asset content'
+        info = self.check(installed_commit=self.A)
+        self.assertTrue(info.available)
+        self.assertEqual(info.download_url, 'https://example.invalid/app.zip')
+        self.assertEqual(len(info.archive_sha256), 64)
+
+    def test_install_verifies_checked_archive_and_resulting_files(self):
+        self.files['release/main.pyw'] = b'new code'
+        info = self.check()
+        result = apply_github_update(info, self.base, fetcher=self.fetch)
+        self.assertEqual(result['errors'], [])
+        self.assertEqual(result['commit_sha'], self.A)
+        self.assertEqual((self.base / 'main.pyw').read_bytes(), b'new code')
+        self.assertFalse(self.check(installed_commit=self.A).available)
+
+    def test_archive_replacement_after_check_cannot_install_other_content(self):
+        info = self.check()
+        self.files['release/main.pyw'] = b'changed after approval'
+        with self.assertRaisesRegex(ValueError, 'ändrats sedan kontrollen'):
+            apply_github_update(info, self.base, fetcher=self.fetch)
+        self.assertEqual((self.base / 'main.pyw').read_bytes(), b'original')
+
+    def test_network_error_in_verification_is_not_up_to_date(self):
+        def fetch(url, timeout):
+            if '/git/ref/' in url:
+                return 403, b'{}'
+            return self.fetch(url, timeout)
+        with self.assertLogs("core.github_update", level="WARNING"):
+            info = check_for_update(current_version='1.0.0', fetcher=fetch, base_dir=self.base)
+        self.assertFalse(info.available)
+        self.assertTrue(info.error)
+        self.assertFalse(info.files_compared)
+
+    def test_annotated_release_tag_is_dereferenced(self):
+        from core.github_update import resolve_release_commit
+        def fetch(url, timeout):
+            if '/git/ref/' in url:
+                return 200, json.dumps({'object': {'type': 'tag', 'sha': self.B}}).encode()
+            self.assertTrue(url.endswith('/git/tags/' + self.B))
+            return 200, json.dumps({'object': {'type': 'commit', 'sha': self.A}}).encode()
+        self.assertEqual(resolve_release_commit('v1.0.0', 'owner/repo', fetch, 15), self.A)
+
+    def test_symlink_cannot_redirect_installer_outside_application(self):
+        outside = self.base / 'outside.py'
+        outside.write_bytes(b'private')
+        core = self.base / 'core'
+        core.mkdir()
+        try:
+            (core / 'code.py').symlink_to(outside)
+        except OSError:
+            self.skipTest('Symlinks unavailable')
+        self.files['release/core/code.py'] = b'new code'
+        with self.assertLogs("core.github_update", level="WARNING"):
+            info = self.check()
+        self.assertTrue(info.error)
+        self.assertFalse(info.available)
+        self.assertEqual(outside.read_bytes(), b'private')
+
+
+    def test_failed_file_copy_is_detected_by_post_install_hashes(self):
+        from unittest import mock
+        self.files['release/main.pyw'] = b'new code'
+        info = self.check()
+        with mock.patch('core.app_update.shutil.copy2'):
+            result = apply_github_update(info, self.base, fetcher=self.fetch)
+        self.assertTrue(result['errors'])
+        self.assertEqual((self.base / 'main.pyw').read_bytes(), b'original')
+
+    def test_missing_archive_is_verification_error_even_at_same_build(self):
+        self.payload['zipball_url'] = ''
+        info = self.check()
+        self.assertTrue(info.error)
+        self.assertFalse(info.available)
+
+    def test_archive_symlink_is_refused(self):
+        payload = io.BytesIO()
+        with zipfile.ZipFile(payload, 'w') as archive:
+            entry = zipfile.ZipInfo('release/link')
+            entry.external_attr = (0o120777 << 16)
+            archive.writestr(entry, '../outside')
+        path = self.base / 'unsafe.zip'
+        path.write_bytes(payload.getvalue())
+        with self.assertRaisesRegex(ValueError, 'Symboliska länkar'):
+            extract_update_zip(path, self.base / 'extract')

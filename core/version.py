@@ -27,7 +27,7 @@ __version__ = "1.0.0"
 # versionsnummer (t.ex. v1.0.0). Uppdateraren jämför den mot
 # "build:"-markeringen i GitHub-releasens text, så att uppdaterade filer
 # upptäcks trots att versionsnumret är oförändrat.
-BUILD_ID = "2026102317"
+BUILD_ID = "2026102318"
 
 # GitHub-repo som autouppdateraren hämtar releaser från ("ägare/repo").
 GITHUB_REPO = "Tokke2/MailOffer"

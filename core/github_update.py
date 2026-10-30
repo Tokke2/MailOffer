@@ -10,6 +10,9 @@ Flöde:
    "build:"-markering) och ett release-fingeravtryck av releasens
    metadata, så att uppdaterade filer i t.ex. v1.0.0 ändå erbjuds som
    uppdatering (ägarbeslut 2026-10-21).
+   I appen verifieras dessutom release-taggens verkliga commit (även
+   annoterade taggar), och SHA-256 för nedladdade appfiler jämförs med
+   installationen. Detta fungerar även utan tidigare sparat fingeravtryck.
 2. ``apply_github_update()`` laddar ner release-zip:en (bifogad
    ``.zip``-asset om den finns, annars ``zipball_url``), packar upp
    den säkert (zip-slip-skydd) och delegerar kopieringen till
@@ -39,6 +42,7 @@ import shutil
 import tempfile
 import urllib.error
 import urllib.request
+from urllib.parse import quote
 import zipfile
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -180,6 +184,8 @@ def release_fingerprint(payload: Dict[str, Any]) -> str:
         "tarball_url": str(payload.get("tarball_url") or ""),
         "assets": assets,
     }
+    if payload.get("resolved_commit_sha"):
+        data["resolved_commit_sha"] = payload["resolved_commit_sha"]
     encoded = json.dumps(
         data, ensure_ascii=False, sort_keys=True, separators=(",", ":")
     ).encode("utf-8")
@@ -241,6 +247,10 @@ class UpdateInfo:
     build_id: str = ""
     fingerprint: str = ""
     same_version_files_changed: bool = False
+    commit_sha: str = ""
+    archive_sha256: str = ""
+    changed_files: list[str] = field(default_factory=list)
+    files_compared: bool = False
     error: str = ""
     no_releases: bool = False
     raw: Dict[str, Any] = field(default_factory=dict)
@@ -285,6 +295,65 @@ def _pick_download_url(payload: Dict[str, Any]) -> str:
     return str(payload.get("zipball_url") or "")
 
 
+def resolve_release_commit(tag: str, repo: str, fetch: Fetcher, timeout: float) -> str:
+    """Resolve the release tag itself, never target_commitish (which may be main)."""
+    url = f"{API_BASE}/repos/{repo}/git/ref/tags/{quote(tag, safe='')}"
+    for _ in range(8):
+        status, body = fetch(url, timeout)
+        if status != 200:
+            raise RuntimeError(f"Kunde inte läsa release-taggens commit (HTTP {status}).")
+        payload = json.loads(body.decode("utf-8"))
+        obj = payload.get("object", {})
+        sha = str(obj.get("sha", ""))
+        if not re.fullmatch(r"[0-9a-fA-F]{40}", sha):
+            raise ValueError("Ogiltig commit i release-taggen.")
+        if obj.get("type") == "commit":
+            return sha.lower()
+        if obj.get("type") != "tag":
+            raise ValueError("Release-taggen pekar inte på en commit.")
+        url = f"{API_BASE}/repos/{repo}/git/tags/{sha}"
+    raise ValueError("För många nästlade release-taggar.")
+
+
+def _file_sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as stream:
+        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def compare_release_files(source: Path, installed: Path) -> list[str]:
+    """Hash only files the updater may replace; never treat user data as a diff.
+
+    Local-only files are retained, just as during installation. Unsafe local
+    symlinks are refused instead of comparing/writing outside the app folder.
+    """
+    from core.app_update import SKIP_DIR_NAMES
+    from core.update_protect import is_protected
+    source, installed = Path(source).resolve(), Path(installed).resolve()
+    changed = []
+    for path in sorted(source.rglob("*")):
+        rel = path.relative_to(source)
+        if any(part in SKIP_DIR_NAMES for part in rel.parts):
+            continue
+        target = installed / rel
+        if is_protected(path, source):
+            continue
+        if path.is_symlink():
+            raise ValueError(f"Symbolisk länk i release: {rel}")
+        if not path.is_file():
+            continue
+        if target.is_symlink() or any(p.is_symlink() or getattr(p, "is_junction", lambda: False)()
+                                      for p in target.parents if p != installed and installed in p.parents):
+            raise ValueError(f"Osäker lokal länk: {rel}")
+        if is_protected(target, installed):
+            continue
+        if not target.is_file() or _file_sha256(path) != _file_sha256(target):
+            changed.append(rel.as_posix())
+    return changed
+
+
 def check_for_update(
     current_version: str = CURRENT_VERSION,
     repo: str = GITHUB_REPO,
@@ -292,6 +361,8 @@ def check_for_update(
     fetcher: Optional[Fetcher] = None,
     current_build_id: str = CURRENT_BUILD_ID,
     installed_fingerprint: str = "",
+    base_dir: Optional[Path] = None,
+    installed_commit: str = "",
 ) -> UpdateInfo:
     """Fråga GitHub om senaste release och jämför med installerad version.
 
@@ -362,11 +433,41 @@ def check_for_update(
         newer or (same_version and (build_changed or fingerprint_changed))
     ):
         info.error = "Releasen saknar nedladdningsbar zip (asset/zipball)."
+    if base_dir is not None and (same_version or newer) and not info.download_url:
+        info.error = "Releasen saknar nedladdningsbar zip (asset/zipball)."
+    if base_dir is not None and not info.latest_version:
+        info.error = "Releasen saknar en giltig versionstagg."
+    # In-app checks verify real release contents, including fresh/manual
+    # installs with no saved fingerprint. Metadata-only callers remain supported.
+    if base_dir is not None and info.download_url and (same_version or newer):
+        try:
+            info.commit_sha = resolve_release_commit(info.tag, repo, fetch, float(timeout))
+            payload["resolved_commit_sha"] = info.commit_sha
+            info.fingerprint = release_fingerprint(payload)
+            if not any(isinstance(a, dict) and str(a.get("name", "")).lower().endswith(".zip")
+                       and a.get("browser_download_url") for a in payload.get("assets", []) or []):
+                info.download_url = f"{API_BASE}/repos/{repo}/zipball/{info.commit_sha}"
+            with tempfile.TemporaryDirectory(prefix="mailoffer-check-") as temp:
+                root = Path(temp)
+                archive = download_update_zip(info.download_url, root, timeout=timeout, fetcher=fetch)
+                info.archive_sha256 = _file_sha256(archive)
+                content = extract_update_zip(archive, root / "extracted")
+                info.changed_files = compare_release_files(content, Path(base_dir))
+            info.files_compared = True
+            commit_changed = bool(installed_commit and str(installed_commit).lower() != info.commit_sha)
+            info.same_version_files_changed = bool(same_version and (build_changed or commit_changed or info.changed_files))
+            info.available = bool(newer or info.same_version_files_changed)
+        except Exception as exc:
+            # Never claim "up to date" or install unverified/ambiguous contents.
+            info.error = f"Kunde inte verifiera releasens commit/filer: {exc}"
+            info.available = False
+            log.warning("Verifiering av release misslyckades", exc_info=True)
     log.info(
         "Uppdateringssökning: installerad=%s senaste=%s tillgänglig=%s "
-        "bygg=%s uppdaterade_filer=%s",
+        "bygg=%s uppdaterade_filer=%s commit=%s jämförda=%s avvikande=%s",
         current_version, info.latest_version or "?", info.available,
         info.build_id or "-", info.same_version_files_changed,
+        info.commit_sha or "-", info.files_compared, len(info.changed_files),
     )
     return info
 
@@ -403,7 +504,12 @@ def _safe_extract(zip_path: Path, dest_dir: Path) -> None:
     """Packa upp zip med zip-slip-skydd (avbryter vid ../-poster)."""
     root = Path(dest_dir).resolve()
     with zipfile.ZipFile(str(zip_path)) as archive:
-        for member in archive.infolist():
+        members = archive.infolist()
+        if len(members) > 20000 or sum(m.file_size for m in members) > 400 * 1024 * 1024:
+            raise ValueError("Zip-filen packas upp till för mycket data.")
+        for member in members:
+            if (member.external_attr >> 16) & 0o170000 == 0o120000:
+                raise ValueError("Symboliska länkar tillåts inte i release-zip.")
             target = (root / member.filename).resolve()
             if target != root and root not in target.parents:
                 raise ValueError(
@@ -466,9 +572,18 @@ def apply_github_update(
         zip_path = download_update_zip(
             info.download_url, tmp_root, timeout=timeout, fetcher=fetcher
         )
+        if info.archive_sha256 and _file_sha256(zip_path) != info.archive_sha256:
+            raise ValueError("Releasens arkiv har ändrats sedan kontrollen. Sök efter uppdateringar igen.")
         app_root = extract_update_zip(zip_path, tmp_root / "extracted")
+        # Refuse unsafe local links before copying any file.
+        compare_release_files(app_root, Path(base_dir))
         result = apply_update_from_dir(app_root, Path(base_dir))
         result = dict(result)
+        if not result.get("errors"):
+            remaining = compare_release_files(app_root, Path(base_dir))
+            if remaining:
+                result.setdefault("errors", []).append("Filkontrollen efter installation misslyckades: " + ", ".join(remaining[:8]))
+        result["commit_sha"] = info.commit_sha
         result["version"] = info.latest_version
         result["build_id"] = str(
             getattr(info, "build_id", "")
@@ -492,6 +607,8 @@ __all__ = [
     "apply_github_update",
     "check_for_update",
     "compare_versions",
+    "compare_release_files",
+    "resolve_release_commit",
     "download_update_zip",
     "extract_update_zip",
     "find_app_root",

@@ -543,3 +543,31 @@ med `python tools/build_thunderbird.py`. Bygg startfilen med
 Källkod/resurser finns under `launcher/`. Startfilens GUI-subsystem,
 ikonresurser och autostartval kontrolleras i portabla tester; faktisk start
 och aktivitetsfält på Windows behöver verifieras på en Windows-dator.
+
+### Uppdatering vid samma versionsnummer: verklig commit- och filkontroll
+
+Appens kontroll använder senaste **publicerade GitHub-release**, aldrig
+`main`. Release-taggen slås upp till sin verkliga commit (även annoterade
+taggar); `target_commitish` räcker inte eftersom det kan innehålla ett
+gammalt branchnamn. Källarkivet låses till den upplösta commit-SHA:n.
+
+Vid kontrollen laddas release-arkivet ned i en tillfällig katalog. SHA-256
+för appfilerna jämförs med installerade filer, med samma undantag för
+användardata som installationen. Ändrade/saknade appfiler eller en ändrad
+sparad release-commit ger uppdatering även om både version och byggstämpel
+är oförändrade. Detta fungerar även vid en manuell installation utan
+sparat release-fingeravtryck. Enbart ändrade releaseanteckningar ger ingen
+ominstallation när commit och filinnehåll matchar.
+
+Vid installation verifieras att arkivet är det som kontrollerades och att
+kopierade appfiler matchar efteråt. Ändrat arkiv kräver en ny kontroll;
+verifieringsfel rapporteras som fel, inte som ”senaste version installerad”.
+Baseline för commit/fingeravtryck sparas först efter verifierat matchande
+innehåll eller lyckad installation. Mallar, JSON/inställningar, kontakter,
+loggar och andra skyddade användarfiler jämförs/ersätts inte. Lokala filer
+som saknas i releasen raderas inte.
+
+Kontrollen körs i bakgrunden men hämtar nu ett arkiv vid varje förfallen
+12-timmarskontroll, vilket använder mer nättrafik än enbart metadata.
+Tyst sökning, godkännande före installation och automatisk säker omstart
+är oförändrade. Versionsnumret ligger kvar på **1.0.0**.

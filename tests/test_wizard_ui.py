@@ -243,6 +243,29 @@ class TestUpdateDeferralUi(unittest.TestCase):
             win.settings.get("installed_release_fingerprint"), "fp-aktuell"
         )
 
+    def test_verified_matching_release_remembers_actual_commit(self):
+        from core.github_update import UpdateInfo
+        from core.version import __version__
+        win = self._make_window()
+        info = UpdateInfo(latest_version=__version__, fingerprint="verified", files_compared=True, commit_sha="a" * 40)
+        win._update_check_manual = False
+        win._on_update_checked(info)
+        self.assertEqual(win.settings.get("installed_release_commit"), "a" * 40)
+        info.error = "verification failed"
+        info.commit_sha = "b" * 40
+        win._on_update_checked(info)
+        self.assertEqual(win.settings.get("installed_release_commit"), "a" * 40)
+
+    def test_update_worker_passes_installation_and_commit_to_real_file_check(self):
+        from ui.main_window import UpdateWorker
+        from core.github_update import UpdateInfo
+        win = self._make_window()
+        worker = UpdateWorker("check", base_dir=win._base_dir(), installed_commit="a" * 40)
+        with mock.patch("core.github_update.check_for_update", return_value=UpdateInfo()) as check:
+            worker.run()
+            self.assertEqual(check.call_args.kwargs["base_dir"], win._base_dir())
+            self.assertEqual(check.call_args.kwargs["installed_commit"], "a" * 40)
+
     def test_same_version_files_changed_flow(self) -> None:
         from core.github_update import UpdateInfo
         from core.version import __version__

@@ -2640,3 +2640,20 @@ Användaren valde från redan-valda: tema-knapp (§34 #6) och tydligare
   filassociationer, användarens taskbar-nålar eller Python-installationen.
 - EXE är osignerad; Windows-start/SmartScreen/aktivitetsfält ej fysiskt
   verifierade. Appversion fortsatt 1.0.0, bygg 2026102317.
+
+## V7.24 (APP 1.0.0)
+- In-app-kontroll verifierar release-taggens verkliga commit via GitHub refs,
+  inklusive annoterade taggar. Aldrig uppslag av main/target_commitish som
+  källa; källarkiv hämtas via oföränderlig commit-SHA.
+- SHA-256-jämförelse av releasens uppdateringsbara filer mot installationen.
+  Samma version/bygg kan ge uppdatering vid fil- eller commitändring, även
+  utan tidigare baslinje. Anteckningsändring ger inte falsk uppdatering.
+- Arkivets SHA-256 kontrolleras igen före kopiering, installerade filer
+  verifieras efteråt. Lokala symlänkar i uppdateringsvägen avvisas.
+- Uppackningsgränser och avvisning av symlänkar i arkiv. Befintligt skydd
+  av användardata gäller vid både jämförelse och installation.
+- installed_release_commit sparas ihop med release-fingeravtrycket efter
+  verifierad baslinje/lyckad installation. Installationsgodkännande kvar.
+- Anonym livekontroll mot publik release: identiskt arkiv ger ingen
+  uppdatering; ändrad main.pyw ger uppdatering vid samma version/bygg.
+- Version fortsatt 1.0.0, bygg 2026102318.

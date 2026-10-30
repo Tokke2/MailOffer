@@ -208,6 +208,7 @@ def get_defaults() -> Dict[str, Any]:
         "auto_update_check": True,
         "last_update_check": "",
         "installed_release_fingerprint": "",
+        "installed_release_commit": "",
 
         # Donation (v5.4) – tom = projektets standardlänkar i
         # core/donate.py används. Redigeras under
@@ -710,6 +711,7 @@ class SettingsManager:
             # v5.4 – GitHub-uppdatering + donation
             "last_update_check",
             "installed_release_fingerprint",
+            "installed_release_commit",
             "donation_url",
             "donation_paypal_url",
             "donation_swish",

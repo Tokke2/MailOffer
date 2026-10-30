@@ -968,12 +968,14 @@ class UpdateWorker(QThread):
         info: Any = None,
         base_dir: Optional[Path] = None,
         installed_fingerprint: str = "",
+        installed_commit: str = "",
     ) -> None:
         super().__init__()
         self._mode = str(mode or "check")
         self._info = info
         self._base_dir = base_dir
         self._installed_fingerprint = str(installed_fingerprint or "")
+        self._installed_commit = str(installed_commit or "")
 
     def run(self) -> None:
         try:
@@ -987,7 +989,9 @@ class UpdateWorker(QThread):
             else:
                 self.checked.emit(
                     check_for_update(
-                        installed_fingerprint=self._installed_fingerprint
+                        installed_fingerprint=self._installed_fingerprint,
+                        installed_commit=self._installed_commit,
+                        base_dir=Path(self._base_dir or _PROJECT_ROOT),
                     )
                 )
         except Exception as exc:
@@ -1785,6 +1789,8 @@ class MainWindow(QMainWindow):
             self._status(tr("update.checking"), "info")
         worker = UpdateWorker(
             "check",
+            base_dir=self._base_dir(),
+            installed_commit=str(self.settings.get("installed_release_commit", "") or ""),
             installed_fingerprint=str(
                 self.settings.get("installed_release_fingerprint", "") or ""
             ),
@@ -1824,16 +1830,19 @@ class MainWindow(QMainWindow):
         except Exception:
             pass
 
-    def _save_release_fingerprint(self, fingerprint: object) -> None:
+    def _save_release_fingerprint(self, fingerprint: object, commit_sha: str = "") -> None:
         """Kom ihåg vilken release (fingeravtryck) som är installerad."""
         value = str(fingerprint or "").strip()
         if not value:
             return
         try:
-            if str(
-                self.settings.get("installed_release_fingerprint", "") or ""
-            ) != value:
+            changed = self.settings.get("installed_release_fingerprint", "") != value
+            if changed:
                 self.settings.set("installed_release_fingerprint", value)
+            if commit_sha and self.settings.get("installed_release_commit", "") != commit_sha:
+                self.settings.set("installed_release_commit", commit_sha)
+                changed = True
+            if changed:
                 self.settings.save()
         except Exception:
             log.debug(
@@ -1862,7 +1871,8 @@ class MainWindow(QMainWindow):
             from core.github_update import compare_versions
 
             if compare_versions(latest, APP_VERSION) == 0:
-                self._save_release_fingerprint(fingerprint)
+                self._save_release_fingerprint(
+                    fingerprint, getattr(info, "commit_sha", "") if getattr(info, "files_compared", False) else "")
         except Exception:
             log.debug("Baselinja release-fingeravtryck hoppades över",
                       exc_info=True)
@@ -1916,6 +1926,9 @@ class MainWindow(QMainWindow):
         """Fråga om en hittad uppdatering ska installeras nu."""
         self._pending_update_info = None
         notes = (info.notes or "").strip() or info.name or info.tag
+        if getattr(info, "files_compared", False):
+            notes = (f"Release-commit: {info.commit_sha[:12]}\n"
+                     f"Avvikande/saknade appfiler: {len(info.changed_files)}\n\n" + notes)
         if len(notes) > 700:
             notes = notes[:700] + "…"
         box = QMessageBox(self)
@@ -2038,7 +2051,7 @@ class MainWindow(QMainWindow):
             return
         # Den nyss installerade releasen är nu baslinjen för framtida
         # filändringar i samma versionsnummer.
-        self._save_release_fingerprint(result.get("fingerprint"))
+        self._save_release_fingerprint(result.get("fingerprint"), str(result.get("commit_sha") or ""))
         self._status(tr("update.installed_title"), "success")
         self._finish_update_restart()
 
