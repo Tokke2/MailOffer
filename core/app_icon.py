@@ -3,7 +3,7 @@
 """
 core/app_icon.py – Central app-ikon för EmailApp (används ÖVERALLT)
 
-Version: 1.0 – EN IKON, ALLA YTOR
+Version: 1.1 – MailOffer-kuvert med turkos offertbricka
 
 Ikonen används på:
   - Huvudfönstret (taskbar + titelrad) – via QApplication.setWindowIcon
@@ -13,7 +13,8 @@ Ikonen används på:
     statuslägen = app-ikonen + liten status-badge)
   - Startup-feldialoger (main.pyw _safe_show_critical)
 
-Fil: icons/app_icon.png (512x512 RGBA, rundade hörn) + .ico (Windows)
+Fil: icons/app_icon.png (1024x1024 RGBA) + .ico (16–256px, Windows).
+Samma ICO är inbyggd i MailOffer.exe för Explorer och autostart.
 
 Fallback-säkerhet:
   - Saknas PNG-filen ritas en snygg kuvertikon programmatiskt

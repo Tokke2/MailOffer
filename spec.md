@@ -2624,3 +2624,19 @@ Användaren valde från redan-valda: tema-knapp (§34 #6) och tydligare
   mottagarlista. Ingen kvarhängande BCC från föregående mall. Testmail undantas.
 - Adressindikering under mallval och full adresslista i sändbekräftelsen.
 - Version fortsatt 1.0.0, bygg 2026102316.
+
+
+## V7.23 (APP 1.0.0)
+- Ny gemensam ikon: valt kuvertmotiv med turkos offertbricka, transparent
+  PNG, flerformats-ICO och matchande Thunderbird-ikon/XPI.
+- MailOffer.exe: liten inbyggd Windows x64 GUI-startfil med ikon och
+  produktmetadata; startar befintlig VBS via systemets wscript, ingen konsol.
+  Endast --background/--minimized tillåts; okända argument avvisas.
+- Windows-autostart prioriterar EXE. VBS-reserv finns kvar men direkt
+  Python/.pyw-autostart tas bort. Befintlig synk reparerar aktiverad äldre
+  autostart; avstängd autostart förblir avstängd.
+- Appomstart använder EXE när den finns. Omstartsfel skrivs till diagnostik.
+- Byggverktyg och källkod finns i repot; ingen ändring av globala
+  filassociationer, användarens taskbar-nålar eller Python-installationen.
+- EXE är osignerad; Windows-start/SmartScreen/aktivitetsfält ej fysiskt
+  verifierade. Appversion fortsatt 1.0.0, bygg 2026102317.

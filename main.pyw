@@ -803,9 +803,11 @@ def main() -> None:
                 if IS_WINDOWS:
                     relaunch_kwargs["creationflags"] = CREATE_NO_WINDOW
                 background_args = ["--background"] if os.environ.pop("EMAILAPP_RELAUNCH_BACKGROUND", "0") == "1" else []
-                subprocess.Popen([exe, str(script)] + background_args, **relaunch_kwargs)
+                launcher = BASE_DIR / "MailOffer.exe"
+                command = ([str(launcher)] if IS_WINDOWS and launcher.is_file() else [exe, str(script)])
+                subprocess.Popen(command + background_args, **relaunch_kwargs)
             except Exception:
-                pass
+                _diagnostics.exception("Kunde inte starta om appen")
 
         _diagnostics.info("STAGE: shutdown complete exit_code=%s", exit_code)
         try:

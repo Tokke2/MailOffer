@@ -68,11 +68,12 @@ pip install -r requirements.txt
 python main.pyw
 ```
 
-**Enklast på Windows:** dubbelklicka **`Starta EmailApp.vbs`** – den
-startar appen helt utan konsolfönster. Saknas Python kör den först
-`Installera_Python.bat` (installerar senaste Python 3.12) dolt i
-bakgrunden och startar sedan appen. (`main.pyw` går också att
-dubbelklicka – appen startar om sig själv med `pythonw.exe`.)
+**Enklast på Windows 10/11 (x64):** dubbelklicka **`MailOffer.exe`**.
+Den har appens egen ikon och startar utan konsolfönster. Behåll hela
+appmappen tillsammans – EXE-filen är en liten startfil, inte en fristående
+paketering av Python-appen. Den befintliga VBS-startkedjan hittar Python
+eller kör `Installera_Python.bat` dolt om Python saknas.
+`Starta EmailApp.vbs` finns kvar som reservstart.
 En exempelmall finns i `Mallar/` – skapa egna med
 **🧙 Ny mall**-knappen.
 
@@ -450,7 +451,7 @@ bakgrunden utan konsolfönster. Versionen förblir 1.0.0 även vid nya byggen.
 
 ### Ingen konsol vid normal Windows-start
 
-Starta med `Starta EmailApp.vbs` (wscript/pythonw) för appfönster utan
+Starta med `MailOffer.exe` (eller reservstarten `Starta EmailApp.vbs`) för appfönster utan
 terminal. Om `.pyw` är associerad med konsol-Python i Windows kan den
 associationen skapa en konsol innan appkoden hinner köra; VBS-starten
 undviker det. En redan öppnad terminal som användaren själv startat stängs
@@ -514,3 +515,31 @@ av samma mottagarkontroll som övriga adresser. Testmail får inga mallbundna
 kopior. Kopplingen sparas per mallfilnamn och e-postadress, inte som en
 följande kontaktidentitet; ändrad kontaktadress kräver nytt val. Byter mallen
 namn behöver kopplingen också göras för det nya namnet.
+
+
+### Ny MailOffer-ikon och Windows-autostart
+
+Den valda kuvertikonen med turkos offertbricka används i app/dialoger,
+systemfältet (med statusmärken), Thunderbird-tillägget och `MailOffer.exe`.
+PNG har transparenta hörn, ICO innehåller 16–256px-varianter. EXE-startfilen
+har inbyggd ikon och produktinformation med Rickard Längkvist som skapare.
+
+Windows-autostart använder i första hand `MailOffer.exe --background`.
+Aktiverad äldre autostart migreras av den befintliga synkroniseringen vid
+appstart. Om EXE saknas används VBS via wscript som reserv; aldrig en direkt
+Python/.pyw-post. Om båda startfilerna saknas rapporteras fel. Avstängd
+autostart aktiveras inte av uppdateringen. Python/pythonw kan fortfarande
+användas internt – appen ändrar inte Windows globala filassociationer.
+
+Skapa genvägar till **MailOffer.exe**, inte till python.exe eller main.pyw.
+Gamla aktivitetsfältsnålar till Python behöver lossas och ersättas med den
+nya startfilen; vi ändrar inte användarens nålar automatiskt. Windows kan
+behålla en gammal ikon i sin ikoncache. Startfilen är inte kodsignerad och
+Windows/SmartScreen kan därför visa en säkerhetsvarning.
+
+Bygg om ikoner med `python tools/make_icon.py` (Pillow krävs) och tillägget
+med `python tools/build_thunderbird.py`. Bygg startfilen med
+`pip install ziglang==0.17.0` och `python tools/build_launcher.py`.
+Källkod/resurser finns under `launcher/`. Startfilens GUI-subsystem,
+ikonresurser och autostartval kontrolleras i portabla tester; faktisk start
+och aktivitetsfält på Windows behöver verifieras på en Windows-dator.

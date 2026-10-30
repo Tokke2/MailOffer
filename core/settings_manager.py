@@ -1315,14 +1315,16 @@ class SettingsManager:
         if getattr(sys, "frozen", False):
             return f'"{sys.executable}" {flag}'
         if IS_WINDOWS:
+            launcher = self.base_dir / "MailOffer.exe"
+            if launcher.is_file():
+                return f'"{launcher}" {flag}'
             vbs = self._vbs_launcher_path()
             try:
                 if vbs.is_file():
                     return f'wscript.exe //B //nologo "{vbs}" {flag}'
             except Exception:
                 pass
-            runner = self._find_pythonw() or sys.executable
-            return f'"{runner}" "{script}" {flag}'
+            raise FileNotFoundError("MailOffer.exe och VBS-startfilen saknas; återställ hela appmappen.")
         return f'"{sys.executable}" "{script}" {flag}'
 
     def _get_autostart_args(self) -> List[str]:
@@ -1331,14 +1333,16 @@ class SettingsManager:
         if getattr(sys, "frozen", False):
             return [sys.executable, flag]
         if IS_WINDOWS:
+            launcher = self.base_dir / "MailOffer.exe"
+            if launcher.is_file():
+                return [str(launcher), flag]
             vbs = self._vbs_launcher_path()
             try:
                 if vbs.is_file():
                     return ["wscript.exe", "//B", "//nologo", str(vbs), flag]
             except Exception:
                 pass
-            runner = self._find_pythonw() or sys.executable
-            return [runner, str(script), flag]
+            raise FileNotFoundError("MailOffer.exe och VBS-startfilen saknas; återställ hela appmappen.")
         return [sys.executable, str(script), flag]
 
     def _run_key_path(self) -> str:
