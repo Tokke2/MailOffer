@@ -77,6 +77,7 @@ from PyQt6.QtGui import (
 from PyQt6.QtWidgets import QApplication, QMenu, QSystemTrayIcon
 
 # local
+from core.i18n import tr
 from core.event_bus import EventBus
 from core.settings_manager import SettingsManager
 
@@ -356,6 +357,9 @@ class SystemTray:
         act_settings = self._menu.addAction("⚙️ Inställningar")
         act_settings.triggered.connect(self._do_open_settings)
 
+        act_updates = self._menu.addAction(tr("menu.check_updates"))
+        act_updates.triggered.connect(self._do_check_updates)
+
         act_smtp = self._menu.addAction("🔌 Testa SMTP")
         act_smtp.triggered.connect(self._do_test_smtp)
 
@@ -498,6 +502,14 @@ class SystemTray:
             self._bus.publish("ui.window_hidden", {})
         except Exception:
             log.error("_do_hide misslyckades", exc_info=True)
+
+    def _do_check_updates(self) -> None:
+        """Manual release check, with visible results even from a hidden window."""
+        try:
+            self._do_show()
+            self._main_window._check_updates(manual=True)
+        except Exception:
+            log.exception("Kunde inte söka efter uppdateringar från systemfältet")
 
     def _do_open_settings(self) -> None:
         """Visa inställningsfliken."""

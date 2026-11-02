@@ -1781,6 +1781,9 @@ class MainWindow(QMainWindow):
     def _check_updates(self, manual: bool = True) -> None:
         """Starta uppdateringssökning i bakgrunden (knapp/meny = manual)."""
         if self._update_worker is not None and self._update_worker.isRunning():
+            if manual and getattr(self._update_worker, "_mode", "") == "check":
+                self._update_check_manual = True
+                self._status(tr("update.checking"), "info")
             return
         self._update_check_manual = bool(manual)
         self._set_last_update_check_now()

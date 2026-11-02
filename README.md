@@ -607,3 +607,12 @@ stannat samlas tidigast vid nästa start/manuell insamling.
 Om appens gränssnitt inte går att öppna kan insamlingen köras utan Qt:
 `python -m core.error_log --base-dir "D:\Program\MailOffer"`.
 Vid skrivskyddad appmapp kan `--output-dir` ange en skrivbar mapp.
+
+### Uppdateringskontroll från systemfältet
+
+Högerklicka på MailOffer-ikonen i systemfältet och välj **Sök efter
+uppdateringar**. Appfönstret visas och samma manuella release-/commit-/
+filkontroll som under Hjälp startas, med resultat och installationsfråga.
+Om en automatisk kontroll redan körs används dess resultat som en manuell
+kontroll i stället för att starta en till. Tyst automatisk kontroll påverkas
+inte när du inte uttryckligen begär ett resultat.

@@ -2672,3 +2672,11 @@ Användaren valde från redan-valda: tema-knapp (§34 #6) och tydligare
 - Knapp i Loggar och valfri `python -m core.error_log` utan Qt. Begränsningar
   och behov att granska personuppgifter före delning dokumenterade.
 - Version fortsatt 1.0.0, bygg 2026102319.
+
+## V7.26 (APP 1.0.0)
+- Sök efter uppdateringar i systemfältets högerklicksmeny, med befintlig
+  SV/EN-menytext. Visar/fokuserar appen och använder samma manuella kontroll
+  som Hjälp, inklusive installationsgodkännande.
+- En redan pågående automatisk kontroll kan övergå till manuell visning
+  utan dubbla nätverksjobb. Pågående installation startas inte om.
+- Version fortsatt 1.0.0, bygg 2026102320.
