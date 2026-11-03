@@ -256,6 +256,29 @@ class TestUpdateDeferralUi(unittest.TestCase):
         win._on_update_checked(info)
         self.assertEqual(win.settings.get("installed_release_commit"), "a" * 40)
 
+    def test_import_images_waits_while_hidden_or_sending(self):
+        win = self._make_window()
+        with mock.patch("core.mail_images.pending_requests") as pending:
+            win._poll_mail_images()
+            pending.assert_not_called()
+            with mock.patch.object(win, "isVisible", return_value=True):
+                win._send_busy = True
+                win._poll_mail_images()
+                pending.assert_not_called()
+                win._send_busy = False
+
+    def test_import_images_confirmation_adds_only_after_approval(self):
+        import base64
+        from core.mail_images import queue_images, pending_requests
+        from PyQt6.QtWidgets import QDialog
+        win = self._make_window()
+        queue_images(win._base_dir(), [{"name": "test.png", "data": base64.b64encode(b"\x89PNG\r\n\x1a\nexample").decode()}])
+        with mock.patch.object(win, "isVisible", return_value=True), mock.patch.object(win, "isMinimized", return_value=False), mock.patch("ui.main_window.QApplication.activeModalWidget", return_value=None), mock.patch.object(QDialog, "exec", return_value=QDialog.DialogCode.Accepted), mock.patch.object(win, "_add_attachment_paths") as add:
+            win._poll_mail_images()
+            add.assert_called_once()
+            self.assertEqual(len(add.call_args.args[0]), 1)
+        self.assertEqual(pending_requests(win._base_dir()), [])
+
     def test_combined_error_log_button_opens_collected_file(self):
         win = self._make_window()
         path = win._base_dir() / "logs/errors.log"

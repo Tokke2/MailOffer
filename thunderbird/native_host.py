@@ -25,6 +25,8 @@ def _read() -> Dict[str, Any] | None:
     if not raw or len(raw) < 4:
         return None
     length = struct.unpack("<I", raw)[0]
+    if length > 32 * 1024 * 1024:
+        raise ValueError("Meddelandet är för stort (högst 32 MB).")
     payload = sys.stdin.buffer.read(length)
     if not payload:
         return None
@@ -108,7 +110,11 @@ def handle(msg: Dict[str, Any]) -> Dict[str, Any]:
         return {"ok": False, "protocol_version": PROTOCOL_VERSION,
                 "error": "Inkompatibelt Thunderbird-tillägg. Installera senaste MailOffer.xpi från appmappen och registrera kopplingen igen."}
     if action == "ping":
-        return {"ok": True, "protocol_version": PROTOCOL_VERSION, "contacts_path": str(CONTACTS_PATH)}
+        return {"ok": True, "protocol_version": PROTOCOL_VERSION, "contacts_path": str(CONTACTS_PATH), "capabilities": ["import_images"]}
+    if action == "import_images":
+        from core.mail_images import queue_images
+        result = queue_images(APP_ROOT, msg.get("images"), msg.get("subject", ""))
+        return {"ok": True, "protocol_version": PROTOCOL_VERSION, **result}
     if action != "add_contacts":
         return {"ok": False, "error": "okänd åtgärd"}
     incoming = msg.get("contacts") or []
@@ -147,7 +153,7 @@ def main() -> None:
         _write(handle(msg))
     except Exception as exc:
         try:
-            _write({"ok": False, "error": str(exc)})
+            _write({"ok": False, "protocol_version": PROTOCOL_VERSION, "error": str(exc)})
         except Exception:
             pass
 

@@ -2680,3 +2680,17 @@ Användaren valde från redan-valda: tema-knapp (§34 #6) och tydligare
 - En redan pågående automatisk kontroll kan övergå till manuell visning
   utan dubbla nätverksjobb. Pågående installation startas inte om.
 - Version fortsatt 1.0.0, bygg 2026102320.
+
+## V7.27 (APP 1.0.0)
+- Thunderbird-meny för import av bildbilagor från ett markerat mejl via
+  listAttachments/getAttachmentFile. Befintlig native bridge med utannonserad
+  import_images-kapabilitet; äldre host stoppas före bildöverföring.
+- Bounded base64-import, raster-signaturkontroll, säkra unika filnamn och
+  atomiskt publicerad lokal kö under skyddade .data/mail-images.
+- UI frågar vilka bilder som ska bifogas när appen är synlig och ledig.
+  Normal bilagehantering/sändbekräftelse används; ingen automatisk sändning,
+  mottagar-/ämnesändring eller automatisk appstart. Kö överlever omstart.
+- Högst 10 bilder, 10 MB/bild och 20 MB/import; native-meddelande max 32 MB.
+  SVG utesluts. Hashkontroll vid läsning; ingen automatisk borttagning av kopior.
+- App och XPI måste uppdateras. Protokoll 1 bibehålls med bakåtkompatibel
+  kapabilitet, publik app-/tilläggsversion fortsatt 1.0.0, bygg 2026102321.

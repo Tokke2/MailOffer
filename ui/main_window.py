@@ -1124,6 +1124,9 @@ class MainWindow(QMainWindow):
         self._contacts_poll = QTimer(self)
         self._contacts_poll.timeout.connect(self._poll_external_contacts)
         self._contacts_poll.start(2000)
+        self._mail_images_timer = QTimer(self)
+        self._mail_images_timer.timeout.connect(self._poll_mail_images)
+        self._mail_images_timer.start(2000)
 
         # (v5.5) Muskjulsskydd – idempotent (main.pyw installerar normalt)
         try:
@@ -3148,6 +3151,61 @@ class MainWindow(QMainWindow):
             )
         else:
             self._status("ℹ️ Inga nya filer lades till", "info")
+
+    def _poll_mail_images(self):
+        from core.mail_images import pending_requests, read_request, finish_request
+        if (not self.isVisible() or self.isMinimized() or QApplication.activeModalWidget() is not None
+                or getattr(self, "_mail_images_prompt", False) or getattr(self, "_send_busy", False)
+                or getattr(self, "_update_install_active", False)):
+            return
+        requests = pending_requests(self._base_dir())
+        if not requests:
+            return
+        request = requests[0]
+        self._mail_images_prompt = True
+        try:
+            subject, paths = read_request(request)
+            dialog = QDialog(self)
+            dialog.setWindowTitle("Importera bildbilagor från Thunderbird")
+            layout = QVBoxLayout(dialog)
+            info = QLabel("Välj bilder att lägga till i det aktuella utskicket. Inget skickas automatiskt.\nMejl: " + subject)
+            info.setTextFormat(Qt.TextFormat.PlainText)
+            info.setWordWrap(True)
+            layout.addWidget(info)
+            choices = QListWidget()
+            for path in paths:
+                image = Path(path)
+                item = QListWidgetItem(f"{image.name} ({self._format_bytes(image.stat().st_size)})")
+                item.setFlags(item.flags() | Qt.ItemFlag.ItemIsUserCheckable)
+                item.setCheckState(Qt.CheckState.Checked)
+                item.setData(Qt.ItemDataRole.UserRole, path)
+                choices.addItem(item)
+            layout.addWidget(choices)
+            buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
+            buttons.accepted.connect(dialog.accept)
+            buttons.rejected.connect(dialog.reject)
+            layout.addWidget(buttons)
+            if dialog.exec() == QDialog.DialogCode.Accepted:
+                selected = [choices.item(i).data(Qt.ItemDataRole.UserRole) for i in range(choices.count())
+                            if choices.item(i).checkState() == Qt.CheckState.Checked]
+                # Acknowledge before adding, so a later UI failure cannot duplicate a request.
+                finish_request(request, "imported" if selected else "dismissed")
+                added = self._add_attachment_paths(selected)
+                if selected:
+                    self.select_tab("send")
+                self._status(f"{added} bildbilagor importerade från Thunderbird.", "success")
+            else:
+                finish_request(request, "dismissed")
+        except Exception:
+            log.exception("Kunde inte importera bildbilagor från Thunderbird")
+            try:
+                if request.exists():
+                    finish_request(request, "failed")
+            except OSError:
+                log.exception("Kunde inte markera misslyckad bildimport")
+            self._status("Bildimporten misslyckades – se felloggen.", "error")
+        finally:
+            self._mail_images_prompt = False
 
     def _add_attachment_paths(self, paths: Sequence[str]) -> int:
         existing = {_attachment_key(path) for path in self._attachments}

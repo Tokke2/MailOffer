@@ -616,3 +616,36 @@ filkontroll som under Hjälp startas, med resultat och installationsfråga.
 Om en automatisk kontroll redan körs används dess resultat som en manuell
 kontroll i stället för att starta en till. Tyst automatisk kontroll påverkas
 inte när du inte uttryckligen begär ett resultat.
+
+### Importera bildbilagor direkt från Thunderbird
+
+1. Uppdatera MailOffer och **installera om `thunderbird/MailOffer.xpi`** i
+   Thunderbird (hjälp finns under appens Thunderbird-inställningar).
+2. Markera **ett mejl** i Thunderbirds meddelandelista. Högerklicka och välj
+   **Importera bildbilagor till MailOffer**.
+3. Visa/starta MailOffer. När appen är synlig och ingen sändning, installation
+   eller modal dialog pågår visas ett bildval med filnamn/storlek.
+4. Markera vilka bilder som ska bifogas och välj OK. De läggs till i det
+   aktuella utskickets vanliga bilagor och skickas med när du senare
+   godkänner sändningen. Befintlig text/mottagare ersätts inte.
+
+PNG, JPEG, GIF, WebP, BMP och TIFF stöds; högst 10 bilder, 10 MB per bild
+respektive 20 MB totalt per import. Tillägget använder mejlets lokala
+bildbilagor, inte externa bildlänkar i HTML-text. Inline-/signaturbilder
+kan följa med om Thunderbird listar dem som bilagor – avmarkera dem i valet.
+SVG och andra format tas inte med. Bildsignaturer kontrolleras och säkra
+filnamn skapas; detta är inte en antiviruskontroll eller garanti att en
+bild går att avkoda.
+
+Bilder kopieras lokalt till `.data/mail-images/<unik import>/`. De kan
+köas medan appen är stängd och väljas vid nästa start. Ingen sändning eller
+uppstart av MailOffer görs automatiskt av tillägget. Originalmejlet ändras
+inte och inga bilder laddas upp av importfunktionen. Vanlig e-postsändning
+skickar däremot de valda bilagorna till dina mottagare.
+
+Kopiorna behålls även efter avslutad/avbruten import för att inte bryta
+bilagor, sparade utkast eller historik. De rensas inte av smart cache eller
+uppdatering. Rensa endast en importmapp manuellt när bilderna inte längre
+behövs. Funktionen gäller Thunderbird; andra e-postprogram har ingen ny
+koppling i den här uppdateringen. Faktisk Thunderbird-/Windows-interaktion
+behöver provas på användardatorn.

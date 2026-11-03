@@ -143,3 +143,51 @@ browser.menus.onClicked.addListener(async (info) => {
     notify("E-postofferten", String(err.message || err));
   }
 });
+
+
+// Explicit image import; no message body/address is copied into a draft.
+browser.menus.create({
+  id: "mailoffer-import-images",
+  title: "Importera bildbilagor till MailOffer",
+  contexts: ["message_list"],
+});
+
+async function importImages(messages) {
+  if (messages.length !== 1) throw new Error("Markera ett mejl i taget för bildimport.");
+  const hello = await browser.runtime.sendNativeMessage(NATIVE_HOST, {action: "ping", protocol_version: PROTOCOL_VERSION});
+  if (!hello || !hello.ok || hello.protocol_version !== PROTOCOL_VERSION ||
+      !Array.isArray(hello.capabilities) || !hello.capabilities.includes("import_images")) {
+    throw new Error("Uppdatera MailOffer och installera dess nya MailOffer.xpi för bildimport.");
+  }
+  const allowed = /^image\/(?:png|jpeg|gif|webp|bmp|tiff)$/i;
+  const attachments = (await browser.messages.listAttachments(messages[0].id)).filter(a => allowed.test(a.contentType || ""));
+  if (!attachments.length) throw new Error("Mejlet har inga bildbilagor i ett format som stöds.");
+  if (attachments.length > 10) throw new Error("Högst 10 bilder kan importeras åt gången.");
+  const images = [];
+  let total = 0;
+  for (const attachment of attachments) {
+    const file = await browser.messages.getAttachmentFile(messages[0].id, attachment.partName);
+    if (!file.size || file.size > 10 * 1024 * 1024) throw new Error("Varje bild får vara högst 10 MB.");
+    total += file.size;
+    if (total > 20 * 1024 * 1024) throw new Error("Bilderna får vara högst 20 MB tillsammans.");
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    let binary = "";
+    for (let i = 0; i < bytes.length; i += 32768) {
+      binary += String.fromCharCode(...bytes.subarray(i, i + 32768));
+    }
+    images.push({name: attachment.name || file.name || "bild", data: btoa(binary)});
+  }
+  const result = await sendContacts({action: "import_images", images, subject: messages[0].subject || ""});
+  if (!result || !result.ok) throw new Error((result && result.error) || "Bildimporten misslyckades.");
+  return result;
+}
+
+browser.menus.onClicked.addListener(async (info, tab) => {
+  if (info.menuItemId !== "mailoffer-import-images") return;
+  try {
+    const result = await importImages(await selectedMessages(info, tab));
+    notify("MailOffer", `${result.count} bilder kopierade. Visa/starta MailOffer för att välja vilka som ska bifogas.`);
+  } catch (err) {
+    notify("MailOffer", String(err.message || err));
+  }
+});
