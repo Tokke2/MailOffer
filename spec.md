@@ -800,7 +800,7 @@ MODULE: module.error {module,error,count,disable} · module.disabled {module,rea
 - **Queue-baserad (v3.5):** QueueHandler + QueueListener – UI-tråden blockerar ALDRIG på disk (~42x snabbare anropstråd)
 - `shutdown_logging()` / `flush_logging()` (anropas via atexit + i main.pyw finally)
 - sys.excepthook fångar ohanterade exceptions → logg + UI-dialog
-- setup_logging(log_dir, level, debug) skapar log-dir automatiskt (fallback till temp)
+- setup_logging(log_dir, level, debug) skapar log-dir automatiskt (ingen fallback till temp)
 - get_logger(name) · get_log_file_path(log_dir) · list_log_files() → List[Path]
 - LOG-FIL: logs/email_app.log
 - Helpers: log_module_load/start, log_dep_check, log_startup_begin/step/complete,
@@ -2694,3 +2694,15 @@ Användaren valde från redan-valda: tema-knapp (§34 #6) och tydligare
   SVG utesluts. Hashkontroll vid läsning; ingen automatisk borttagning av kopior.
 - App och XPI måste uppdateras. Protokoll 1 bibehålls med bakåtkompatibel
   kapabilitet, publik app-/tilläggsversion fortsatt 1.0.0, bygg 2026102321.
+
+
+## V7.28 (APP 1.0.0)
+- Alla appens loggar ligger i egen undermapp <appmapp>/logs, inklusive
+  start/diagnostik/native-krasch, huvudlogg, samlad fellogg, rotation och index.
+- Temp-reserver tas bort från logger, tidig diagnostik och VBS-start.
+  VBS visar skrivvarning högst en gång, huvudloggern öppnar filen direkt
+  och rapporterar skrivfel vid start i stället för tyst omdirigering.
+- Samlad fellogg läser bara appens logs-mapp; alternativ CLI-utmatning
+  tas bort. Gamla temp-loggar flyttas/raderas inte automatiskt.
+- Regressionstester för placering och nekad skrivbehörighet utan temp-fallback.
+- Version fortsatt 1.0.0, bygg 2026102322.

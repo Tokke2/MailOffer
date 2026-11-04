@@ -13,10 +13,11 @@
 ' ============================================================================
 Option Explicit
 
-Dim shell, fso, scriptDir, pythonw, batPath, args, i, exitCode, launchError, launchCode
+Dim shell, fso, scriptDir, pythonw, batPath, args, i, exitCode, launchError, launchCode, logWarningShown
 Set shell = CreateObject("WScript.Shell")
 Set fso = CreateObject("Scripting.FileSystemObject")
 scriptDir = fso.GetParentFolderName(WScript.ScriptFullName)
+logWarningShown = False
 
 LogStage "Launcher started; folder=" & scriptDir
 pythonw = FindPythonw()
@@ -97,7 +98,7 @@ End Function
 
 
 Sub LogStage(message)
-    Dim folder, path, stream
+    Dim folder, path, stream, reason
     On Error Resume Next
     folder = scriptDir & "\logs"
     If Not fso.FolderExists(folder) Then fso.CreateFolder folder
@@ -110,9 +111,14 @@ Sub LogStage(message)
     End If
     Set stream = fso.OpenTextFile(path, 8, True, -1)
     If Err.Number <> 0 Then
+        reason = Err.Description
         Err.Clear
-        path = shell.ExpandEnvironmentStrings("%TEMP%") & "\MailOffer-launcher.log"
-        Set stream = fso.OpenTextFile(path, 8, True, -1)
+        If Not logWarningShown Then
+            logWarningShown = True
+            MsgBox "Kan inte skriva loggar i " & folder & vbCrLf & reason & vbCrLf & _
+                   "Valj en skrivbar appmapp eller kontrollera mappens behorigheter.", vbExclamation, "MailOffer"
+        End If
+        Exit Sub
     End If
     stream.WriteLine CStr(Now) & " | " & message
     stream.Close

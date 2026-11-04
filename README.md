@@ -380,8 +380,8 @@ sökvägar och felmeddelanden; granska det före delning.
   Fullständiga stackspår, utan dump av lokala variabler. 5 MB, fem arkiv.
 - `native-crash-<pid>.log`: faulthandler för vissa lågnivåkrascher, högst
   tio filer. Kan vara tom efter normal körning.
-- Om appmappen inte är skrivbar försöker Python använda
-  `%TEMP%/MailOffer-logs`; startfilen använder `%TEMP%/MailOffer-launcher.log`.
+- Alla appens loggar skrivs i `<appmapp>/logs/`. Om mappen inte går att
+  skapa/skriva visas ett startfel; inga loggar omdirigeras till tempmappen.
 
 Den fristående diagnostiken överlever ominitiering av den vanliga loggern.
 Vanliga lösenords-/tokenfält och SMTP AUTH-data maskeras i diagnostikloggen,
@@ -588,9 +588,9 @@ Samma fel kan finnas under flera källfiler om originalen loggat det på
 flera ställen. Normal start/avslut med felkod 0 tas inte med.
 
 Öppna **Loggar → Öppna samlad fellogg** för att uppdatera och öppna filen.
-Om den ordinarie loggmappen inte kan användas vid appstart används
-`%TEMP%\MailOffer-logs\errors.log`. Insamlaren läser även appens befintliga
-reservloggar där och `%TEMP%\MailOffer-launcher.log`, inte hela tempmappen.
+Samtliga loggar, rotationskopior och insamlarens index/lås ligger i
+`<appmapp>\logs\`. Insamlaren läser bara loggar i denna undermapp, inte
+gamla reservloggar eller andra filer i tempmappen.
 
 Felloggen roteras vid 5 MB, med upp till fem äldre kopior. För att begränsa
 resursåtgång läses högst 1 MB per källfil och omgång och de 128 senast
@@ -606,7 +606,8 @@ stannat samlas tidigast vid nästa start/manuell insamling.
 
 Om appens gränssnitt inte går att öppna kan insamlingen köras utan Qt:
 `python -m core.error_log --base-dir "D:\Program\MailOffer"`.
-Vid skrivskyddad appmapp kan `--output-dir` ange en skrivbar mapp.
+Appmappen måste vara skrivbar; alternativ utmatning med `--output-dir`
+finns inte längre, så även manuell insamling stannar i appens loggmapp.
 
 ### Uppdateringskontroll från systemfältet
 
@@ -649,3 +650,18 @@ uppdatering. Rensa endast en importmapp manuellt när bilderna inte längre
 behövs. Funktionen gäller Thunderbird; andra e-postprogram har ingen ny
 koppling i den här uppdateringen. Faktisk Thunderbird-/Windows-interaktion
 behöver provas på användardatorn.
+
+
+### En enda loggmapp i appmappen
+
+Alla loggar samlas i **`<appmapp>\logs\`**, exempelvis
+`D:\Program\MailOffer\logs\`. Undermappen skapas automatiskt och innehåller
+`email_app.log`, `diagnostics.log`, `launcher.log`, `errors.log`, eventuella
+`startup_crash.log`/`native-crash-<pid>.log` och roterade kopior. Felloggens
+index och lås ligger också där, inte bland appfilerna i roten.
+
+Ingen ny loggning sker till `%TEMP%`. Startfilen varnar om den inte kan
+skriva loggar och huvudloggern kontrollerar skrivbehörighet redan vid
+start; vid fel behöver appen en skrivbar plats eller korrigerade
+mappbehörigheter. Uppdatering/smart cache rensar inte loggmappen. Äldre
+reservloggar flyttas eller raderas inte automatiskt.

@@ -67,15 +67,13 @@ def _locked(directory):
 
 
 class ErrorLogCollector:
-    def __init__(self, base, output_dir=None, *, fallback_dir=None, launcher_fallback=None):
-        self.base = Path(base)
-        self.directory = Path(output_dir or self.base / 'logs')
+    def __init__(self, base):
+        self.base = Path(base).resolve()
+        self.directory = self.base / 'logs'
         self.directory.mkdir(parents=True, exist_ok=True)
         self.path = self.directory / NAME
         self.state_path = self.directory / 'errors.state.json'
-        fallback = Path(fallback_dir or Path(tempfile.gettempdir()) / 'MailOffer-logs')
-        self.inputs = list(dict.fromkeys([self.base / 'logs', fallback, self.directory]))
-        self.launcher_fallback = Path(launcher_fallback or Path(tempfile.gettempdir()) / 'MailOffer-launcher.log')
+        self.inputs = [self.directory]
         self._stop = threading.Event()
         self._thread = None
         self._mutex = threading.RLock()
@@ -89,8 +87,6 @@ class ErrorLogCollector:
                 if re.fullmatch(r'.+\.log(?:\.\d+)?', path.name) and not path.name.startswith('errors.log'):
                     if path.is_file() and not path.is_symlink():
                         found.add(path)
-        if self.launcher_fallback.is_file() and not self.launcher_fallback.is_symlink():
-            found.add(self.launcher_fallback)
         return sorted(found, key=lambda p: (p.stat().st_mtime, str(p)))[-128:]
 
     def _append(self, source, text):
@@ -221,8 +217,7 @@ if __name__ == '__main__':
     import argparse
     parser = argparse.ArgumentParser(description='Collect MailOffer log errors locally (no Qt).')
     parser.add_argument('--base-dir', type=Path, default=Path(__file__).resolve().parents[1])
-    parser.add_argument('--output-dir', type=Path, default=None)
     args = parser.parse_args()
-    collector = ErrorLogCollector(args.base_dir, args.output_dir)
+    collector = ErrorLogCollector(args.base_dir)
     collector.collect(final=True)
     print(collector.path)

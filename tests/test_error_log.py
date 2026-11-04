@@ -16,8 +16,7 @@ class ErrorLogTests(unittest.TestCase):
         self.logs = self.base / 'logs'
 
     def make_collector(self):
-        return ErrorLogCollector(self.base, fallback_dir=self.base / 'fallback',
-                                 launcher_fallback=self.base / 'fallback-launcher.log')
+        return ErrorLogCollector(self.base)
 
     def text(self):
         return self.collector.path.read_text(encoding='utf-8')
@@ -96,16 +95,14 @@ class ErrorLogTests(unittest.TestCase):
         self.assertIn('caught-marker', self.text())
         self.assertIn('warning-marker', self.text())
 
-    def test_app_fallback_directory_and_single_launcher_fallback(self):
+    def test_logs_outside_app_log_folder_are_not_read(self):
         fallback = self.base / 'fallback'
         fallback.mkdir()
         (fallback / 'diagnostics.log').write_text('ERROR fallback-marker\n')
         (self.base / 'fallback-launcher.log').write_text('30/10/2026 10:00:00 | Process ended; exit code=4\n', encoding='utf-16')
         (self.base / 'unrelated.log').write_text('ERROR must-not-read\n')
-        self.assertEqual(self.collector.collect(), 2)
-        self.assertIn('fallback-marker', self.text())
-        self.assertIn('exit code=4', self.text())
-        self.assertNotIn('must-not-read', self.text())
+        self.assertEqual(self.collector.collect(), 0)
+        self.assertEqual(self.text(), '')
 
     def test_password_redaction_and_no_message_content_in_index(self):
         (self.logs / 'module.log').write_text('ERROR password="long secret value" token=hidden Authorization: Bearer private AUTH PLAIN base64value\n')

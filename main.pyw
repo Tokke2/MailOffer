@@ -394,6 +394,16 @@ def save_window_geometry(
         log.debug("Kunde inte spara geometri via fallback: %s", exc)
 
 
+def _setup_app_logging(log_dir: Path) -> bool:
+    """An unwritable app log folder is a visible startup failure, not a reroute."""
+    try:
+        setup_logging(log_dir, level="INFO", debug=False)
+        return True
+    except OSError as exc:
+        _safe_show_critical("Loggningen kunde inte starta", str(exc))
+        return False
+
+
 def _write_startup_crash_file(exc: BaseException) -> None:
     """Sista skyddsnät för pythonw/tyst krasch: skriv crash-fil."""
     try:
@@ -487,7 +497,8 @@ def main() -> None:
 
     # Initiera logging så tidigt som möjligt.
     log_dir = BASE_DIR / "logs"
-    setup_logging(log_dir, level="INFO", debug=False)
+    if not _setup_app_logging(log_dir):
+        raise SystemExit(1)
     log = get_logger(__name__)
     try:
         from core.logger import cleanup_old_logs

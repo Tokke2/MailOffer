@@ -7,7 +7,6 @@ import os
 from pathlib import Path
 import re
 import sys
-import tempfile
 import threading
 import warnings
 
@@ -31,15 +30,18 @@ def install(base):
     global _logger, _fault_file, _error_collector
     if _logger is not None:
         return _logger
-    for directory in (Path(base) / 'logs', Path(tempfile.gettempdir()) / 'MailOffer-logs'):
-        try:
-            directory.mkdir(parents=True, exist_ok=True)
-            handler = logging.handlers.RotatingFileHandler(directory / 'diagnostics.log', maxBytes=5*1024*1024, backupCount=5, encoding='utf-8')
-            break
-        except OSError:
-            continue
-    else:
-        return logging.getLogger('mailoffer.diagnostics.unavailable')
+    directory = Path(base).resolve() / 'logs'
+    try:
+        directory.mkdir(parents=True, exist_ok=True)
+        handler = logging.handlers.RotatingFileHandler(directory / 'diagnostics.log', maxBytes=5*1024*1024, backupCount=5, encoding='utf-8')
+    except OSError:
+        # Normal logging setup will report the unwritable app log directory.
+        # Do not create log files elsewhere or a console on pythonw startup.
+        unavailable = logging.getLogger('mailoffer.diagnostics.unavailable')
+        unavailable.propagate = False
+        if not unavailable.handlers:
+            unavailable.addHandler(logging.NullHandler())
+        return unavailable
     handler.setFormatter(RedactingFormatter('%(asctime)s | %(levelname)s | pid=%(process)d | %(threadName)s | %(name)s | %(message)s | %(pathname)s:%(lineno)d'))
     _logger = logging.getLogger('mailoffer.diagnostics')
     _logger.setLevel(logging.DEBUG)
@@ -78,7 +80,7 @@ def install(base):
     atexit.register(lambda: _logger.info('PROCESS EXIT (Python atexit reached)'))
     try:
         from core.error_log import ErrorLogCollector
-        _error_collector = ErrorLogCollector(base, directory)
+        _error_collector = ErrorLogCollector(base)
         _error_collector.start()
     except Exception:
         _logger.exception('Could not start combined error log')
@@ -112,6 +114,8 @@ def attach_root():
 
 
 def install_qt():
+    if _logger is None:
+        return
     from PyQt6.QtCore import qInstallMessageHandler, QtMsgType
     def message(kind, context, text):
         level = logging.DEBUG if kind == QtMsgType.QtDebugMsg else logging.WARNING

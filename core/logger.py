@@ -78,7 +78,6 @@ import os
 import platform
 import queue
 import sys
-import tempfile
 import time
 import traceback
 from logging.handlers import (
@@ -157,7 +156,7 @@ def setup_logging(
     """Konfigurera och returnera root logger för applikationen.
 
     Effekter:
-    - Skapar log_dir om den saknas (med fallback till temp)
+    - Skapar log_dir om den saknas (ingen omdirigering till temp)
     - Lägger till RotatingFileHandler (5 MB, 5 backups) via bakgrundskö
     - Lägger till StreamHandler om debug=True
     - Sätter sys.excepthook för ohanterade exceptions
@@ -651,26 +650,12 @@ def list_log_files(log_dir: Path) -> List[Path]:
 # ═══════════════════════════════════════════════════════════════════════════
 
 def _ensure_log_dir(log_dir: Path) -> Path:
-    """Försök skapa log_dir. Vid fel, falla tillbaka till temp-katalog."""
+    """Use the requested app subfolder only; never silently write to TEMP."""
     try:
         log_dir.mkdir(parents=True, exist_ok=True)
-        return log_dir
     except OSError as exc:
-        fallback = Path(tempfile.gettempdir()) / "EmailApp" / "logs"
-        print(
-            f"WARNING: Kunde inte skapa loggkatalog '{log_dir}': {exc}\n"
-            f"         Använder fallback: {fallback}",
-            file=sys.stderr,
-        )
-        try:
-            fallback.mkdir(parents=True, exist_ok=True)
-            return fallback
-        except OSError as fb_exc:
-            print(
-                f"CRITICAL: Kunde inte skapa fallback-katalog: {fb_exc}",
-                file=sys.stderr,
-            )
-            return fallback
+        raise OSError(f"Kunde inte skapa loggmappen {log_dir}. Välj en skrivbar appmapp.") from exc
+    return log_dir
 
 
 def _add_file_handler(
@@ -678,47 +663,17 @@ def _add_file_handler(
     level: int,
     formatter: logging.Formatter,
 ) -> Optional[logging.Handler]:
-    """Skapa RotatingFileHandler med fallback. Returnerar handler eller None."""
+    """Open eagerly so denied writes surface during startup, not silently later."""
     try:
         handler = RotatingFileHandler(
-            filename=log_file,
-            mode="a",
-            maxBytes=MAX_LOG_SIZE_BYTES,
-            backupCount=BACKUP_COUNT,
-            encoding="utf-8",
-            delay=True,
+            filename=log_file, mode="a", maxBytes=MAX_LOG_SIZE_BYTES,
+            backupCount=BACKUP_COUNT, encoding="utf-8", delay=False,
         )
-        handler.setLevel(level)
-        handler.setFormatter(formatter)
-        return handler
     except OSError as exc:
-        print(
-            f"ERROR: Kunde inte skapa loggfil '{log_file}': {exc}",
-            file=sys.stderr,
-        )
-        try:
-            fallback_file = (
-                Path(tempfile.gettempdir()) / "EmailApp" / "logs" / LOG_FILENAME
-            )
-            fallback_file.parent.mkdir(parents=True, exist_ok=True)
-            handler = RotatingFileHandler(
-                filename=fallback_file,
-                mode="a",
-                maxBytes=MAX_LOG_SIZE_BYTES,
-                backupCount=BACKUP_COUNT,
-                encoding="utf-8",
-                delay=True,
-            )
-            handler.setLevel(level)
-            handler.setFormatter(formatter)
-            print(f"INFO: Fallback-logg aktiv: {fallback_file}", file=sys.stderr)
-            return handler
-        except Exception as fallback_exc:
-            print(
-                f"CRITICAL: Ingen loggfil tillgänglig: {fallback_exc}",
-                file=sys.stderr,
-            )
-            return None
+        raise OSError(f"Kunde inte skriva loggfilen {log_file}. Kontrollera skrivbehörighet och diskutrymme.") from exc
+    handler.setLevel(level)
+    handler.setFormatter(formatter)
+    return handler
 
 
 def _add_console_handler(
