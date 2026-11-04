@@ -2720,3 +2720,11 @@ Användaren valde från redan-valda: tema-knapp (§34 #6) och tydligare
 - Knapp för arkivmappen, radbrytande loggknappar och borttagen automatisk
   10-dagarsradering. Arkiv och öppna fel har ingen automatisk gallring.
 - Version fortsatt 1.0.0, bygg 2026102323.
+
+## V7.30 (APP 1.0.0)
+- Sju avslutade lokala kalenderdagars arkivlagring: datum >= idag minus
+  sju dagar och < idag. Äldre genererade ZIP-arkiv gallras vid start och
+  dygnsskifte och skapas inte om från kvarvarande originalfiler.
+- Gallringen rör inte öppna fel, SQLite-register, aktiva originalfiler,
+  främmande filer eller symboliska länkar. Tomma utgångna datumkataloger tas bort.
+- Ersätter tidigare obegränsad arkivlagring. Version 1.0.0, bygg 2026102324.

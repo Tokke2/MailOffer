@@ -670,7 +670,7 @@ reservloggar flyttas eller raderas inte automatiskt.
 
 Loggposter före dagens **lokala kalenderdatum** får verifierade ZIP-arkivkopior
 under `logs/archive/ÅÅÅÅ-MM-DD/`. Det sker vid start och när datumet byts
-medan appen körs; även äldre missade dagar tas med. Dagens daterade poster
+medan appen körs; även missade dagar inom de senaste sju dagarna tas med. Dagens daterade poster
 arkiveras inte ännu. Arkivkopiorna är innehållsidentifierade så oförändrade
 kopior inte skapas igen. Poster utan läsbart ISO-datum grupperas efter
 källfilens ändringsdatum; nya VBS-startposter använder ISO-format.
@@ -678,7 +678,9 @@ källfilens ändringsdatum; nya VBS-startposter använder ISO-format.
 Aktiva originalfiler trunkeras/flyttas **inte** av arkiveringen, för att
 inte förlora samtidiga loggskrivningar på Windows. Deras vanliga storleksrotation
 finns kvar. Automatisk 10-dagarsborttagning vid appstart är borttagen.
-Arkivet rensas inte automatiskt. Loggfiler över 50 MB hoppas över av
+Dagsarkiv sparas för de sju avslutade kalenderdagarna före dagens datum.
+Äldre automatiskt skapade ZIP-arkiv gallras vid start och dygnsskifte;
+loggposter äldre än gränsen arkiveras inte på nytt. Loggfiler över 50 MB hoppas över av
 arkiveringen. Öppna arkivmappen via **Loggar → Öppna loggarkiv**.
 
 **`logs/unresolved-errors.log`** är separat och roteras/arkiveras inte bort.
@@ -697,6 +699,6 @@ kvar i databasen men tas bort från den öppna felloggen. Redigera inte den
 genererade loggfilen manuellt. Kopiera databasen tillsammans med loggarna
 om du vill bevara status vid manuell flytt.
 
-Både arkiv och felregister kan växa över tid och måste vid behov hanteras
-manuellt. Granska även arkivens innehåll före delning; de är kopior av
+Arkiven gallras efter sju dagar, men mängden data inom perioden har ingen
+storleksgräns. Felregistret har ingen automatisk gallring och kan växa över tid. Granska även arkivens innehåll före delning; de är kopior av
 originalens loggtext, inte en garanterat anonymiserad export.

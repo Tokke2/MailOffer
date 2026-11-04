@@ -70,3 +70,36 @@ class LogArchiveTests(unittest.TestCase):
         resolve_issues(self.logs, [key])
         import_history(self.logs)
         self.assertEqual(open_issues(self.logs), [])
+
+    def test_retention_keeps_seven_completed_days_without_recreation(self):
+        source = self.logs / 'email_app.log'
+        source.write_text('2026-10-27 10:00:00 | ERROR | expired\n2026-10-28 10:00:00 | INFO | boundary\n2026-11-03 10:00:00 | INFO | yesterday\n2026-11-04 10:00:00 | INFO | current\n')
+        # Create archives before expiry, then advance one day.
+        archive_logs(self.logs, date(2026, 11, 3))
+        old = self.logs / 'archive' / '2026-10-27'
+        self.assertTrue(old.exists())
+        key = record_error(self.logs, 'email_app.log', 'ERROR | expired but unresolved')
+        archive_logs(self.logs, date(2026, 11, 4))
+        self.assertFalse(old.exists())
+        self.assertTrue((self.logs / 'archive' / '2026-10-28').exists())
+        self.assertFalse((self.logs / 'archive' / '2026-11-04').exists())
+        self.assertEqual(open_issues(self.logs)[0][0], key)
+        self.assertIn('expired but unresolved', (self.logs / 'unresolved-errors.log').read_text())
+        self.assertIn('expired', source.read_text())
+        self.assertEqual(archive_logs(self.logs, date(2026, 11, 4)), [])
+        self.assertFalse(old.exists())
+
+    def test_retention_preserves_unknown_files_and_ignores_symlink_folders(self):
+        folder = self.logs / 'archive' / '2026-10-01'
+        folder.mkdir(parents=True)
+        (folder / 'notes.txt').write_text('keep')
+        (folder / 'manual.zip').write_text('keep')
+        (folder / ('email_app.log-' + 'a' * 16 + '.zip')).write_text('generated')
+        external = self.logs / 'external'
+        external.mkdir()
+        target = external / ('email_app.log-' + 'b' * 16 + '.zip')
+        target.write_text('keep')
+        (folder.parent / '2026-10-02').symlink_to(external, target_is_directory=True)
+        archive_logs(self.logs, date(2026, 11, 4))
+        self.assertEqual(sorted(p.name for p in folder.iterdir()), ['manual.zip', 'notes.txt'])
+        self.assertTrue(target.exists())
