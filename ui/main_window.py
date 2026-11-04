@@ -4787,7 +4787,8 @@ class MainWindow(QMainWindow):
         self._log_edit.setFont(QFont("Consolas", 9))
         layout.addWidget(self._log_edit, stretch=1)
 
-        buttons = QHBoxLayout()
+        from ui.responsive import WrapLayout
+        buttons = WrapLayout()
         btn_refresh = QPushButton("🔄 Uppdatera")
         btn_refresh.setProperty("cssClass", "accent")
         btn_refresh.clicked.connect(self._refresh_log)
@@ -4799,6 +4800,12 @@ class MainWindow(QMainWindow):
         btn_errors = QPushButton("🛠 Öppna samlad fellogg")
         btn_errors.clicked.connect(self._open_combined_errors)
         buttons.addWidget(btn_errors)
+        btn_open_errors = QPushButton("⚠ Öppna fel / markera åtgärdade")
+        btn_open_errors.clicked.connect(self._manage_open_errors)
+        buttons.addWidget(btn_open_errors)
+        archive_button = QPushButton("📦 Öppna loggarkiv")
+        archive_button.clicked.connect(self._open_log_archive)
+        buttons.addWidget(archive_button)
 
         btn_clear = QPushButton("🧹 Rensa")
         btn_clear.setProperty("cssClass", "danger")
@@ -4820,6 +4827,66 @@ class MainWindow(QMainWindow):
         cursor = self._log_edit.textCursor()
         cursor.movePosition(cursor.MoveOperation.End)
         self._log_edit.setTextCursor(cursor)
+
+    def _open_log_archive(self):
+        try:
+            path = self._base_dir() / "logs" / "archive"
+            path.mkdir(parents=True, exist_ok=True)
+            self._explorer(path)
+        except Exception:
+            log.exception("Kunde inte öppna loggarkivet")
+            self._status("Kunde inte öppna loggarkivet.", "error")
+
+    def _manage_open_errors(self):
+        from core.open_errors import open_issues, resolve_issues
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Öppna fel")
+        layout = QVBoxLayout(dialog)
+        info = QLabel("Fel ligger kvar tills du själv markerar dem som åtgärdade. "
+                      "Kontrollera att orsaken är löst först. Återkommer felet öppnas det igen.")
+        info.setWordWrap(True)
+        layout.addWidget(info)
+        choices = QListWidget()
+        layout.addWidget(choices)
+        directory = self._base_dir() / "logs"
+        def refresh():
+            choices.clear()
+            for key, source, message, first, last, count in open_issues(directory):
+                item = QListWidgetItem(f"{key} · {source} · {count} gånger · senast {last}\n{message[:700]}")
+                item.setData(Qt.ItemDataRole.UserRole, key)
+                item.setFlags(item.flags() | Qt.ItemFlag.ItemIsUserCheckable)
+                item.setCheckState(Qt.CheckState.Unchecked)
+                choices.addItem(item)
+        def resolve():
+            selected = [choices.item(i).data(Qt.ItemDataRole.UserRole) for i in range(choices.count())
+                        if choices.item(i).checkState() == Qt.CheckState.Checked]
+            if not selected:
+                return
+            if QMessageBox.question(dialog, "Markera åtgärdade", f"Markera {len(selected)} fel som åtgärdade?",
+                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                    QMessageBox.StandardButton.No) != QMessageBox.StandardButton.Yes:
+                return
+            try:
+                resolve_issues(directory, selected)
+                refresh()
+            except Exception:
+                log.exception("Kunde inte markera fel som åtgärdade")
+                QMessageBox.warning(dialog, "Öppna fel", "Kunde inte spara ändringen. Se loggen.")
+        open_file = QPushButton("Öppna hela felloggen")
+        open_file.clicked.connect(lambda: self._explorer(directory / "unresolved-errors.log"))
+        layout.addWidget(open_file)
+        button = QPushButton("Markera valda som åtgärdade")
+        button.clicked.connect(resolve)
+        layout.addWidget(button)
+        close = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
+        close.rejected.connect(dialog.reject)
+        layout.addWidget(close)
+        try:
+            refresh()
+            dialog.exec()
+        except Exception:
+            log.exception("Kunde inte läsa öppna fel")
+            self._status("Kunde inte läsa öppna fel – se loggen.", "error")
 
     def _open_combined_errors(self) -> None:
         try:

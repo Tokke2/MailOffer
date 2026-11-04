@@ -500,14 +500,6 @@ def main() -> None:
     if not _setup_app_logging(log_dir):
         raise SystemExit(1)
     log = get_logger(__name__)
-    try:
-        from core.logger import cleanup_old_logs
-
-        n = cleanup_old_logs(log_dir, days=10)
-        if n:
-            log.info("Rensade %d gamla loggfiler", n)
-    except Exception:
-        pass
 
     log.info(
         "🚀 %s v%s startar på %s",

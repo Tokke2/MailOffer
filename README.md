@@ -665,3 +665,38 @@ skriva loggar och huvudloggern kontrollerar skrivbehörighet redan vid
 start; vid fel behöver appen en skrivbar plats eller korrigerade
 mappbehörigheter. Uppdatering/smart cache rensar inte loggmappen. Äldre
 reservloggar flyttas eller raderas inte automatiskt.
+
+### Dagsarkiv och öppna fel
+
+Loggposter före dagens **lokala kalenderdatum** får verifierade ZIP-arkivkopior
+under `logs/archive/ÅÅÅÅ-MM-DD/`. Det sker vid start och när datumet byts
+medan appen körs; även äldre missade dagar tas med. Dagens daterade poster
+arkiveras inte ännu. Arkivkopiorna är innehållsidentifierade så oförändrade
+kopior inte skapas igen. Poster utan läsbart ISO-datum grupperas efter
+källfilens ändringsdatum; nya VBS-startposter använder ISO-format.
+
+Aktiva originalfiler trunkeras/flyttas **inte** av arkiveringen, för att
+inte förlora samtidiga loggskrivningar på Windows. Deras vanliga storleksrotation
+finns kvar. Automatisk 10-dagarsborttagning vid appstart är borttagen.
+Arkivet rensas inte automatiskt. Loggfiler över 50 MB hoppas över av
+arkiveringen. Öppna arkivmappen via **Loggar → Öppna loggarkiv**.
+
+**`logs/unresolved-errors.log`** är separat och roteras/arkiveras inte bort.
+Den visar öppna fel med referens-ID, källfil, första/senaste observation,
+antal och feltext/stackspår. Status sparas i `logs/error-issues.sqlite3`.
+Tillgänglig tidigare `errors.log`-historik importeras en gång vid uppdatering;
+redan raderade loggar kan inte återskapas. Varningar som fångas av felloggen
+ingår också. Samma fel i olika källor kan vara separata poster.
+
+Välj **Loggar → Öppna fel / markera åtgärdade**, markera poster och bekräfta
+**Markera valda som åtgärdade**. Att markera en post reparerar inte orsaken;
+du behöver först kontrollera att felet verkligen är löst. Appen gissar
+aldrig att ett fel är åtgärdat bara för att det inte hörts av på ett tag.
+Återkommer samma identifierade fel öppnas det igen. Åtgärdade poster finns
+kvar i databasen men tas bort från den öppna felloggen. Redigera inte den
+genererade loggfilen manuellt. Kopiera databasen tillsammans med loggarna
+om du vill bevara status vid manuell flytt.
+
+Både arkiv och felregister kan växa över tid och måste vid behov hanteras
+manuellt. Granska även arkivens innehåll före delning; de är kopior av
+originalens loggtext, inte en garanterat anonymiserad export.

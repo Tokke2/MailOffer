@@ -76,6 +76,8 @@ class ErrorLogCollector:
         self.inputs = [self.directory]
         self._stop = threading.Event()
         self._thread = None
+        self._archive_day = None
+        self._last_failure = None
         self._mutex = threading.RLock()
 
     def _sources(self):
@@ -84,7 +86,7 @@ class ErrorLogCollector:
             if directory.is_symlink():
                 continue
             for path in directory.glob('*.log*'):
-                if re.fullmatch(r'.+\.log(?:\.\d+)?', path.name) and not path.name.startswith('errors.log'):
+                if re.fullmatch(r'.+\.log(?:\.\d+)?', path.name) and not path.name.startswith(('errors.log', 'unresolved-errors.log', 'resolved-errors.log')):
                     if path.is_file() and not path.is_symlink():
                         found.add(path)
         return sorted(found, key=lambda p: (p.stat().st_mtime, str(p)))[-128:]
@@ -93,6 +95,8 @@ class ErrorLogCollector:
         if self.path.is_symlink():
             raise OSError('Combined error log must not be a symbolic link')
         text = redact(text)
+        from core.open_errors import record_error
+        record_error(self.directory, source, text)
         if len(text) > 128 * 1024:
             text = text[:64 * 1024] + '\n[TRUNCATED]\n' + text[-64 * 1024:]
         data = (f'\n=== Collected {datetime.now().isoformat(timespec="seconds")} | source={source} ===\n' + text.rstrip() + '\n').encode('utf-8')
@@ -109,6 +113,8 @@ class ErrorLogCollector:
     def collect(self, *, final=False):
         """One bounded pass. Original logs are read only; output is never an input."""
         with self._mutex, _locked(self.directory):
+            from core.open_errors import import_history
+            import_history(self.directory)
             try:
                 state = json.loads(self.state_path.read_text(encoding='utf-8'))
                 if not isinstance(state, dict):
@@ -195,8 +201,18 @@ class ErrorLogCollector:
             while not self._stop.is_set():
                 try:
                     self.collect()
-                except (OSError, ValueError):
-                    pass  # A locked/full disk must not take down the application.
+                    day = datetime.now().date()
+                    if self._archive_day != day:
+                        from core.log_archive import archive_logs
+                        archive_logs(self.directory, today=day)
+                        self._archive_day = day
+                    self._last_failure = None
+                except Exception as exc:
+                    failure = f"{type(exc).__name__}: {exc}"
+                    if failure != self._last_failure:
+                        import logging
+                        logging.getLogger(__name__).warning("Logginsamling/arkivering misslyckades: %s", failure)
+                        self._last_failure = failure
                 self._stop.wait(5)
         self._thread = threading.Thread(target=loop, name='ErrorLogCollector', daemon=True)
         self._thread.start()
@@ -208,7 +224,7 @@ class ErrorLogCollector:
             self._thread.join(timeout=3)
         try:
             self.collect(final=True)
-        except (OSError, ValueError):
+        except Exception:
             pass
 
 

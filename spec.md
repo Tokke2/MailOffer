@@ -2706,3 +2706,17 @@ Användaren valde från redan-valda: tema-knapp (§34 #6) och tydligare
   tas bort. Gamla temp-loggar flyttas/raderas inte automatiskt.
 - Regressionstester för placering och nekad skrivbehörighet utan temp-fallback.
 - Version fortsatt 1.0.0, bygg 2026102322.
+
+## V7.29 (APP 1.0.0)
+- Verifierade, innehållsidentifierade ZIP-arkivkopior av tidigare dagars
+  loggposter i logs/archive/YYYY-MM-DD. Lokal datumgräns, start/dygnsskifte,
+  inga aktiva original trunkeras eller flyttas. Gamla missade dagar ingår.
+- ISO-tid i nya VBS-poster; odaterade poster använder filens mtime-datum.
+- Persistent separat unresolved-errors.log/SQLite-register: öppna fel
+  behålls utan tidsutgång och arkiveras inte bort. Manuell åtgärdad-status
+  via Loggar; återkommande identiskt identifierat fel öppnas igen.
+- Engångsimport av kvarvarande errors.log-historik. Maskerade vanliga
+  hemligheter i felregistret; originaltext/arkiv behöver granskas före delning.
+- Knapp för arkivmappen, radbrytande loggknappar och borttagen automatisk
+  10-dagarsradering. Arkiv och öppna fel har ingen automatisk gallring.
+- Version fortsatt 1.0.0, bygg 2026102323.

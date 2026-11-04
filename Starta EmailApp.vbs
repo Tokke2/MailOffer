@@ -98,7 +98,7 @@ End Function
 
 
 Sub LogStage(message)
-    Dim folder, path, stream, reason
+    Dim folder, path, stream, reason, stamp, isoStamp
     On Error Resume Next
     folder = scriptDir & "\logs"
     If Not fso.FolderExists(folder) Then fso.CreateFolder folder
@@ -120,7 +120,10 @@ Sub LogStage(message)
         End If
         Exit Sub
     End If
-    stream.WriteLine CStr(Now) & " | " & message
+    stamp = Now
+    isoStamp = Year(stamp) & "-" & Right("0" & Month(stamp), 2) & "-" & Right("0" & Day(stamp), 2) & _
+               " " & Right("0" & Hour(stamp), 2) & ":" & Right("0" & Minute(stamp), 2) & ":" & Right("0" & Second(stamp), 2)
+    stream.WriteLine isoStamp & " | " & message
     stream.Close
     On Error GoTo 0
 End Sub
