@@ -1,6 +1,13 @@
 # Windows PowerShell 5.1. Never install a second Python when one is detected.
+param([switch]$SkipPythonUpgrade)
 $ErrorActionPreference = 'Stop'
+$startupLock = $null
 try {
+    if (-not $SkipPythonUpgrade) {
+        $logDirectory = Join-Path (Split-Path $PSScriptRoot) 'logs'
+        New-Item -ItemType Directory -Force -Path $logDirectory | Out-Null
+        $startupLock = [IO.File]::Open((Join-Path $logDirectory 'python-startup.lock'), [IO.FileMode]::OpenOrCreate, [IO.FileAccess]::ReadWrite, [IO.FileShare]::None)
+    }
     $candidates = @()
     $detected = $false
     foreach ($root in @('HKCU:\Software\Python\PythonCore',
@@ -55,26 +62,41 @@ try {
         }
     }
     $versions = @()
+    $runtimes = @()
     foreach ($exe in @($candidates | Select-Object -Unique)) {
-        $output = & $exe -I -S -c 'import sys; print("%d.%d" % sys.version_info[:2])' 2>$null
+        $output = & $exe -I -c 'import sys; print("%d.%d" % sys.version_info[:2] if sys.prefix == sys.base_prefix else "virtual")' 2>$null
         if ($LASTEXITCODE -eq 0 -and "$output" -match '^(\d+)\.(\d+)$') {
             $versions += "$output"
+            if ([version]"$output" -ge [version]"3.10") {
+                $runtimes += [pscustomobject]@{Version=[version]"$output"; Path=$exe}
+            }
         }
     }
     if ($detected) {
         # Crucial: this branch NEVER falls back to a fresh installation.
         if (-not $versions.Count) { throw 'Python finns men kunde inte kontrolleras. Ingen ny installation gjordes.' }
-        $winget = Get-Command winget.exe -CommandType Application -ErrorAction SilentlyContinue
-        if (-not $winget) { throw 'Python finns. Winget saknas; uppdatera befintlig Python manuellt. Ingen ny installation gjordes.' }
-        foreach ($version in @($versions | Select-Object -Unique)) {
+        $runtime = $runtimes | Sort-Object Version -Descending | Select-Object -First 1
+        if (-not $runtime) { throw 'Ingen gemensam Python 3.10+ hittades. Ingen separat miljo skapas.' }
+        $version = $runtime.Version.ToString()
+        if (-not $SkipPythonUpgrade) {
+            $winget = Get-Command winget.exe -CommandType Application -ErrorAction SilentlyContinue
+            if (-not $winget) { throw 'Winget saknas. Uppdatera befintlig Python manuellt; ingen ny installation gjordes.' }
             $package = 'Python.Python.' + $version
             Write-Host "Kontrollerar uppdatering av befintlig Python $version."
             & $winget.Source upgrade --exact --id $package --source winget --silent --accept-package-agreements --accept-source-agreements --disable-interactivity
-            # APPINSTALLER_CLI_ERROR_UPDATE_NOT_APPLICABLE means already current.
             if ($LASTEXITCODE -ne 0 -and $LASTEXITCODE -ne -1978335189 -and $LASTEXITCODE -ne 2316632107) {
-                throw "Befintlig Python $version kunde inte uppdateras med winget (kod $LASTEXITCODE). Ingen ny installation gjordes."
+                throw "Befintlig Python kunde inte uppdateras (kod $LASTEXITCODE). Ingen ny installation gjordes."
             }
         }
+        # Run with exactly the interpreter the GUI will use, before importing Qt.
+        & $runtime.Path (Join-Path $PSScriptRoot 'update_python_packages.py')
+        if ($LASTEXITCODE -ne 0) { throw 'Kontroll/uppdatering av Python-tillagg misslyckades. Se logs/python-startup.log.' }
+        $pythonw = Join-Path (Split-Path $runtime.Path) 'pythonw.exe'
+        if (-not (Test-Path $pythonw)) { throw 'Gemensam pythonw.exe saknas.' }
+        $logs = Join-Path (Split-Path $PSScriptRoot) 'logs'
+        New-Item -ItemType Directory -Force -Path $logs | Out-Null
+        [IO.File]::WriteAllText((Join-Path $logs 'python-runtime.txt'), $pythonw, [Text.Encoding]::Unicode)
+
         exit 0
     }
 
@@ -101,8 +123,11 @@ try {
     } finally {
         Remove-Item -LiteralPath $temporary -Recurse -Force
     }
-    exit 0
+    & $PSCommandPath -SkipPythonUpgrade
+    exit $LASTEXITCODE
 } catch {
     Write-Host ("Python-kontrollen misslyckades: " + $_.Exception.Message)
     exit 1
+} finally {
+    if ($startupLock) { $startupLock.Dispose() }
 }

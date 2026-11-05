@@ -108,6 +108,14 @@ BASE_DIR = Path(__file__).resolve().parent
 if str(BASE_DIR) not in sys.path:
     sys.path.insert(0, str(BASE_DIR))
 
+# Direct .pyw launches also go through the shared-runtime startup check.
+if __name__ == "__main__" and os.name == "nt" and os.environ.get("MAILOFFER_STARTUP_READY") != "1":
+    subprocess.Popen(
+        ["wscript.exe", str(BASE_DIR / "Starta EmailApp.vbs"), *sys.argv[1:]],
+        creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0x08000000),
+    )
+    raise SystemExit(0)
+
 # Diagnostics must precede third-party imports, especially pythonw import failures.
 from core.diagnostics import install as install_diagnostics
 _diagnostics = install_diagnostics(BASE_DIR)

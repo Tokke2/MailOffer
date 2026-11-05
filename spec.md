@@ -2737,3 +2737,15 @@ Användaren valde från redan-valda: tema-knapp (§34 #6) och tydligare
   när ingen Python hittas. Signatur och installerarens returkod kontrolleras.
 - Reservstart använder pyw -3 utan hårdkodad 3.12. Tyst start bevarad.
 - Version 1.0.0, bygg 2026102325. Windows-körning återstår att verifiera.
+
+## V7.32 (APP 1.0.0)
+- Varje Windows-start via EXE/VBS, autostart och direkt main.pyw går genom
+  Python-/paketkontroll före Qt-import. Gemensam Python, ingen egen venv.
+- Senaste hittade stödda gemensamma serie väljs och uppgraderas inom serien;
+  appens paket uppgraderas till nyare stabila kompatibla versioner med
+  requirements.txt som minimum, följt av pip check.
+- Vald interpreter överlämnas till GUI:t via logs/python-runtime.txt.
+  Exklusivt startlås i appmappens logs hindrar parallella uppgraderingar.
+- Fel avbryter start synligt, utdata i logs/python-startup.log. Delad
+  Python/paketuppgradering kan påverka andra program; ingen miljöisolering.
+- Version 1.0.0, bygg 2026102326. Verklig Windows-körning ej verifierad här.

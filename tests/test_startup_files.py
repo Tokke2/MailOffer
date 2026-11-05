@@ -78,12 +78,16 @@ class TestStartVbs(unittest.TestCase):
         self.assertIn(", 1, True)", self.src)
         self.assertNotIn(", 0, False", self.src)
 
-    def test_local_environment_preferred(self):
-        self.assertLess(self.src.index(r"\.venv\Scripts\pythonw.exe"), self.src.index('localAppData & "\\Programs'))
+    def test_shared_runtime_selected_after_check_on_every_launch(self):
+        self.assertNotIn(r"\.venv\Scripts", self.src)
+        self.assertNotIn('FindPythonw', self.src)
+        self.assertLess(self.src.index('shell.Run("cmd /c'), self.src.index('python-runtime.txt'))
+        self.assertIn('MAILOFFER_STARTUP_READY', self.src)
+        self.assertIn('WScript.Quit 1', self.src)
 
-    def test_pythonw_search_prefers_312(self):
-        self.assertIn("Python312", self.src)
-        self.assertLess(self.src.index("Python312"), self.src.index("Python310"))
+    def test_shared_runtime_manifest_is_used(self):
+        self.assertIn('runtimeFile.ReadAll', self.src)
+        self.assertIn('pythonw = Trim', self.src)
 
     def test_ascii_only_no_mojibake_risk(self):
         self.assertTrue(all(ord(ch) < 128 for ch in self.src))

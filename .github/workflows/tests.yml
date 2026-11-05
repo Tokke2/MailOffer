@@ -28,3 +28,22 @@ jobs:
           node-version: "22"
       - name: Testa Thunderbird-protokoll
         run: node tests/test_thunderbird_protocol.js
+
+  windows-startup-syntax:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Kontrollera PowerShell och VBS utan installation
+        shell: powershell
+        run: |
+          $tokens = $null
+          $errors = $null
+          [System.Management.Automation.Language.Parser]::ParseFile((Join-Path $pwd 'tools/ensure_python.ps1'), [ref]$tokens, [ref]$errors) | Out-Null
+          if ($errors.Count) { $errors | Format-List; exit 1 }
+          $source = [IO.File]::ReadAllText((Join-Path $pwd 'Starta EmailApp.vbs'))
+          $probe = Join-Path $env:TEMP 'mailoffer-syntax-only.vbs'
+          # Compile the whole script but exit before running any startup actions.
+          $source = $source.Replace('Option Explicit', "Option Explicit`r`nWScript.Quit 0")
+          [IO.File]::WriteAllText($probe, $source, [Text.Encoding]::ASCII)
+          & cscript.exe //nologo $probe
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

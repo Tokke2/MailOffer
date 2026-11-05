@@ -80,8 +80,18 @@ parallell installation eller automatisk övergång till en annan versionsserie.
 Saknas winget eller stöd för installationen visas ett fel och du får uppdatera
 manuellt. Endast när Python saknas hämtas senaste stabila Windows-versionen
 från python.org, med kontroll av installatörens signatur och returkod.
-Kör BAT-filen manuellt för uppgraderingskontroll; vanlig appstart med hittad
-Python gör inte en nätverksuppgradering varje gång.
+Vid **varje Windows-start**, även autostart och direktstart av main.pyw,
+kontrolleras/uppgraderas Python och appens tillägg innan GUI:t laddas.
+Ingen egen virtuell miljö skapas eller väljs: den senaste hittade gemensamma
+Python-serien som stöds används. Bara den valda serien uppgraderas.
+Paket i requirements.txt används som minimiversioner vid startkontrollen;
+pip hämtar nyare stabila kompatibla paket och kör därefter pip check.
+**Gemensamma uppgraderingar kan påverka andra program** som använder samma
+Python och paket. Starten kan ta längre tid och kräver fungerande nätåtkomst
+för uppdateringskontrollen. Vid fel avbryts starten med en synlig varning;
+ingen separat miljö eller extra Python installeras som reserv.
+Detaljer skrivs till logs/python-startup.log. Parallella startkontroller
+för samma appmapp spärras för att undvika samtidiga uppgraderingar.
 `Starta EmailApp.vbs` finns kvar som reservstart.
 En exempelmall finns i `Mallar/` – skapa egna med
 **🧙 Ny mall**-knappen.

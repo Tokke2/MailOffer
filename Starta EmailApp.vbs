@@ -2,8 +2,8 @@
 ' Starta EmailApp.vbs - starta E-postofferten UTAN konsolfonster.
 '
 ' Kedja vid dubbelklick och autostart (registret pekar hit via wscript):
-'   1. Leta pythonw.exe (Python 3.12 forst, sedan ovriga 3.x-installationer).
-'   2. Saknas Python: kor Installera_Python.bat /silent DOLT och vanta
+'   1. Kontrollera/uppdatera gemensam Python och tillagg vid varje start.
+'   2. Kor Installera_Python.bat /silent DOLT och vanta
 '      tills installationen ar klar, leta sedan igen.
 '   3. Starta main.pyw med pythonw (ingen konsol). Argument skickas
 '      vidare, t.ex. --background fran autostarten.
@@ -20,21 +20,38 @@ scriptDir = fso.GetParentFolderName(WScript.ScriptFullName)
 logWarningShown = False
 
 LogStage "Launcher started; folder=" & scriptDir
-pythonw = FindPythonw()
-If pythonw = "" Then
-    batPath = scriptDir & "\Installera_Python.bat"
-    If fso.FileExists(batPath) Then
-        ' 0 = dolt fonster, True = vanta tills klart
-        LogStage "Installer starting"
-        On Error Resume Next
-        exitCode = shell.Run("cmd /c """ & batPath & """ /silent", 0, True)
-        launchCode = Err.Number
-        launchError = Err.Description
-        On Error GoTo 0
-        LogStage "Installer ended; exit code=" & exitCode & "; script error=" & launchCode & " " & launchError
-        pythonw = FindPythonw()
-    End If
+pythonw = ""
+batPath = scriptDir & "\Installera_Python.bat"
+If Not fso.FileExists(batPath) Then
+    MsgBox "Installera_Python.bat saknas.", vbExclamation, "MailOffer"
+    WScript.Quit 1
 End If
+' Every launch: upgrade shared Python and packages before starting the GUI.
+LogStage "Python startup check starting"
+On Error Resume Next
+exitCode = shell.Run("cmd /c """ & batPath & """ /silent", 0, True)
+launchCode = Err.Number
+launchError = Err.Description
+On Error GoTo 0
+LogStage "Python startup check ended; exit code=" & exitCode & "; error=" & launchCode & " " & launchError
+If launchCode <> 0 Or exitCode <> 0 Then
+    MsgBox "Kunde inte kontrollera/uppdatera Python och tillagg." & vbCrLf & _
+           "Se logs\python-startup.log och logs\launcher.log." & vbCrLf & _
+           "Ingen separat Python-miljo installeras som reserv.", vbExclamation, "MailOffer"
+    WScript.Quit 1
+End If
+If fso.FileExists(scriptDir & "\logs\python-runtime.txt") Then
+    Dim runtimeFile, processEnv
+    Set runtimeFile = fso.OpenTextFile(scriptDir & "\logs\python-runtime.txt", 1, False, -1)
+    pythonw = Trim(runtimeFile.ReadAll)
+    runtimeFile.Close
+End If
+If pythonw = "" Or Not fso.FileExists(pythonw) Then
+    MsgBox "Kunde inte hitta kontrollerad Python. Start avbruten.", vbExclamation, "MailOffer"
+    WScript.Quit 1
+End If
+Set processEnv = shell.Environment("Process")
+processEnv("MAILOFFER_STARTUP_READY") = "1"
 
 args = ""
 For i = 0 To WScript.Arguments.Count - 1
@@ -55,46 +72,7 @@ If pythonw <> "" Then
         If exitCode <> 0 Then MsgBox "Appen avslutades med felkod " & exitCode & vbCrLf & "Se logs\diagnostics.log och logs\launcher.log", vbExclamation, "E-postofferten"
     End If
     On Error GoTo 0
-Else
-    ' Sista utvag: Python Launcher (pyw.exe) om den finns i PATH.
-    On Error Resume Next
-    LogStage "Fallback interpreter=pyw.exe -3"
-    exitCode = shell.Run("pyw.exe -3 """ & scriptDir & "\main.pyw""" & args, 1, True)
-    launchCode = Err.Number
-    launchError = Err.Description
-    LogStage "Fallback process ended; exit code=" & exitCode & "; error=" & launchCode & " " & launchError
-    If launchCode <> 0 Then
-        MsgBox "Python 3 kunde inte hittas eller uppdateras/installeras." & vbCrLf & _
-               "Kor Installera_Python.bat manuellt och forsok igen.", _
-               vbExclamation, "E-postofferten"
-    End If
-    On Error GoTo 0
 End If
-
-Function FindPythonw()
-    Dim localAppData, candidates, j, candidate
-    FindPythonw = ""
-    localAppData = shell.ExpandEnvironmentStrings("%LOCALAPPDATA%")
-    candidates = Array( _
-        scriptDir & "\.venv\Scripts\pythonw.exe", _
-        scriptDir & "\venv\Scripts\pythonw.exe", _
-        scriptDir & "\python\pythonw.exe", _
-        localAppData & "\Programs\Python\Python312\pythonw.exe", _
-        localAppData & "\Programs\Python\Python313\pythonw.exe", _
-        localAppData & "\Programs\Python\Python314\pythonw.exe", _
-        localAppData & "\Programs\Python\Python311\pythonw.exe", _
-        localAppData & "\Programs\Python\Python310\pythonw.exe", _
-        "C:\Program Files\Python312\pythonw.exe", _
-        "C:\Program Files\Python313\pythonw.exe")
-    For j = 0 To UBound(candidates)
-        candidate = candidates(j)
-        LogStage "Probe interpreter=" & candidate
-        If fso.FileExists(candidate) Then
-            FindPythonw = candidate
-            Exit Function
-        End If
-    Next
-End Function
 
 
 Sub LogStage(message)
