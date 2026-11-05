@@ -34,24 +34,32 @@ class TestInstallBat(unittest.TestCase):
     def test_old_bat_name_gone(self):
         self.assertFalse((ROOT / "Installera senaste Python.bat").exists())
 
-    def test_pinned_python_312_everywhere(self):
-        self.assertIn("Python.Python.3.12", self.src)            # winget-id
-        self.assertIn(r"3\.12\.\d+", self.src)                   # python.org-regex
-        self.assertIn("https://www.python.org/ftp/python/", self.src)
-        self.assertIn("py -3.12", self.src)
+    def test_detect_existing_before_install(self):
+        helper = (ROOT / "tools" / "ensure_python.ps1").read_text()
+        self.assertIn('ensure_python.ps1', self.src)
+        self.assertIn('HKCU:', helper)
+        self.assertIn('HKLM:', helper)
+        self.assertIn('-0p', helper)
+        branch = helper[helper.index('    if ($detected) {'):helper.index('    # No installed interpreter found')]
+        self.assertIn(' upgrade --exact', branch)
+        self.assertNotIn('Start-Process', branch)
+        self.assertNotIn(' winget install ', branch)
+        self.assertIn('exit 0', branch)
+        self.assertIn('throw', branch)
 
-    def test_silent_mode_and_fast_exit(self):
-        self.assertIn("/silent", self.src)
-        self.assertIn(":AlreadyOk", self.src)
-        # pause får bara finnas i manuellt läge (efter SILENT-kollen)
-        pause_at = self.src.rfind("pause")
-        guard_at = self.src.rfind("if not defined SILENT")
-        self.assertGreater(pause_at, guard_at)
+    def test_silent_and_error_propagation(self):
+        self.assertIn('/silent', self.src)
+        self.assertIn('exit /b %RESULT%', self.src)
+        self.assertGreater(self.src.rfind('pause'), self.src.rfind('if not defined SILENT'))
 
-    def test_quiet_installer_flags(self):
-        self.assertIn("/quiet", self.src)
-        self.assertIn("PrependPath=1", self.src)
-        self.assertIn("Include_launcher=1", self.src)
+    def test_latest_stable_and_verified_installer(self):
+        helper = (ROOT / "tools" / "ensure_python.ps1").read_text()
+        self.assertIn('Latest Python 3 Release', helper)
+        self.assertIn('Get-AuthenticodeSignature', helper)
+        self.assertIn('Python Software Foundation', helper)
+        self.assertIn('-Wait -PassThru', helper)
+        self.assertIn('ExitCode', helper)
+        self.assertIn('/quiet InstallAllUsers=0', helper)
 
 
 class TestStartVbs(unittest.TestCase):

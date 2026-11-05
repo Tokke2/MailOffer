@@ -73,6 +73,15 @@ Den har appens egen ikon och startar utan konsolfönster. Behåll hela
 appmappen tillsammans – EXE-filen är en liten startfil, inte en fristående
 paketering av Python-appen. Den befintliga VBS-startkedjan hittar Python
 eller kör `Installera_Python.bat` dolt om Python saknas.
+`Installera_Python.bat` kontrollerar först befintlig Python via registret,
+PATH, Python Launcher och standardmappar. Finns Python används endast
+`winget upgrade` för den befintliga versionsserien (t.ex. 3.12.x); ingen
+parallell installation eller automatisk övergång till en annan versionsserie.
+Saknas winget eller stöd för installationen visas ett fel och du får uppdatera
+manuellt. Endast när Python saknas hämtas senaste stabila Windows-versionen
+från python.org, med kontroll av installatörens signatur och returkod.
+Kör BAT-filen manuellt för uppgraderingskontroll; vanlig appstart med hittad
+Python gör inte en nätverksuppgradering varje gång.
 `Starta EmailApp.vbs` finns kvar som reservstart.
 En exempelmall finns i `Mallar/` – skapa egna med
 **🧙 Ny mall**-knappen.

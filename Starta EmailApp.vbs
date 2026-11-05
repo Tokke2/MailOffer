@@ -58,13 +58,13 @@ If pythonw <> "" Then
 Else
     ' Sista utvag: Python Launcher (pyw.exe) om den finns i PATH.
     On Error Resume Next
-    LogStage "Fallback interpreter=pyw.exe -3.12"
-    exitCode = shell.Run("pyw.exe -3.12 """ & scriptDir & "\main.pyw""" & args, 1, True)
+    LogStage "Fallback interpreter=pyw.exe -3"
+    exitCode = shell.Run("pyw.exe -3 """ & scriptDir & "\main.pyw""" & args, 1, True)
     launchCode = Err.Number
     launchError = Err.Description
     LogStage "Fallback process ended; exit code=" & exitCode & "; error=" & launchCode & " " & launchError
     If launchCode <> 0 Then
-        MsgBox "Python 3.12 kunde inte hittas eller installeras." & vbCrLf & _
+        MsgBox "Python 3 kunde inte hittas eller uppdateras/installeras." & vbCrLf & _
                "Kor Installera_Python.bat manuellt och forsok igen.", _
                vbExclamation, "E-postofferten"
     End If

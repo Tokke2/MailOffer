@@ -2728,3 +2728,12 @@ Användaren valde från redan-valda: tema-knapp (§34 #6) och tydligare
 - Gallringen rör inte öppna fel, SQLite-register, aktiva originalfiler,
   främmande filer eller symboliska länkar. Tomma utgångna datumkataloger tas bort.
 - Ersätter tidigare obegränsad arkivlagring. Version 1.0.0, bygg 2026102324.
+
+## V7.31 (APP 1.0.0)
+- Installera_Python.bat delegerar till tools/ensure_python.ps1: först upptäckt
+  av befintlig Python, sedan endast winget upgrade av befintlig versionsserie.
+- Ingen installationsreserv vid uppgraderingsfel, saknat winget eller okänd
+  Python-installation. Senaste stabila python.org-installation tillåts endast
+  när ingen Python hittas. Signatur och installerarens returkod kontrolleras.
+- Reservstart använder pyw -3 utan hårdkodad 3.12. Tyst start bevarad.
+- Version 1.0.0, bygg 2026102325. Windows-körning återstår att verifiera.
