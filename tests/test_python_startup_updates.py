@@ -47,3 +47,21 @@ class PythonStartupTests(unittest.TestCase):
         self.assertIn('$startupLock.Dispose()', helper)
         self.assertIn('sys.prefix == sys.base_prefix', helper)
         self.assertIn('update_python_packages.py', helper)
+
+    def test_weekly_gate_skips_network_before_candidate_probes(self):
+        helper = (ROOT / 'tools/ensure_python.ps1').read_text()
+        gate = helper.index('Test-PythonMaintenanceDue $statePath')
+        self.assertLess(gate, helper.index('$candidates = @()'))
+        self.assertIn('exit 0', helper[gate:helper.index('$candidates = @()')])
+        self.assertLess(helper.index('update_python_packages.py'), helper.index('$temporaryState ='))
+        self.assertIn('completed=(Get-Date)', helper)
+
+    def test_monday_task_is_hidden_and_has_no_saved_credentials(self):
+        schedule = (ROOT / 'tools/weekly_python.ps1').read_text()
+        self.assertIn("-DaysOfWeek Monday -At '08:00'", schedule)
+        self.assertIn('-StartWhenAvailable', schedule)
+        self.assertIn('-LogonType Interactive -RunLevel Limited', schedule)
+        self.assertNotIn('-Password', schedule)
+        script = (ROOT / 'tools/weekly_python.vbs').read_text()
+        self.assertIn(', 0, True)', script)
+        self.assertNotIn('main.pyw', script)

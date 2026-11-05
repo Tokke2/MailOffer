@@ -36,14 +36,33 @@ jobs:
       - name: Kontrollera PowerShell och VBS utan installation
         shell: powershell
         run: |
-          $tokens = $null
-          $errors = $null
-          [System.Management.Automation.Language.Parser]::ParseFile((Join-Path $pwd 'tools/ensure_python.ps1'), [ref]$tokens, [ref]$errors) | Out-Null
-          if ($errors.Count) { $errors | Format-List; exit 1 }
-          $source = [IO.File]::ReadAllText((Join-Path $pwd 'Starta EmailApp.vbs'))
-          $probe = Join-Path $env:TEMP 'mailoffer-syntax-only.vbs'
-          # Compile the whole script but exit before running any startup actions.
-          $source = $source.Replace('Option Explicit', "Option Explicit`r`nWScript.Quit 0")
-          [IO.File]::WriteAllText($probe, $source, [Text.Encoding]::ASCII)
-          & cscript.exe //nologo $probe
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          foreach ($file in @('tools/ensure_python.ps1', 'tools/weekly_python.ps1')) {
+            $tokens = $null
+            $errors = $null
+            [System.Management.Automation.Language.Parser]::ParseFile((Join-Path $pwd $file), [ref]$tokens, [ref]$errors) | Out-Null
+            if ($errors.Count) { $errors | Format-List; exit 1 }
+          }
+          . ./tools/weekly_python.ps1
+          $cases = @(
+            @('2026-11-09T07:59:59', '2026-11-02T08:00:00'),
+            @('2026-11-09T08:00:00', '2026-11-09T08:00:00'),
+            @('2026-11-15T23:59:59', '2026-11-09T08:00:00'),
+            @('2026-11-16T08:00:00', '2026-11-16T08:00:00')
+          )
+          foreach ($case in $cases) {
+            if ((Get-PythonMaintenanceSlot ([datetime]$case[0])).ToString('s') -ne $case[1]) { throw 'Wrong weekly slot' }
+          }
+          $state = Join-Path $env:TEMP 'mailoffer-week-test.json'
+          [IO.File]::WriteAllText($state, '{"slot":"2026-11-09T08:00:00"}')
+          if (Test-PythonMaintenanceDue $state ([datetime]'2026-11-16T07:59:59')) { throw 'Early update' }
+          if (-not (Test-PythonMaintenanceDue $state ([datetime]'2026-11-16T08:00:00'))) { throw 'Missed update' }
+          [IO.File]::WriteAllText($state, 'corrupt')
+          if (-not (Test-PythonMaintenanceDue $state)) { throw 'Corrupt state must retry' }
+          foreach ($file in @('Starta EmailApp.vbs', 'tools/weekly_python.vbs')) {
+            $source = [IO.File]::ReadAllText((Join-Path $pwd $file))
+            $probe = Join-Path $env:TEMP 'mailoffer-syntax-only.vbs'
+            $source = $source.Replace('Option Explicit', "Option Explicit`r`nWScript.Quit 0")
+            [IO.File]::WriteAllText($probe, $source, [Text.Encoding]::ASCII)
+            & cscript.exe //nologo $probe
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }

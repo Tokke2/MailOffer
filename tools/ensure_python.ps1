@@ -1,12 +1,28 @@
 # Windows PowerShell 5.1. Never install a second Python when one is detected.
 param([switch]$SkipPythonUpgrade)
 $ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'weekly_python.ps1')
+$appRoot = Split-Path $PSScriptRoot
+$statePath = Join-Path $appRoot 'logs/python-maintenance.json'
+$runtimePath = Join-Path $appRoot 'logs/python-runtime.txt'
 $startupLock = $null
 try {
     if (-not $SkipPythonUpgrade) {
         $logDirectory = Join-Path (Split-Path $PSScriptRoot) 'logs'
         New-Item -ItemType Directory -Force -Path $logDirectory | Out-Null
         $startupLock = [IO.File]::Open((Join-Path $logDirectory 'python-startup.lock'), [IO.FileMode]::OpenOrCreate, [IO.FileAccess]::ReadWrite, [IO.FileShare]::None)
+    }
+    if (-not $SkipPythonUpgrade) {
+        Register-PythonMaintenance $appRoot
+        if (-not (Test-PythonMaintenanceDue $statePath)) {
+            if (Test-Path $runtimePath) {
+                $existingRuntime = [IO.File]::ReadAllText($runtimePath).Trim()
+                if (Test-Path -LiteralPath $existingRuntime -PathType Leaf) {
+                    Write-Host 'Veckokontrollen ar redan klar. Ingen uppdateringskontroll vid denna start.'
+                    exit 0
+                }
+            }
+        }
     }
     $candidates = @()
     $detected = $false
@@ -97,6 +113,10 @@ try {
         New-Item -ItemType Directory -Force -Path $logs | Out-Null
         [IO.File]::WriteAllText((Join-Path $logs 'python-runtime.txt'), $pythonw, [Text.Encoding]::Unicode)
 
+        $state = @{slot=(Get-PythonMaintenanceSlot).ToString('s'); completed=(Get-Date).ToString('s')} | ConvertTo-Json
+        $temporaryState = $statePath + '.tmp'
+        [IO.File]::WriteAllText($temporaryState, $state)
+        Move-Item -LiteralPath $temporaryState -Destination $statePath -Force
         exit 0
     }
 

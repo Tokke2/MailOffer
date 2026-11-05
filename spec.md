@@ -2749,3 +2749,12 @@ Användaren valde från redan-valda: tema-knapp (§34 #6) och tydligare
 - Fel avbryter start synligt, utdata i logs/python-startup.log. Delad
   Python/paketuppgradering kan påverka andra program; ingen miljöisolering.
 - Version 1.0.0, bygg 2026102326. Verklig Windows-körning ej verifierad här.
+
+## V7.33 (APP 1.0.0)
+- Ersätter kontroll vid varje start med veckovis Python-/paketunderhåll:
+  måndag 08.00 lokal tid, dolt Windows-schema för inloggad användare.
+- Sparad lyckad veckoperiod; ingen winget/pip-kontroll mellan veckotillfällena.
+  Missad/initial kontroll tas igen vid appstart. Fel markeras inte som lyckade.
+- Ingen väckning, inga sparade lösenord/administratörskrav. Om policy blockerar
+  schemat används appstart efter veckogränsen som reserv. Delad Python kvar.
+- Version 1.0.0, bygg 2026102327.

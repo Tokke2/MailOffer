@@ -2,7 +2,7 @@
 ' Starta EmailApp.vbs - starta E-postofferten UTAN konsolfonster.
 '
 ' Kedja vid dubbelklick och autostart (registret pekar hit via wscript):
-'   1. Kontrollera/uppdatera gemensam Python och tillagg vid varje start.
+'   1. Kontrollera/uppdatera gemensam Python och tillagg veckovis, mandagar 08:00.
 '   2. Kor Installera_Python.bat /silent DOLT och vanta
 '      tills installationen ar klar, leta sedan igen.
 '   3. Starta main.pyw med pythonw (ingen konsol). Argument skickas
@@ -26,7 +26,7 @@ If Not fso.FileExists(batPath) Then
     MsgBox "Installera_Python.bat saknas.", vbExclamation, "MailOffer"
     WScript.Quit 1
 End If
-' Every launch: upgrade shared Python and packages before starting the GUI.
+' Local weekly gate: upgrades only when the Monday 08:00 slot is due.
 LogStage "Python startup check starting"
 On Error Resume Next
 exitCode = shell.Run("cmd /c """ & batPath & """ /silent", 0, True)

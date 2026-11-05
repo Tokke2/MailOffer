@@ -80,18 +80,29 @@ parallell installation eller automatisk övergång till en annan versionsserie.
 Saknas winget eller stöd för installationen visas ett fel och du får uppdatera
 manuellt. Endast när Python saknas hämtas senaste stabila Windows-versionen
 från python.org, med kontroll av installatörens signatur och returkod.
-Vid **varje Windows-start**, även autostart och direktstart av main.pyw,
-kontrolleras/uppgraderas Python och appens tillägg innan GUI:t laddas.
-Ingen egen virtuell miljö skapas eller väljs: den senaste hittade gemensamma
+Python och appens tillägg kontrolleras/uppgraderas **en gång per vecka,
+måndagar kl. 08.00 enligt datorns lokala tid**. Ett dolt Windows-schema
+registreras för aktuell inloggad användare, utan sparat lösenord eller krav
+på administratörskonto. Ingen app behöver vara öppen. Om tiden missas kan
+Windows köra uppgiften senare när användaren är inloggad. Datorn väcks inte.
+Vanlig start läser bara lokal veckostatus och vald interpreter; ingen ny
+winget-/pip-kontroll görs när veckans kontroll redan lyckats. Missad kontroll
+tas även igen vid nästa appstart. Första starten eller saknad interpreter
+kräver initial kontroll. Misslyckade kontroller kan försöka igen vid nästa start.
+Om arbetsdatorns policy blockerar schemat varnas det i loggen och nästa
+appstart efter måndag 08.00 används som reserv.
+
+Ingen egen virtuell miljö skapas eller väljs: senaste hittade gemensamma
 Python-serien som stöds används. Bara den valda serien uppgraderas.
-Paket i requirements.txt används som minimiversioner vid startkontrollen;
+Paket i requirements.txt används som minimiversioner vid veckokontrollen;
 pip hämtar nyare stabila kompatibla paket och kör därefter pip check.
 **Gemensamma uppgraderingar kan påverka andra program** som använder samma
-Python och paket. Starten kan ta längre tid och kräver fungerande nätåtkomst
-för uppdateringskontrollen. Vid fel avbryts starten med en synlig varning;
-ingen separat miljö eller extra Python installeras som reserv.
-Detaljer skrivs till logs/python-startup.log. Parallella startkontroller
-för samma appmapp spärras för att undvika samtidiga uppgraderingar.
+Python och paket. Nätåtkomst krävs när underhållet utförs, inte vid vanliga
+starter däremellan. Fel vid kontroll avbryter appstart med synlig varning.
+Detaljer finns i logs/python-startup.log, veckostatus i
+logs/python-maintenance.json. Parallella kontroller i samma appmapp spärras.
+Veckouppgiften heter MailOffer-Python-Weekly-<appmappens ID>; ta bort den i
+Windows Schemaläggaren om appmappen avinstalleras manuellt.
 `Starta EmailApp.vbs` finns kvar som reservstart.
 En exempelmall finns i `Mallar/` – skapa egna med
 **🧙 Ny mall**-knappen.
