@@ -714,6 +714,8 @@ class AttachmentDropListWidget(QListWidget):
         self._colors = dict(colors)
         self.setAcceptDrops(True)
         self.setDragEnabled(False)
+        self.setDragDropMode(QAbstractItemView.DragDropMode.DropOnly)
+        self.setDefaultDropAction(Qt.DropAction.CopyAction)
         self.setSelectionMode(
             QAbstractItemView.SelectionMode.ExtendedSelection
         )
@@ -743,7 +745,8 @@ class AttachmentDropListWidget(QListWidget):
         )
 
     def dragEnterEvent(self, event: Any) -> None:  # noqa: N802
-        if event.mimeData().hasUrls():
+        from core.compose_helpers import dropped_local_files
+        if dropped_local_files(event.mimeData().urls()):
             event.acceptProposedAction()
             self._drag_active = True
             self._apply_drop_style()
@@ -751,7 +754,8 @@ class AttachmentDropListWidget(QListWidget):
             event.ignore()
 
     def dragMoveEvent(self, event: Any) -> None:  # noqa: N802
-        if event.mimeData().hasUrls():
+        from core.compose_helpers import dropped_local_files
+        if dropped_local_files(event.mimeData().urls()):
             event.acceptProposedAction()
         else:
             event.ignore()
@@ -768,12 +772,8 @@ class AttachmentDropListWidget(QListWidget):
             event.ignore()
             return
 
-        paths: List[str] = []
-        for url in event.mimeData().urls():
-            if url.isLocalFile():
-                local_path = url.toLocalFile().strip()
-                if local_path:
-                    paths.append(local_path)
+        from core.compose_helpers import dropped_local_files
+        paths = dropped_local_files(event.mimeData().urls())
 
         if paths:
             self.filesDropped.emit(paths)
@@ -1116,6 +1116,7 @@ class MainWindow(QMainWindow):
         self._cache_cleanup_timer.start(60_000)
         QTimer.singleShot(8000, self._run_cache_cleanup)
         self._restore_update_session()
+        self._setup_draft_autosave()
         self._automatic_backup_timer = QTimer(self)
         self._automatic_backup_timer.timeout.connect(self._run_automatic_backup)
         self._automatic_backup_timer.start(60_000)
@@ -2118,9 +2119,101 @@ class MainWindow(QMainWindow):
             finally:
                 self._history_rows = previous_rows
             path.unlink()
+            self._restored_update_session = True
             log.info("Arbetsläge återställt efter tyst uppdateringsomstart")
         except Exception:
             log.exception("Kunde inte återställa arbetsläge; sessionsfilen behålls")
+
+    def _draft_path(self):
+        return self._base_dir() / ".data" / "compose-draft.json"
+
+    def _draft_snapshot(self):
+        return {"template_name": self._tpl_combo.currentText(),
+                "subject": self._subject.text(), "body": self._editor.toPlainText(),
+                "free_text": self._free_edit.toPlainText(), "replacements": self._get_ph(),
+                "to": self._list_items(self._to_list), "bcc": self._list_items(self._bcc_list),
+                "to_lang": self._list_langs(self._to_list), "bcc_lang": self._list_langs(self._bcc_list),
+                "attachment_paths": list(self._attachments),
+                "profile_id": self._send_profile_combo.currentData() or ""}
+
+    def _setup_draft_autosave(self):
+        self._draft_pending = self._draft_path().exists() and not getattr(self, "_restored_update_session", False)
+        self._draft_last = None if getattr(self, "_restored_update_session", False) else self._draft_snapshot()
+        self._draft_timer = QTimer(self)
+        self._draft_timer.timeout.connect(self._autosave_draft)
+        self._draft_timer.start(2000)
+        QApplication.instance().aboutToQuit.connect(self._save_draft_at_exit)
+
+    def _save_draft_at_exit(self):
+        if not getattr(self, "_draft_pending", True):
+            self._autosave_draft()
+
+    def _autosave_draft(self):
+        from core.compose_draft import read_draft, save_draft
+        if getattr(self, "_send_busy", False):
+            return
+        try:
+            if self._draft_pending:
+                if getattr(self, "_draft_failed", False):
+                    return
+                if not self.isVisible() or QApplication.activeModalWidget() is not None:
+                    return
+                answer = QMessageBox.question(self, "Sparat utkast",
+                    "Ett autosparat utkast finns. Återställa det?\n"
+                    "Ja återställer. Nej kastar det sparade utkastet. Inget skickas automatiskt.",
+                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                    QMessageBox.StandardButton.Yes)
+                if answer == QMessageBox.StandardButton.Yes:
+                    state = read_draft(self._draft_path())
+                    if state is None:
+                        return
+                    self._restore_compose_draft(state)
+                else:
+                    self._draft_path().unlink(missing_ok=True)
+                self._draft_pending = False
+                self._draft_last = self._draft_snapshot()
+                return
+            state = self._draft_snapshot()
+            if state != self._draft_last:
+                save_draft(self._draft_path(), state)
+                self._draft_last = state
+        except Exception:
+            if not getattr(self, "_draft_failed", False):
+                log.exception("Kunde inte spara/återställa utkast")
+                self._status("Utkast kunde inte sparas/återställas. Tidigare fil behålls.", "error")
+            self._draft_failed = True
+
+    def _restore_compose_draft(self, state):
+        index = self._send_profile_combo.findData(state.get("profile_id", ""))
+        if index >= 0:
+            self._send_profile_combo.setCurrentIndex(index)
+        index = self._tpl_combo.findText(state.get("template_name", ""))
+        self._tpl_combo.setCurrentIndex(index)
+        if index >= 0:
+            self._on_tpl_sel(state["template_name"])
+        else:
+            self._last_tpl = None
+        self._subject.setText(state.get("subject", ""))
+        self._editor.setPlainText(state.get("body", ""))
+        self._free_edit.setPlainText(state.get("free_text", ""))
+        self.settings.set("replacements_values", state.get("replacements", {}))
+        self._rebuild_ph()
+        for target in ("to", "bcc"):
+            getattr(self, "_" + target + "_list").clear()
+            for email in state.get(target, []):
+                self._add_recipient(target, email=email, show_warning=False,
+                    lang=state.get(target + "_lang", {}).get(email, "sv"))
+        self._clr_att()
+        paths = state.get("attachment_paths", [])
+        added = self._add_attachment_paths(paths)
+        self._refresh_preview()
+        self.select_tab("send")
+        self._status(f"Utkast återställt. {len(paths) - added} bilagor saknas/ignorerades.", "warning" if added != len(paths) else "success")
+
+    def _discard_sent_draft(self):
+        self._draft_path().unlink(missing_ok=True)
+        self._draft_pending = False
+        self._draft_last = self._draft_snapshot()
 
     def _on_update_failed(self, message: str) -> None:
         self._update_install_active = False
@@ -3626,6 +3719,8 @@ class MainWindow(QMainWindow):
 
         current = self._list_items(list_widget)
         if value.lower() in {item.lower() for item in current}:
+            if show_warning:
+                QMessageBox.warning(self, "Dubbel mottagare", "Adressen finns redan i den här mottagarlistan.")
             if email is None:
                 line.clear()
             return 0
@@ -7027,6 +7122,9 @@ class MainWindow(QMainWindow):
                 self._release_send_lock()
 
     def _begin_send(self, test_recipient: Optional[str] = None) -> bool:
+        if getattr(self, "_draft_pending", False):
+            self._status("Återställ eller kasta det sparade utkastet innan du skickar.", "warning")
+            return False
         if getattr(self, "_update_install_active", False):
             self._status(tr("update.checking"), "warning")
             return False
@@ -7039,6 +7137,18 @@ class MainWindow(QMainWindow):
         params = self._gather_send_params()
         if test_recipient:
             params = self._make_test_params(params, test_recipient)
+
+        if not test_recipient:
+            from core.compose_helpers import duplicate_recipients
+            duplicates = duplicate_recipients({"Till": self._list_items(self._to_list),
+                "Hemlig kopia": self._list_items(self._bcc_list),
+                "Standard/arkiv-Bcc": [email for email in params.get("default_bcc", [])
+                    if email.casefold() not in {value.casefold() for value in self._list_items(self._bcc_list)}]})
+            if duplicates:
+                details = "\n".join(f"{email}: {', '.join(labels)}" for email, labels in duplicates.items())
+                QMessageBox.warning(self, "Dubbla mottagare",
+                    "Samma adress finns flera gånger. Ta bort överlappningen innan du skickar:\n" + details)
+                return False
 
         report = self._preflight_report(params)
         params["preflight_text"] = self._format_preflight_text(report)
@@ -7233,6 +7343,10 @@ class MainWindow(QMainWindow):
             if self.settings.get("clear_form_after_send", True):
                 self._reset_form_after_send()
                 self.bus.publish("ui.form_reset", {"source": "send_success"})
+            try:
+                self._discard_sent_draft()
+            except Exception:
+                log.exception("Kunde inte rensa skickat utkast")
             QMessageBox.information(
                 self,
                 "✅ Klart",
@@ -7480,6 +7594,7 @@ class MainWindow(QMainWindow):
             log.debug("changeEvent/minimize_to_tray fel", exc_info=True)
 
     def closeEvent(self, event: Any) -> None:  # noqa: N802
+        self._save_draft_at_exit()
         if self.settings.get("close_to_tray", True):
             event.ignore()
             self.hide()

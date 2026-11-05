@@ -2758,3 +2758,18 @@ Användaren valde från redan-valda: tema-knapp (§34 #6) och tydligare
 - Ingen väckning, inga sparade lösenord/administratörskrav. Om policy blockerar
   schemat används appstart efter veckogränsen som reserv. Delad Python kvar.
 - Version 1.0.0, bygg 2026102327.
+
+## V7.34 (APP 1.0.0)
+- Autosparat kompositionsutkast i skyddad .data, atomisk skrivning och
+  validerad fältlista utan SMTP-inställningar. Ändringskontroll varannan sekund,
+  återställningsfråga vid synligt fönster; inget automatiskt utskick.
+- Lyckad ordinarie sändning rensar utkast, fel/testutskick behåller det.
+  Väntande utkast skyddas vid dold start och under sändning.
+- Mottagardubbletter varnas/blockeras före sändning, utan falsk träff för
+  standard-Bcc som redan visas i Bcc-listan.
+- Konservativa kontaktdubblettförslag (namn+företag), primäradressval,
+  före/efter-granskning och explicit bekräftelse. Säkerhetskopia före merge,
+  kategoriförening, primärspråk och rollback vid sparfel.
+- Befintlig drag-and-drop för bilagor förbättrad: DropOnly/CopyAction och
+  endast existerande lokala filer, inga webblänkar/mappar.
+- Version 1.0.0, bygg 2026102328. Qt/Windows-interaktion ej provkörd här.

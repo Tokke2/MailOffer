@@ -732,3 +732,37 @@ om du vill bevara status vid manuell flytt.
 Arkiven gallras efter sju dagar, men mängden data inom perioden har ingen
 storleksgräns. Felregistret har ingen automatisk gallring och kan växa över tid. Granska även arkivens innehåll före delning; de är kopior av
 originalens loggtext, inte en garanterat anonymiserad export.
+
+### Autosparade utkast, dubbletter och bilagor
+
+- **Autosparning:** ändrat arbetsinnehåll sparas ungefär varannan sekund och
+  vid normal avslutning i `.data/compose-draft.json`. Ämne, text, fritext,
+  mallnamn, platshållarvärden, profil-ID, mottagarnas adresser/språk och
+  bilagornas sökvägar ingår. SMTP-inställningar/lösenord sparas inte av denna
+  funktion. Mejlets innehåll kan naturligtvis ändå vara känsligt: filen är
+  lokal och inte krypterad. Utkastet skyddas från releaseuppdateringar.
+- Vid nästa synliga appstart frågar appen om utkastet ska återställas eller
+  kastas. Dold autostart skriver inte över ett väntande utkast. Saknade bilagor
+  rapporteras; filerna kopieras inte av autosparningen. Ett återställt utkast
+  skickas aldrig automatiskt. Lyckad ordinarie sändning rensar utkastet;
+  testmejl eller misslyckad sändning gör det inte. De sista sekunderna före
+  ett hårt avbrott kan saknas. Ett arbetsläge efter godkänd uppdateringsomstart
+  prioriteras framför ett äldre autosparat utkast.
+- **Dubbla mottagare:** adresser jämförs utan hänsyn till stora/små bokstäver.
+  Samma adress i Till och Hemlig kopia (eller överlappande standard-/arkiv-Bcc)
+  blockerar sändningen med en varning tills överlappningen rättats. Ett
+  standard-Bcc som redan visas i Bcc-listan är samma mottagare, inte en extra
+  dubblett. Upprepad manuell inmatning i samma lista ger också en varning.
+  Appen har inget separat Kopia-fält.
+- **Kontakter → Granska dubbletter:** föreslår kontakter med samma icke-tomma
+  namn **och** företag, med normaliserade blanksteg och bokstäver. Detta är
+  endast förslag, inte säker identifiering av en person. Exakta e-postadresser
+  är redan unika i adressboken. Granska före/efter, välj vilken e-postadress
+  som ska behållas och bekräfta. Övriga adresser tas bort ur adressboken,
+  kategorier förenas och primärkontaktens språk behålls. Historik och redan
+  ifyllda mottagarlistor ändras inte. En `contacts-merge-backup-<ID>.json`
+  sparas bredvid kontaktfilen före ändringen; dessa kopior gallras inte
+  automatiskt. Vid sparfel återställs kontaktmodellen.
+- **Dra och släpp:** släpp en eller flera lokala filer direkt i bilagelistan
+  i steg 2. Mappar och webblänkar accepteras inte; redan tillagda sökvägar
+  läggs inte till en gång till. Ingen fil flyttas eller skickas automatiskt.

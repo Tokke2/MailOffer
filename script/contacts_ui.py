@@ -376,7 +376,7 @@ class ContactStore:
         except Exception:
             log.exception("ContactStore: kunde inte skapa fil")
 
-    def _save_locked(self) -> None:
+    def _save_locked(self) -> bool:
         try:
             self._data_path.parent.mkdir(parents=True, exist_ok=True)
             ordered = sorted(
@@ -397,8 +397,10 @@ class ContactStore:
                 encoding="utf-8",
             )
             tmp.replace(self._data_path)
+            return True
         except Exception:
             log.exception("ContactStore: sparfel")
+            return False
 
     def save(self) -> None:
         with self._lock:
@@ -458,6 +460,33 @@ class ContactStore:
             self._save_locked()
         self._publish("update")
         return contact
+
+    def merge_duplicates(self, emails, primary_email):
+        """Explicit user-approved merge, with backup and rollback on save failure."""
+        import copy
+        import uuid
+        from core.compose_helpers import merge_contact_rows, contact_duplicate_groups
+        keys = list(dict.fromkeys(str(email).strip().lower() for email in emails))
+        primary_email = primary_email.strip().lower()
+        with self._lock:
+            if primary_email not in keys or len(keys) < 2 or any(key not in self._contacts for key in keys):
+                raise ValueError("Kontakterna har ändrats. Sök efter dubbletter igen.")
+            rows = [self._contacts[key].to_dict() for key in keys]
+            if not any(len(group) == len(rows) for group in contact_duplicate_groups(rows)):
+                raise ValueError("Kontakterna är inte längre samma föreslagna grupp.")
+            before = copy.deepcopy(self._contacts)
+            backup = self._data_path.with_name(self._data_path.stem + '-merge-backup-' + uuid.uuid4().hex + '.json')
+            backup.write_bytes(self._data_path.read_bytes())
+            primary = self._contacts[primary_email].to_dict()
+            merged = Contact.from_dict(merge_contact_rows(primary, rows))
+            for key in keys:
+                del self._contacts[key]
+            self._contacts[primary_email] = merged
+            if not self._save_locked():
+                self._contacts = before
+                raise OSError("Kontakterna kunde inte sparas. Originalet och säkerhetskopian behålls.")
+        self._publish("merge")
+        return backup
 
     def delete(self, email: str) -> bool:
         normalized = email.strip().lower()
@@ -1015,6 +1044,64 @@ class ContactsTab(QWidget):
         return get_colors("dark")
 
     # ── UI-byggnad ──────────────────────────────────────────────────────
+    def _review_duplicates(self):
+        from core.compose_helpers import contact_duplicate_groups, merge_contact_rows
+        groups = contact_duplicate_groups([contact.to_dict() for contact in self._store.all()])
+        if not groups:
+            QMessageBox.information(self, "Kontaktdubbletter", "Inga förslag hittades. Sökningen kräver samma namn och företag. E-postadresser är redan unika i adressboken.")
+            return
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Granska möjliga kontaktdubbletter")
+        layout = QVBoxLayout(dialog)
+        info = QLabel("Förslagen är inte säkra identitetsmatchningar. Välj grupp och den adress som ska behållas. Övriga adresser tas bort ur adressboken, inte ur historik eller utkast. Primärkontaktens språk behålls; kategorier förenas. Säkerhetskopia skapas före ändring.")
+        info.setWordWrap(True)
+        layout.addWidget(info)
+        group_combo = QComboBox()
+        for rows in groups:
+            group_combo.addItem(f"{rows[0].get('name')} — {rows[0].get('company')} ({len(rows)} adresser)")
+        primary_combo = QComboBox()
+        preview = QPlainTextEdit()
+        preview.setReadOnly(True)
+        layout.addWidget(group_combo)
+        layout.addWidget(QLabel("Adress att behålla:"))
+        layout.addWidget(primary_combo)
+        layout.addWidget(preview)
+        def show_preview():
+            import json
+            rows = groups[group_combo.currentIndex()]
+            index = primary_combo.currentIndex()
+            if index >= 0:
+                preview.setPlainText(json.dumps({"före": rows, "efter": merge_contact_rows(rows[index], rows)}, ensure_ascii=False, indent=2))
+        def choose_group():
+            primary_combo.blockSignals(True)
+            primary_combo.clear()
+            primary_combo.addItems([row['email'] for row in groups[group_combo.currentIndex()]])
+            primary_combo.blockSignals(False)
+            show_preview()
+        group_combo.currentIndexChanged.connect(choose_group)
+        primary_combo.currentIndexChanged.connect(show_preview)
+        choose_group()
+        buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Cancel)
+        merge = buttons.addButton("Slå ihop vald grupp…", QDialogButtonBox.ButtonRole.ActionRole)
+        def confirm():
+            rows = groups[group_combo.currentIndex()]
+            primary = primary_combo.currentText()
+            removed = ', '.join(row['email'] for row in rows if row['email'] != primary)
+            if QMessageBox.question(dialog, "Bekräfta sammanslagning", f"Behåll {primary}. Ta bort {removed} ur adressboken?", QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No, QMessageBox.StandardButton.No) != QMessageBox.StandardButton.Yes:
+                return
+            try:
+                backup = self._store.merge_duplicates([row['email'] for row in rows], primary)
+                self.refresh_list()
+                QMessageBox.information(dialog, "Sammanslaget", f"Säkerhetskopia: {backup}")
+                dialog.accept()
+            except Exception as exc:
+                QMessageBox.warning(dialog, "Sammanslagning misslyckades", str(exc))
+        merge.clicked.connect(confirm)
+        buttons.rejected.connect(dialog.reject)
+        layout.addWidget(buttons)
+        dialog.resize(700, 550)
+        dialog.exec()
+
     def _build_ui(self) -> None:
         layout = QVBoxLayout(self)
         layout.setSpacing(8)
@@ -1106,11 +1193,13 @@ class ContactsTab(QWidget):
         info_layout = QVBoxLayout(info_box)
         info_layout.setSpacing(8)
 
-        crud_row = QHBoxLayout()
+        from ui.responsive import WrapLayout
+        crud_row = WrapLayout()
         for text, callback, css_class in [
             ("➕ Ny", self._add_contact, "success"),
             ("✏️ Redigera", self._edit_selected, "accent"),
             ("🗑️ Ta bort", self._delete_selected, "danger"),
+            ("🔎 Granska dubbletter", self._review_duplicates, "accent"),
         ]:
             button = QPushButton(text)
             button.setProperty("cssClass", css_class)
