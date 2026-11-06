@@ -78,6 +78,12 @@ while time.monotonic() < end and not (root / 'finish').exists():
                 self.assertEqual(proof['args'][1:], ['--background'])
                 self.assertEqual(proof['host'], '1')
                 self.assertEqual(proof['ready'], '1')
+                # A running host must not prevent the next approved release update.
+                from core.app_update import _copy_executable
+                update = root / 'updated.exe'
+                update.write_bytes((ROOT / 'MailOffer.exe').read_bytes() + b'new-release-test')
+                _copy_executable(update, root / 'MailOffer.exe', root)
+                self.assertEqual((root / 'MailOffer.exe').read_bytes(), update.read_bytes())
                 second = subprocess.run([str(root / 'MailOffer.exe')], timeout=10)
                 self.assertEqual(second.returncode, 0)
                 wait_file(root / 'focused')

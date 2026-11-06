@@ -5,6 +5,9 @@ from __future__ import annotations
 
 import logging
 import shutil
+import filecmp
+import os
+import uuid
 from pathlib import Path
 from typing import Any, Dict, List
 
@@ -19,6 +22,29 @@ SKIP_DIR_NAMES = {
     "adresslistor",
     "logs",
 }
+
+
+def _copy_executable(source, target, base):
+    """Swap the file name, never write into a mapped Windows image."""
+    if target.exists() and filecmp.cmp(source, target, shallow=False):
+        return
+    staged = target.with_name('.' + target.name + '-' + uuid.uuid4().hex + '.tmp')
+    backup = None
+    try:
+        shutil.copy2(source, staged)
+        if target.exists():
+            backups = base / '.data' / 'executable-backups'
+            backups.mkdir(parents=True, exist_ok=True)
+            backup = backups / (target.stem + '-' + uuid.uuid4().hex + '.exe')
+            os.replace(target, backup)
+        try:
+            os.replace(staged, target)
+        except Exception:
+            if backup is not None:
+                os.replace(backup, target)
+            raise
+    finally:
+        staged.unlink(missing_ok=True)
 
 
 def apply_update_from_dir(src: Path, dest: Path) -> Dict[str, Any]:
@@ -56,7 +82,10 @@ def apply_update_from_dir(src: Path, dest: Path) -> Dict[str, Any]:
             if not path.is_file():
                 continue
             target.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(path, target)
+            if target.suffix.lower() == ".exe":
+                _copy_executable(path, target, dest)
+            else:
+                shutil.copy2(path, target)
             copied.append(str(rel))
         except Exception as exc:
             errors.append("%s: %s" % (rel, exc))

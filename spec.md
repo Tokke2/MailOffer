@@ -2782,6 +2782,11 @@ Användaren valde från redan-valda: tema-knapp (§34 #6) och tydligare
 - Qt-trådens timer återställer/visar/höjer befintligt fönster från tray/minimering.
 - VBS och direkt main.pyw prioriterar EXE. Bootstrap separat utan GUI-start.
 - Windows CI provar riktig EXE-host, processbild, argument, fokushändelse och
-  att dubbla starter endast kör bootstrap en gång (utan nätuppdatering/Qt).
+  att dubbla starter endast kör bootstrap en gång, även med dolt Qt-fönster
+  i offscreenläge på Python 3.12 och 3.14 (utan nätuppdatering).
 - Version 1.0.0, bygg 2026102329. Hjälpprocesser och Windows ikoncache omfattas
   inte av någon absolut garanti om ikonbyte i alla systemvyer.
+
+- Körande EXE uppdateras via staged namnbyte, inte överskrivning av mappad
+  processbild. Föregående EXE behålls i .data/executable-backups för återställning.
+  Windows-testet verifierar även EXE-byte medan första instansen kör.

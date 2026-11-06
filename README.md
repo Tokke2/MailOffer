@@ -790,3 +790,7 @@ pythonw och kan inte ge dess processbild en annan inbyggd ikon. Windows kan
 också visa grupper/cache på olika sätt; ingen absolut garanti ges för alla
 vyer i alla Windows-versioner. Processvärden kräver standard-CPython x64 med
 kompatibelt DLL/API; saknas det visas fel, ingen extra runtime installeras.
+
+Vid godkänd releaseuppdatering byts EXE-filen via en färdigskriven temporär
+fil och namnbyte, inte genom att skriva i den körande processbilden. Föregående
+EXE behålls i `.data/executable-backups/`; kopiorna gallras inte automatiskt.
