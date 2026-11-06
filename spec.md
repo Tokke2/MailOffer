@@ -2773,3 +2773,15 @@ Användaren valde från redan-valda: tema-knapp (§34 #6) och tydligare
 - Befintlig drag-and-drop för bilagor förbättrad: DropOnly/CopyAction och
   endast existerande lokala filer, inga webblänkar/mappar.
 - Version 1.0.0, bygg 2026102328. Qt/Windows-interaktion ej provkörd här.
+
+## V7.35 (APP 1.0.0)
+- Branded Windows x64 GUI-host laddar befintlig delad CPython-DLL i processen
+  MailOffer.exe. Ikonresurs och copyright behålls; ingen egen Pythonmiljö.
+- Tidigt sessionslokalt mutex före underhåll/start. Andra start signalerar
+  namngiven händelse, ger första PID förgrundsrätt och avslutas utan bootstrap.
+- Qt-trådens timer återställer/visar/höjer befintligt fönster från tray/minimering.
+- VBS och direkt main.pyw prioriterar EXE. Bootstrap separat utan GUI-start.
+- Windows CI provar riktig EXE-host, processbild, argument, fokushändelse och
+  att dubbla starter endast kör bootstrap en gång (utan nätuppdatering/Qt).
+- Version 1.0.0, bygg 2026102329. Hjälpprocesser och Windows ikoncache omfattas
+  inte av någon absolut garanti om ikonbyte i alla systemvyer.

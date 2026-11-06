@@ -19,6 +19,15 @@ Set fso = CreateObject("Scripting.FileSystemObject")
 scriptDir = fso.GetParentFolderName(WScript.ScriptFullName)
 logWarningShown = False
 
+If fso.FileExists(scriptDir & "\MailOffer.exe") Then
+    args = ""
+    For i = 0 To WScript.Arguments.Count - 1
+        args = args & " """ & WScript.Arguments(i) & """"
+    Next
+    exitCode = shell.Run("""" & scriptDir & "\MailOffer.exe""" & args, 1, False)
+    WScript.Quit 0
+End If
+
 LogStage "Launcher started; folder=" & scriptDir
 pythonw = ""
 batPath = scriptDir & "\Installera_Python.bat"

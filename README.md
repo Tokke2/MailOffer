@@ -766,3 +766,27 @@ originalens loggtext, inte en garanterat anonymiserad export.
 - **Dra och släpp:** släpp en eller flera lokala filer direkt i bilagelistan
   i steg 2. Mappar och webblänkar accepteras inte; redan tillagda sökvägar
   läggs inte till en gång till. Ingen fil flyttas eller skickas automatiskt.
+
+### Egen processikon och en enda instans (Windows x64)
+
+`MailOffer.exe` är nu även processvärd: den laddar den befintliga gemensamma
+CPython-installationens DLL i sin egen process. Ingen extra Python eller
+virtuell miljö paketeras/skapas. Huvudprocessen heter därför **MailOffer.exe**
+i Aktivitetshanteraren och har appens inbyggda kuvert-/offertikon i stället
+för Python-processens ikon. Samma original används för fönster, dialoger,
+systemfält och startfil. Vanlig start/autostart och direkt main.pyw går via
+EXE-filen när den finns. Hela appmappen krävs fortfarande.
+
+Ett Windows-mutex tas **före** veckokontrollen och hålls tills appen avslutas.
+En andra start signalerar den redan körande appen och avslutas direkt:
+fönstret visas även från minimerat/dolt systemfältsläge. Om första starten
+fortfarande förbereds ligger visningsbegäran kvar tills GUI:t är redo.
+Detta gäller inom samma Windows-inloggningssession, även från olika appmappar.
+
+Separata kortlivade Python-/Windows-hjälpprocesser vid underhåll kan fortfarande
+ha sina egna systemikoner. Äldre fastnålade genvägar kan behöva tas bort och
+fästas på nytt som MailOffer.exe. Reservstart utan EXE använder fortfarande
+pythonw och kan inte ge dess processbild en annan inbyggd ikon. Windows kan
+också visa grupper/cache på olika sätt; ingen absolut garanti ges för alla
+vyer i alla Windows-versioner. Processvärden kräver standard-CPython x64 med
+kompatibelt DLL/API; saknas det visas fel, ingen extra runtime installeras.

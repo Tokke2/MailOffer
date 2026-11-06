@@ -111,7 +111,9 @@ if str(BASE_DIR) not in sys.path:
 # Direct .pyw launches also go through the shared-runtime startup check.
 if __name__ == "__main__" and os.name == "nt" and os.environ.get("MAILOFFER_STARTUP_READY") != "1":
     subprocess.Popen(
-        ["wscript.exe", str(BASE_DIR / "Starta EmailApp.vbs"), *sys.argv[1:]],
+        ([str(BASE_DIR / "MailOffer.exe"), *sys.argv[1:]]
+         if (BASE_DIR / "MailOffer.exe").is_file() else
+         ["wscript.exe", str(BASE_DIR / "Starta EmailApp.vbs"), *sys.argv[1:]]),
         creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0x08000000),
     )
     raise SystemExit(0)
@@ -653,6 +655,8 @@ def main() -> None:
         main_window = MainWindow(settings, event_bus, recovery)
         from core.app_icon import get_app_icon
         main_window.setWindowIcon(get_app_icon())
+        from core.native_host import install_focus_handler
+        install_focus_handler(main_window)
         log.debug("MainWindow initierad.")
 
         # SystemTray

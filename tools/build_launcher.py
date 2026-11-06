@@ -2,7 +2,7 @@
 
 python -m pip install ziglang==0.17.0
 python tools/build_launcher.py
-No Python runtime is bundled; the existing VBS performs interpreter discovery.
+No runtime is bundled: the host loads the installed shared CPython DLL in-process.
 """
 from pathlib import Path
 import subprocess

@@ -58,7 +58,7 @@ jobs:
           if (-not (Test-PythonMaintenanceDue $state ([datetime]'2026-11-16T08:00:00'))) { throw 'Missed update' }
           [IO.File]::WriteAllText($state, 'corrupt')
           if (-not (Test-PythonMaintenanceDue $state)) { throw 'Corrupt state must retry' }
-          foreach ($file in @('Starta EmailApp.vbs', 'tools/weekly_python.vbs')) {
+          foreach ($file in @('Starta EmailApp.vbs', 'tools/weekly_python.vbs', 'tools/python_bootstrap.vbs')) {
             $source = [IO.File]::ReadAllText((Join-Path $pwd $file))
             $probe = Join-Path $env:TEMP 'mailoffer-syntax-only.vbs'
             $source = $source.Replace('Option Explicit', "Option Explicit`r`nWScript.Quit 0")
@@ -66,3 +66,8 @@ jobs:
             & cscript.exe //nologo $probe
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           }
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Testa verklig EXE-host och enkelinstans utan Qt
+        run: python -m unittest discover -s tests -p test_native_host.py -v
