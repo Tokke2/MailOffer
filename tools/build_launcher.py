@@ -16,7 +16,7 @@ def build():
     with tempfile.TemporaryDirectory() as temp:
         resource = str(Path(temp) / 'mailoffer.res')
         subprocess.run([sys.executable, '-m', 'ziglang', 'rc', '/c65001', '/fo', resource, 'mailoffer.rc'], cwd=ROOT / 'launcher', check=True)
-        subprocess.run([sys.executable, '-m', 'ziglang', 'cc', '-target', 'x86_64-windows-gnu', '-municode', '-Wl,--subsystem,windows', '-Os', '-s', 'mailoffer.c', resource, '-lshell32', '-o', str(ROOT / 'MailOffer.exe')], cwd=ROOT / 'launcher', check=True)
+        subprocess.run([sys.executable, '-m', 'ziglang', 'cc', '-target', 'x86_64-windows-gnu', '-municode', '-Wl,--subsystem,windows', '-Wl,--stack,8388608', '-Os', '-s', 'mailoffer.c', resource, '-lshell32', '-o', str(ROOT / 'MailOffer.exe')], cwd=ROOT / 'launcher', check=True)
 
 
 if __name__ == '__main__':

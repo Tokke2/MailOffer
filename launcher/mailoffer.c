@@ -12,7 +12,7 @@ static int fail(const wchar_t *message) {
 }
 
 int WINAPI wWinMain(HINSTANCE instance, HINSTANCE previous, PWSTR raw, int show) {
-    wchar_t root[32768], script[32768], host[32768], command[32768];
+    static wchar_t root[32768], script[32768], host[32768], command[32768];
     DWORD size = GetModuleFileNameW(NULL, root, 32768);
     if (!size || size >= 32768) return 1;
     wchar_t *slash = wcsrchr(root, L'\\');
@@ -45,7 +45,7 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE previous, PWSTR raw, int show)
     CloseHandle(process.hThread); CloseHandle(process.hProcess);
     if (result) return fail(L"Python-kontrollen misslyckades. Se logs\\python-startup.log. Ingen extra Python-miljo skapas.");
 
-    wchar_t runtime[32768], python[32768], home[32768], dll[32768], pattern[32768];
+    static wchar_t runtime[32768], python[32768], home[32768], dll[32768], pattern[32768];
     swprintf(runtime, 32768, L"%ls\\logs\\python-runtime.txt", root);
     FILE *file = _wfopen(runtime, L"rb");
     if (!file) return fail(L"Kontrollerad Python saknas.");

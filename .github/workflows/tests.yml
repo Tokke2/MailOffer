@@ -70,4 +70,4 @@ jobs:
         with:
           python-version: "3.12"
       - name: Testa verklig EXE-host och enkelinstans utan Qt
-        run: python -m unittest discover -s tests -p test_native_host.py -v
+        run: python tools/run_native_tests.py
