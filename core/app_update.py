@@ -5,7 +5,6 @@ from __future__ import annotations
 
 import logging
 import shutil
-import filecmp
 import os
 import uuid
 from pathlib import Path
@@ -24,9 +23,21 @@ SKIP_DIR_NAMES = {
 }
 
 
+def _same_contents(source, target):
+    if source.stat().st_size != target.stat().st_size:
+        return False
+    with source.open('rb') as left, target.open('rb') as right:
+        while True:
+            chunk = left.read(1024 * 1024)
+            if chunk != right.read(1024 * 1024):
+                return False
+            if not chunk:
+                return True
+
+
 def _copy_executable(source, target, base):
     """Swap the file name, never write into a mapped Windows image."""
-    if target.exists() and filecmp.cmp(source, target, shallow=False):
+    if target.exists() and _same_contents(source, target):
         return
     staged = target.with_name('.' + target.name + '-' + uuid.uuid4().hex + '.tmp')
     backup = None
