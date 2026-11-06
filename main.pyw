@@ -210,8 +210,8 @@ def _find_pythonw() -> Optional[str]:
 
 
 def _should_start_hidden(background: bool, tray_available: bool) -> bool:
-    """Manual launch is always visible; never hide without a working tray."""
-    return bool(background and tray_available)
+    """Always start in the tray when available; otherwise use taskbar minimization."""
+    return bool(tray_available)
 
 
 def _consume_background_flag(argv: list) -> bool:
@@ -698,7 +698,7 @@ def main() -> None:
         except Exception:
             log.debug("Kunde inte publicera app.startup", exc_info=True)
 
-        # Explicit background launches only; old settings must not hide manual starts.
+        # Always minimized, independent of old settings or launch arguments.
         tray_icon = getattr(tray, "_tray", None)
         tray_available = bool(tray_icon is not None and tray_icon.isVisible())
         if _should_start_hidden(background_start, tray_available):
@@ -709,10 +709,8 @@ def main() -> None:
                 settings.get("start_minimized", True),
             )
         else:
-            main_window.show()
-            main_window.raise_()
-            main_window.activateWindow()
-            log.info("Startfönster visas (manuell start eller systembricka saknas).")
+            main_window.showMinimized()
+            log.info("Startar minimerad i aktivitetsfältet eftersom systembrickan saknas.")
 
         log.info("Bygg=%s | Python=%s | bakgrund=%s | bricka=%s", BUILD_ID, sys.executable, background_start, tray_available)
         log.info(

@@ -2790,3 +2790,9 @@ Användaren valde från redan-valda: tema-knapp (§34 #6) och tydligare
 - Körande EXE uppdateras via staged namnbyte, inte överskrivning av mappad
   processbild. Föregående EXE behålls i .data/executable-backups för återställning.
   Windows-testet verifierar även EXE-byte medan första instansen kör.
+
+## V7.36 (APP 1.0.0)
+- Alltid minimerad start: systemfält om tillgängligt, annars aktivitetsfält.
+- Äldre start_minimized=False och manuella starter ändrar inte policyn.
+- Andra start fortsätter visa befintlig instans via native-fokushändelsen.
+- Version 1.0.0, bygg 2026102330.

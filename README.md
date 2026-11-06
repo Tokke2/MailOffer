@@ -794,3 +794,10 @@ kompatibelt DLL/API; saknas det visas fel, ingen extra runtime installeras.
 Vid godkänd releaseuppdatering byts EXE-filen via en färdigskriven temporär
 fil och namnbyte, inte genom att skriva i den körande processbilden. Föregående
 EXE behålls i `.data/executable-backups/`; kopiorna gallras inte automatiskt.
+
+### Alltid minimerad start
+Appen startar alltid i systemfältet när brickan är tillgänglig, även vid
+dubbelklick och oavsett äldre startinställning. Saknas systembricka startar
+fönstret minimerat i aktivitetsfältet, inte oåtkomligt dolt. En andra start
+visar fortfarande den befintliga instansen. Återställning av utkast väntar
+tills fönstret visas.

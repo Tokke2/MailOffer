@@ -193,7 +193,7 @@ def get_defaults() -> Dict[str, Any]:
         # Autostart & tray
         "startup": False,
         "autostart": False,
-        "start_minimized": False,
+        "start_minimized": True,
         "close_to_tray": True,
         "minimize_to_tray": True,
 
@@ -443,7 +443,7 @@ class SettingsManager:
         data = dict(raw)
 
         if version < 13:
-            data.setdefault("start_minimized", False)
+            data.setdefault("start_minimized", True)
             data.setdefault("close_to_tray", True)
 
         if version < 15:
