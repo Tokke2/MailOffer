@@ -5318,7 +5318,7 @@ class MainWindow(QMainWindow):
         form = QFormLayout(group)
         form.addRow("Tema", self._make_settings_combo("theme", ["system", "dark", "light"]))
         form.addRow(tr("settings.language_row"), self._make_settings_combo("language", ["sv", "en"]))
-        form.addRow("Start minimerat", self._make_settings_checkbox("start_minimized", "Start minimerat"))
+        form.addRow("Startläge", QLabel("Alltid minimerad – systemfält eller aktivitetsfält"))
         form.addRow("Close to tray", self._make_settings_checkbox("close_to_tray", "Stäng till tray"))
         form.addRow("Minimize to tray", self._make_settings_checkbox("minimize_to_tray", "Minimera till tray"))
         form.addRow("Autostart", self._make_settings_checkbox("autostart", "Starta med systemet"))
