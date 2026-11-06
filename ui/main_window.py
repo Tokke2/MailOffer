@@ -2156,7 +2156,7 @@ class MainWindow(QMainWindow):
             if self._draft_pending:
                 if getattr(self, "_draft_failed", False):
                     return
-                if not self.isVisible() or QApplication.activeModalWidget() is not None:
+                if not self.isVisible() or self.isMinimized() or QApplication.activeModalWidget() is not None:
                     return
                 answer = QMessageBox.question(self, "Sparat utkast",
                     "Ett autosparat utkast finns. Återställa det?\n"

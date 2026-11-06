@@ -106,6 +106,7 @@ class ComposeImprovementTests(unittest.TestCase):
         methods = {n.name: ast.get_source_segment(source, n) for n in main.body if isinstance(n, ast.FunctionDef)}
         self.assertIn('start(2000)', methods['_setup_draft_autosave'])
         self.assertIn('not self.isVisible()', methods['_autosave_draft'])
+        self.assertIn('self.isMinimized()', methods['_autosave_draft'])
         self.assertIn('_send_busy', methods['_autosave_draft'])
         self.assertIn('_draft_pending', methods['_begin_send'])
         self.assertLess(methods['_begin_send'].index('duplicate_recipients'), methods['_begin_send'].index('_confirm_send'))
