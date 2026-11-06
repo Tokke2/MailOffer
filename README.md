@@ -70,9 +70,9 @@ python main.pyw
 
 **Enklast på Windows 10/11 (x64):** dubbelklicka **`MailOffer.exe`**.
 Den har appens egen ikon och startar utan konsolfönster. Behåll hela
-appmappen tillsammans – EXE-filen är en liten startfil, inte en fristående
-paketering av Python-appen. Den befintliga VBS-startkedjan hittar Python
-eller kör `Installera_Python.bat` dolt om Python saknas.
+appmappen tillsammans – EXE-filen är en processvärd, inte en fristående
+paketering av Python-appen. Den laddar datorns befintliga gemensamma CPython
+och använder den dolda veckokontrollen före uppstart.
 `Installera_Python.bat` kontrollerar först befintlig Python via registret,
 PATH, Python Launcher och standardmappar. Finns Python används endast
 `winget upgrade` för den befintliga versionsserien (t.ex. 3.12.x); ingen

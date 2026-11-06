@@ -45,9 +45,23 @@ kernel.OpenEventW.restype = wintypes.HANDLE
 kernel.WaitForSingleObject.argtypes = [wintypes.HANDLE, wintypes.DWORD]
 handle = kernel.OpenEventW(0x00100000, False, 'Local\\\\RickardLangkvist.MailOffer.Focus')
 (root / 'ready.json').write_text(json.dumps({'image': path.value, 'args': sys.argv, 'host': os.environ.get('MAILOFFER_NATIVE_HOST'), 'ready': os.environ.get('MAILOFFER_STARTUP_READY')}))
+app = window = None
+if os.environ.get('MAILOFFER_TEST_QT') == '1':
+    sys.path.insert(0, ''' + repr(str(ROOT)) + ''')
+    from PyQt6.QtWidgets import QApplication, QMainWindow
+    from core.native_host import install_focus_handler
+    app = QApplication([])
+    window = QMainWindow()
+    install_focus_handler(window)
+    window.hide()
 end = time.monotonic() + 20
 while time.monotonic() < end and not (root / 'finish').exists():
-    if kernel.WaitForSingleObject(handle, 100) == 0:
+    if app:
+        app.processEvents()
+        if window.isVisible() and not window.isMinimized():
+            (root / 'focused').touch()
+        time.sleep(0.05)
+    elif kernel.WaitForSingleObject(handle, 100) == 0:
         (root / 'focused').touch()
 ''', encoding='utf-8')
             first = subprocess.Popen([str(root / 'MailOffer.exe'), '--background'])
