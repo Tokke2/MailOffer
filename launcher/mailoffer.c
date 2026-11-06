@@ -80,6 +80,12 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE previous, PWSTR raw, int show)
     if (!set_program || !set_home || !python_main) return fail(L"Python-versionen saknar nodvandigt host-API.");
     SetEnvironmentVariableW(L"MAILOFFER_STARTUP_READY", L"1");
     SetEnvironmentVariableW(L"MAILOFFER_NATIVE_HOST", L"1");
+    /* CPython reads the UCRT environment snapshot, not just Win32's block. */
+    typedef int (__cdecl *PutEnv)(const wchar_t *, const wchar_t *);
+    HMODULE crt = GetModuleHandleW(L"ucrtbase.dll");
+    PutEnv putenv_wide = crt ? (PutEnv)GetProcAddress(crt, "_wputenv_s") : NULL;
+    if (!putenv_wide || putenv_wide(L"MAILOFFER_STARTUP_READY", L"1") || putenv_wide(L"MAILOFFER_NATIVE_HOST", L"1"))
+        return fail(L"Kunde inte initiera Python-hostens startmiljo.");
     set_program(python); set_home(home);
     int count = 0; LPWSTR *args = CommandLineToArgvW(GetCommandLineW(), &count);
     if (!args) return 1;

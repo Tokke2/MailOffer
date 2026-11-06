@@ -44,7 +44,7 @@ kernel.OpenEventW.argtypes = [wintypes.DWORD, wintypes.BOOL, wintypes.LPCWSTR]
 kernel.OpenEventW.restype = wintypes.HANDLE
 kernel.WaitForSingleObject.argtypes = [wintypes.HANDLE, wintypes.DWORD]
 handle = kernel.OpenEventW(0x00100000, False, 'Local\\\\RickardLangkvist.MailOffer.Focus')
-(root / 'ready.json').write_text(json.dumps({'image': path.value, 'args': sys.argv, 'host': os.environ.get('MAILOFFER_NATIVE_HOST')}))
+(root / 'ready.json').write_text(json.dumps({'image': path.value, 'args': sys.argv, 'host': os.environ.get('MAILOFFER_NATIVE_HOST'), 'ready': os.environ.get('MAILOFFER_STARTUP_READY')}))
 end = time.monotonic() + 20
 while time.monotonic() < end and not (root / 'finish').exists():
     if kernel.WaitForSingleObject(handle, 100) == 0:
@@ -63,6 +63,7 @@ while time.monotonic() < end and not (root / 'finish').exists():
                 self.assertEqual(Path(proof['image']).name.lower(), 'mailoffer.exe')
                 self.assertEqual(proof['args'][1:], ['--background'])
                 self.assertEqual(proof['host'], '1')
+                self.assertEqual(proof['ready'], '1')
                 second = subprocess.run([str(root / 'MailOffer.exe')], timeout=10)
                 self.assertEqual(second.returncode, 0)
                 wait_file(root / 'focused')
@@ -83,6 +84,10 @@ class NativeHostWiringTests(unittest.TestCase):
         self.assertIn('AllowSetForegroundWindow(*pid)', source)
         self.assertIn('python_main(count + 1, python_args)', source)
         self.assertIn('LoadLibraryExW', source)
+        import struct
+        data = (ROOT / 'MailOffer.exe').read_bytes()
+        pe = struct.unpack_from('<I', data, 60)[0]
+        self.assertGreaterEqual(struct.unpack_from('<Q', data, pe + 24 + 72)[0], 8 * 1024 * 1024)
         focus = (ROOT / 'core/native_host.py').read_text()
         for method in ('showNormal()', 'raise_()', 'activateWindow()'):
             self.assertIn(method, focus)
