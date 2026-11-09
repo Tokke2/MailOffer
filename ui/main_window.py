@@ -4968,7 +4968,7 @@ class MainWindow(QMainWindow):
                 log.exception("Kunde inte markera fel som åtgärdade")
                 QMessageBox.warning(dialog, "Öppna fel", "Kunde inte spara ändringen. Se loggen.")
         open_file = QPushButton("Öppna hela felloggen")
-        open_file.clicked.connect(lambda: self._explorer(directory / "unresolved-errors.log"))
+        open_file.clicked.connect(lambda: self._explorer(directory / "errors.log"))
         layout.addWidget(open_file)
         button = QPushButton("Markera valda som åtgärdade")
         button.clicked.connect(resolve)

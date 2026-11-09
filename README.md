@@ -607,7 +607,7 @@ Tyst sökning, godkännande före installation och automatisk säker omstart
 appens tillgängliga `.log`-filer och deras roterade kopior: bland annat
 `email_app.log`, `diagnostics.log`, `launcher.log`, `startup_crash.log` och
 `native-crash-*.log`. Varje post anger källfil och insamlingstid; ursprunglig
-tid och feltext behålls. Originalfilerna ändras inte av insamlaren.
+tid och feltext behålls. Äldre källposter flyttas därefter till dagsarkiv.
 
 Loggarna läses inkrementellt i en bakgrundstråd ungefär var femte sekund,
 vid nästa start och en sista gång vid normalt avslut. Läspositioner sparas
@@ -621,10 +621,11 @@ Samtliga loggar, rotationskopior och insamlarens index/lås ligger i
 `<appmapp>\logs\`. Insamlaren läser bara loggar i denna undermapp, inte
 gamla reservloggar eller andra filer i tempmappen.
 
-Felloggen roteras vid 5 MB, med upp till fem äldre kopior. För att begränsa
-resursåtgång läses högst 1 MB per källfil och omgång och de 128 senast
-ändrade loggfilerna bevakas. Stora gamla loggar kan därför ta flera omgångar
-att samla in. Mycket stora enskilda felposter begränsas med markering.
+Den centrala felloggen är nu en genererad vy över **alla öppna fel** i
+`logs/error-issues.sqlite3`: den roteras eller gallras inte bort. För att begränsa
+resursåtgång läses högst 1 MB per källfil och omgång och de 128 senast ändrade
+loggfilerna bevakas. Arkivering väntar tills källans fel har sparats i registret.
+Stora loggar kan därför kräva flera insamlingsomgångar.
 
 Vanliga lösenords-, token- och AUTH-värden maskeras, men loggen kan innehålla
 andra person- och ärendeuppgifter: **granska den innan du delar den**.
@@ -695,42 +696,60 @@ start; vid fel behöver appen en skrivbar plats eller korrigerade
 mappbehörigheter. Uppdatering/smart cache rensar inte loggmappen. Äldre
 reservloggar flyttas eller raderas inte automatiskt.
 
-### Dagsarkiv och öppna fel
+### Dagsarkiv: bara dagens poster kvar i aktiva loggar
 
-Loggposter före dagens **lokala kalenderdatum** får verifierade ZIP-arkivkopior
-under `logs/archive/ÅÅÅÅ-MM-DD/`. Det sker vid start och när datumet byts
-medan appen körs; även missade dagar inom de senaste sju dagarna tas med. Dagens daterade poster
-arkiveras inte ännu. Arkivkopiorna är innehållsidentifierade så oförändrade
-kopior inte skapas igen. Poster utan läsbart ISO-datum grupperas efter
-källfilens ändringsdatum; nya VBS-startposter använder ISO-format.
+Tidigare dagars poster flyttas till verifierade ZIP-filer under
+`logs/archive/ÅÅÅÅ-MM-DD/`. **Efter verifieringen ersätts den aktiva filen med
+endast dagens poster**, inklusive deras fortsättningsrader/stackspår.
+Framtidsdaterade poster behålls också, för att inte tappa data vid felställd
+klocka. Dagsgränsen följer datorns lokala kalenderdatum. Odaterade poster
+hänförs till senaste läsbara ISO-datum, annars filens ändringsdatum.
 
-Aktiva originalfiler trunkeras/flyttas **inte** av arkiveringen, för att
-inte förlora samtidiga loggskrivningar på Windows. Deras vanliga storleksrotation
-finns kvar. Automatisk 10-dagarsborttagning vid appstart är borttagen.
-Dagsarkiv sparas för de sju avslutade kalenderdagarna före dagens datum.
-Äldre automatiskt skapade ZIP-arkiv gallras vid start och dygnsskifte;
-loggposter äldre än gränsen arkiveras inte på nytt. Loggfiler över 50 MB hoppas över av
-arkiveringen. Öppna arkivmappen via **Loggar → Öppna loggarkiv**.
+Det sker vid start, dygnsskifte och uppföljande försök ungefär varje minut.
+Innan något tas bort måste insamlaren ha hunnit spara källans fel i registret.
+Appens filskrivare pausas med handlerlås. På Windows stängs deras filhandtag
+under kontrollen och källan öppnas exklusivt; upptagna externa filer väntar.
+Den färdiga dagsfilen skrivs till en temporär fil och synkas till disk innan
+ett atomiskt namnbyte. Inga öppna filer skrivs om med oskyddad trunkering.
+En liten arkivjournal gör att läspositionen kan återställas efter avbrott,
+så kvarvarande dagens fel inte återimporteras som nya bara på grund av bytet.
+På andra system kräver externa skrivare att de respekterar filens advisory-lås.
 
-**`logs/unresolved-errors.log`** är separat och roteras/arkiveras inte bort.
-Den visar öppna fel med referens-ID, källfil, första/senaste observation,
-antal och feltext/stackspår. Status sparas i `logs/error-issues.sqlite3`.
-Tillgänglig tidigare `errors.log`-historik importeras en gång vid uppdatering;
-redan raderade loggar kan inte återskapas. Varningar som fångas av felloggen
-ingår också. Samma fel i olika källor kan vara separata poster.
+Dagsarkiv sparas för de **sju avslutade kalenderdagarna före idag**. Äldre data
+arkiveras/verifieras före borttagning ur källan och gallras därefter enligt
+sjudagarsregeln. Loggar över 50 MB, otolkbar textkodning och upptagna filer
+lämnas orörda i stället för att riskera data; orsaken loggas och nya försök görs.
+Aktuellt rått faulthandler-utflöde hanteras först när processen avslutats.
+Öppna arkivmappen via **Loggar → Öppna loggarkiv**.
+
+### En central fellogg som behåller olösta fel
+
+**`logs/errors.log`** visar alla insamlade **öppna fel och varningar**, med
+referens-ID, källfil, första/senaste observation, antal och feltext/stackspår.
+Den är undantagen från dagsarkiveringen: ett olöst fel ligger kvar även om
+ursprungsdagen är äldre än sju dagar. Inga nya roterade kopior av denna vy skapas.
+**`logs/error-issues.sqlite3`** är det beständiga registret bakom filen.
+
+Äldre `errors.log`-historik importeras vid uppdatering och säkerhetskopieras
+som verifierat ZIP före formatbytet (engångskopian kan även innehålla dagens
+historik). Den tidigare genererade `unresolved-errors.log` slås samman med
+registret och tas bort först när den centrala vyn skapats. Tidigare åtgärdade
+fel öppnas inte igen av historieimporten. Redan raderad historik kan inte återskapas.
+Kända gamla stderr-INFO-felklassningar tas inte in på nytt som fel. Redan
+registrerade historiska fel lämnas dock kvar tills de markeras som åtgärdade.
 
 Välj **Loggar → Öppna fel / markera åtgärdade**, markera poster och bekräfta
-**Markera valda som åtgärdade**. Att markera en post reparerar inte orsaken;
-du behöver först kontrollera att felet verkligen är löst. Appen gissar
-aldrig att ett fel är åtgärdat bara för att det inte hörts av på ett tag.
-Återkommer samma identifierade fel öppnas det igen. Åtgärdade poster finns
-kvar i databasen men tas bort från den öppna felloggen. Redigera inte den
-genererade loggfilen manuellt. Kopiera databasen tillsammans med loggarna
-om du vill bevara status vid manuell flytt.
+**Markera valda som åtgärdade**. Det reparerar inte orsaken; kontrollera först
+att felet är löst. Appen gissar inte att ett fel är åtgärdat bara för att det
+varit tyst en tid. Återkommer samma identifierade fel öppnas det igen.
+Åtgärdade poster finns kvar i databasen men tas bort ur den öppna felloggen.
+Redigera inte den genererade filen manuellt. Kopiera även databasen vid flytt.
+Om den genererade felloggen saknas återskapas den från registret.
 
-Arkiven gallras efter sju dagar, men mängden data inom perioden har ingen
-storleksgräns. Felregistret har ingen automatisk gallring och kan växa över tid. Granska även arkivens innehåll före delning; de är kopior av
-originalens loggtext, inte en garanterat anonymiserad export.
+Alla loggar, arkiv, index och journaler stannar i appmappens `logs/`.
+Öppna fel/SQLite har ingen automatisk storleks- eller tidsgallring. Granska
+innehållet före delning: arkiven innehåller originaltext, inte en garanterat
+anonymiserad export. Diskfel/strömavbrott kan aldrig ge en absolut datagaranti.
 
 ### Autosparade utkast, dubbletter och bilagor
 

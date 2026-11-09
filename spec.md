@@ -2808,3 +2808,18 @@ Användaren valde från redan-valda: tema-knapp (§34 #6) och tydligare
   strukturerade stderr-poster behåller INFO/DEBUG/WARNING/ERROR-nivå.
   Oformaterade fel och spårningar bevaras. Befintliga felloggar lämnas orörda.
 - Version 1.0.0, bygg 2026102331.
+
+## V7.38 (APP 1.0.0)
+- En central errors.log för öppna fel/varningar från alla bevakade appkällor;
+  SQLite behåller status utan utgång. Ersätter dubbel genererad fellogg.
+- Legacyhistorik importeras idempotent, verifierad kopia före formatbyte;
+  tidigare unresolved-errors.log tas bort efter lyckad konvertering.
+- Äldre dagsloggposter tas bort ur aktiva källor EFTER verifierat ZIP och
+  fullständig felinsamling. Dagens och framtidsdaterade poster behålls.
+- Handlerlås/exklusivt Windows-handtag, staged fsync/atomiskt namnbyte och
+  arkivjournal för läspositionsåterställning. Upptagna filer lämnas orörda.
+- Start/dygnsskifte/minutvis återförsök; sju dagars arkivgallring kvar.
+  Öppna fel undantas. Över 50 MB/otolkbar kodning/livande faulthandler väntar.
+- Historiska stderr-INFO-felklassningar läses inte in igen; riktiga spårningar
+  bevaras. Registerposter åtgärdsmarkeras inte automatiskt.
+- Version 1.0.0, bygg 2026102332.

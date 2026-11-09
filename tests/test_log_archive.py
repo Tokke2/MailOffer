@@ -27,7 +27,7 @@ class LogArchiveTests(unittest.TestCase):
                 text = archive.read('email_app.log').decode()
                 self.assertNotIn('today', text)
                 self.assertNotIn('open issue', text)
-        self.assertEqual(source.read_text(), original)
+        self.assertEqual(source.read_text(), '2026-11-04 10:00:00 | INFO | today\n')
         self.assertEqual(archive_logs(self.logs, date(2026, 11, 4)), [])
 
     def test_utf16_launcher_archive(self):
@@ -51,14 +51,14 @@ class LogArchiveTests(unittest.TestCase):
         record_error(self.logs, 'email_app.log.1', '2026-11-04 10:00:00 | ERROR | SMTP 535 password=private')
         self.assertEqual(len(open_issues(self.logs)), 1)
         self.assertEqual(open_issues(self.logs)[0][-1], 2)
-        text = (self.logs / 'unresolved-errors.log').read_text()
+        text = (self.logs / 'errors.log').read_text()
         self.assertIn('SMTP 535', text)
         self.assertNotIn('private', text)
         archive_logs(self.logs, date(2026, 11, 5))
         self.assertEqual(len(open_issues(self.logs)), 1)
         resolve_issues(self.logs, [key])
         self.assertEqual(open_issues(self.logs), [])
-        self.assertNotIn('SMTP 535', (self.logs / 'unresolved-errors.log').read_text())
+        self.assertNotIn('SMTP 535', (self.logs / 'errors.log').read_text())
         record_error(self.logs, 'email_app.log', '2026-11-05 10:00:00 | ERROR | SMTP 535 password=private')
         self.assertEqual(open_issues(self.logs)[0][0], key)
 
@@ -84,8 +84,8 @@ class LogArchiveTests(unittest.TestCase):
         self.assertTrue((self.logs / 'archive' / '2026-10-28').exists())
         self.assertFalse((self.logs / 'archive' / '2026-11-04').exists())
         self.assertEqual(open_issues(self.logs)[0][0], key)
-        self.assertIn('expired but unresolved', (self.logs / 'unresolved-errors.log').read_text())
-        self.assertIn('expired', source.read_text())
+        self.assertIn('expired but unresolved', (self.logs / 'errors.log').read_text())
+        self.assertNotIn('expired', source.read_text())
         self.assertEqual(archive_logs(self.logs, date(2026, 11, 4)), [])
         self.assertFalse(old.exists())
 

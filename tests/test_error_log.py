@@ -129,14 +129,14 @@ class ErrorLogTests(unittest.TestCase):
         self.collector.collect()
         self.assertIn('late-stack.py', self.text())
 
-    def test_rotates_output_and_does_not_collect_output_backups(self):
+    def test_open_errors_never_rotate_and_output_backups_are_not_sources(self):
         (self.logs / 'module.log').write_text('ERROR first\n')
         self.collector.collect()
         with mock.patch('core.error_log.MAX_SIZE', 100):
             with (self.logs / 'module.log').open('a') as stream:
                 stream.write('ERROR second\n')
             self.collector.collect()
-        self.assertTrue((self.logs / 'errors.log.1').exists())
+        self.assertFalse((self.logs / 'errors.log.1').exists())
         self.assertEqual(self.collector.collect(), 0)
 
     def test_corrupt_index_recovers_without_touching_original(self):
@@ -178,3 +178,8 @@ class ErrorLogTests(unittest.TestCase):
         self.assertIn('stack-context', self.text())
         self.assertNotIn('healthy-before', self.text())
         self.assertNotIn('healthy-after', self.text())
+
+    def test_legacy_stderr_info_is_not_an_error_but_debug_traceback_is(self):
+        line = '2026-11-03 10:00:00 | ERROR | diagnostics | stderr: 2026-11-03 10:00:00 | INFO | sender | Sändning klar.'
+        self.assertFalse(is_error(line, 'diagnostics.log'))
+        self.assertTrue(is_error(line + '\nTraceback (most recent call last):\nRuntimeError: actual failure', 'diagnostics.log'))

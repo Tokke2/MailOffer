@@ -7,7 +7,7 @@ import re
 import sqlite3
 import tempfile
 
-NAME = 'unresolved-errors.log'
+NAME = 'errors.log'
 
 
 def _connect(directory):
@@ -23,8 +23,10 @@ def _render(db, directory):
     fd, temporary = tempfile.mkstemp(prefix='.open-errors-', dir=directory)
     try:
         with os.fdopen(fd, 'w', encoding='utf-8') as stream:
-            stream.write('OPEN ERRORS — mark resolved in the app; do not edit this generated file.\n')
-            for row in db.execute('SELECT id, source, message, first_seen, last_seen, count FROM issues WHERE resolved=0 ORDER BY last_seen DESC'):
+            rows = db.execute('SELECT id, source, message, first_seen, last_seen, count FROM issues WHERE resolved=0 ORDER BY last_seen DESC').fetchall()
+            if rows:
+                stream.write('OPEN ERRORS — mark resolved in the app; do not edit this generated file.\n')
+            for row in rows:
                 key, source, message, first, last, count = row
                 stream.write(f'\n=== ID {key} | source={source} | first={first} | last={last} | count={count} ===\n{message.rstrip()}\n')
         os.replace(temporary, Path(directory) / NAME)
@@ -42,6 +44,7 @@ def _identity(source, message):
 
 def record_error(directory, source, message):
     from core.error_log import redact
+    import_history(directory)
     message = redact(message)
     family, key = _identity(source, message)
     now = datetime.now().isoformat(timespec='seconds')
@@ -58,13 +61,18 @@ def record_error(directory, source, message):
 
 def import_history(directory):
     """One-time, idempotent import of retained errors.log history on upgrade."""
-    from core.error_log import redact
+    from core.error_log import redact, is_error
     directory = Path(directory)
     db = _connect(directory)
     try:
         with db:
             db.execute('BEGIN IMMEDIATE')
-            if db.execute("SELECT 1 FROM metadata WHERE key='history-imported'").fetchone():
+            if db.execute("SELECT 1 FROM metadata WHERE key='canonical-error-log-v2'").fetchone():
+                if not (directory / NAME).exists():
+                    _render(db, directory)
+                legacy = directory / 'unresolved-errors.log'
+                if legacy.exists() and not legacy.is_symlink():
+                    legacy.unlink()
                 return
             header = re.compile(r'^=== Collected ([^|]+) \| source=(.+) ===$', re.M)
             for path in sorted(directory.glob('errors.log*')):
@@ -72,15 +80,33 @@ def import_history(directory):
                     continue
                 text = path.read_text(encoding='utf-8', errors='replace')
                 matches = list(header.finditer(text))
+                if matches:
+                    from core.log_archive import snapshot
+                    snapshot(directory, path.name, datetime.fromtimestamp(path.stat().st_mtime).date(), path.read_bytes())
                 for i, match in enumerate(matches):
                     message = redact(text[match.end():matches[i + 1].start() if i + 1 < len(matches) else len(text)].strip())
+                    if not is_error(message, match[2]):
+                        continue
                     family, key = _identity(match[2], message)
                     stamp = match[1].strip()
                     db.execute('INSERT OR IGNORE INTO issues VALUES (?, ?, ?, ?, ?, 1, 0)', (key, family, message, stamp, stamp))
-            db.execute("INSERT INTO metadata VALUES ('history-imported', '1')")
+            legacy = directory / 'unresolved-errors.log'
+            if legacy.exists() and not legacy.is_symlink():
+                text = legacy.read_text(encoding='utf-8')
+                pattern = re.compile(r'^=== ID ([0-9a-f]+) \| source=(.+) \| first=(.+) \| last=(.+) \| count=(\d+) ===$', re.M)
+                matches = list(pattern.finditer(text))
+                for i, match in enumerate(matches):
+                    message = redact(text[match.end():matches[i + 1].start() if i + 1 < len(matches) else len(text)].strip())
+                    db.execute('INSERT OR IGNORE INTO issues VALUES (?, ?, ?, ?, ?, ?, 0)', (match[1], match[2], message, match[3], match[4], int(match[5])))
+                if text.strip() and not matches and not text.startswith('OPEN ERRORS'):
+                    raise ValueError('Okänd gammal fellogg; filen lämnas orörd')
+            db.execute("INSERT OR REPLACE INTO metadata VALUES ('canonical-error-log-v2', '1')")
             _render(db, directory)
     finally:
         db.close()
+    legacy = directory / 'unresolved-errors.log'
+    if legacy.exists() and not legacy.is_symlink():
+        legacy.unlink()
 
 
 def open_issues(directory):

@@ -30,6 +30,9 @@ def redact(text):
 def is_error(text, source):
     if source.startswith(('native-crash-', 'startup_crash', 'low_level_crash')):
         return bool(text.strip())
+    nested_info = re.search(r'\bstderr:\s*\d{4}-\d\d-\d\d[ T]\d\d:\d\d:\d\d(?:[,.]\d+)?\s*\|\s*(?:INFO|DEBUG|TRACE)\s*\|', text)
+    if nested_info and "diagnostics" in source.lower() and not _TRACE.search(text):
+        return False  # old diagnostics versions mislabeled normal stderr logging
     if _LEVEL.search(text) or _TRACE.search(text):
         return True
     if 'launcher' in source.lower():
@@ -77,6 +80,7 @@ class ErrorLogCollector:
         self._stop = threading.Event()
         self._thread = None
         self._archive_day = None
+        self._last_archive = 0.0
         self._last_failure = None
         self._mutex = threading.RLock()
 
@@ -97,22 +101,53 @@ class ErrorLogCollector:
         text = redact(text)
         from core.open_errors import record_error
         record_error(self.directory, source, text)
-        if len(text) > 128 * 1024:
-            text = text[:64 * 1024] + '\n[TRUNCATED]\n' + text[-64 * 1024:]
-        data = (f'\n=== Collected {datetime.now().isoformat(timespec="seconds")} | source={source} ===\n' + text.rstrip() + '\n').encode('utf-8')
-        if self.path.exists() and self.path.stat().st_size + len(data) > MAX_SIZE:
-            for number in range(5, 0, -1):
-                previous = self.path if number == 1 else self.path.with_name(NAME + f'.{number - 1}')
-                target = self.path.with_name(NAME + f'.{number}')
-                if previous.exists():
-                    os.replace(previous, target)
-        with self.path.open('ab') as stream:
-            stream.write(data)
-            stream.flush()
+
+    def _save_index(self, state):
+        fd, temporary = tempfile.mkstemp(prefix='.errors-state-', dir=self.directory)
+        try:
+            with os.fdopen(fd, 'w', encoding='utf-8') as stream:
+                json.dump(state, stream)
+                stream.flush()
+                os.fsync(stream.fileno())
+            os.replace(temporary, self.state_path)
+        finally:
+            Path(temporary).unlink(missing_ok=True)
+
+    @staticmethod
+    def _source_identity(source):
+        info = source.stat()
+        return f'{info.st_dev}:{info.st_ino}' if info.st_ino else str(source.resolve())
+
+    def _recover_archive_cursors(self):
+        journals = sorted(self.directory.glob('.archive-cursor-*.json'))
+        if not journals:
+            return
+        try:
+            state = json.loads(self.state_path.read_text(encoding='utf-8'))
+        except (OSError, ValueError):
+            state = {}
+        if not isinstance(state, dict):
+            state = {}
+        for journal in journals:
+            if journal.is_symlink():
+                raise ValueError('Arkivjournalen får inte vara en symbolisk länk')
+            row = json.loads(journal.read_text(encoding='utf-8'))
+            name = row['source']
+            if Path(name).name != name or not re.fullmatch(r'.+\.log(?:\.\d+)?', name):
+                raise ValueError('Ogiltig arkivjournal')
+            source = self.directory / name
+            if source.exists() and not source.is_symlink() and self._source_identity(source) == row['identity']:
+                # The staged inode became the active file. Resume after retained,
+                # already-collected records even if the process died before index save.
+                state[row['identity']] = row['cursor']
+        self._save_index(state)
+        for journal in journals:
+            journal.unlink()
 
     def collect(self, *, final=False):
         """One bounded pass. Original logs are read only; output is never an input."""
         with self._mutex, _locked(self.directory):
+            self._recover_archive_cursors()
             from core.open_errors import import_history
             import_history(self.directory)
             try:
@@ -183,16 +218,51 @@ class ErrorLogCollector:
                 state[key] = value
             state = dict(list(state.items())[-512:])
             if state != original_state or not self.state_path.exists():
-                fd, temporary = tempfile.mkstemp(prefix='.errors-state-', dir=self.directory)
-                try:
-                    with os.fdopen(fd, 'w', encoding='utf-8') as stream:
-                        json.dump(state, stream)
-                    os.replace(temporary, self.state_path)
-                finally:
-                    Path(temporary).unlink(missing_ok=True)
+                self._save_index(state)
             if not self.path.exists():
                 self.path.touch()
             return count
+
+    def archive_completed_logs(self, today=None):
+        """Only compact sources fully ingested into the persistent error registry."""
+        from core.log_archive import archive_logs
+        self.collect(final=True)
+        with self._mutex, _locked(self.directory):
+            state = json.loads(self.state_path.read_text(encoding='utf-8')) if self.state_path.exists() else {}
+            def eligible(source, raw):
+                if re.fullmatch(r"errors\.log\.\d+", source.name):
+                    return True  # legacy summaries were imported before this pass
+                row = state.get(self._source_identity(source), {})
+                length = row.get('prefix_length', 0)
+                return (row.get('offset') == len(raw) and length > 0 and
+                        hashlib.sha256(raw[:length]).hexdigest() == row.get('prefix')) or not raw
+            def cursor(source, remaining):
+                size = min(len(remaining), 64) or 1
+                old = state.get(self._source_identity(source), {})
+                return dict(offset=len(remaining), prefix_length=size,
+                    prefix=hashlib.sha256(remaining[:size]).hexdigest(),
+                    continuation=old.get('continuation', False) if remaining else False)
+            def journal_path(source):
+                digest = hashlib.sha256(source.name.encode('utf-8')).hexdigest()[:16]
+                return self.directory / ('.archive-cursor-' + digest + '.json')
+            def prepared(source, staged, remaining):
+                data = dict(source=source.name, identity=self._source_identity(staged), cursor=cursor(source, remaining))
+                path = journal_path(source)
+                fd, temporary = tempfile.mkstemp(prefix='.archive-cursor-', suffix='.tmp', dir=self.directory)
+                try:
+                    with os.fdopen(fd, 'w', encoding='utf-8') as stream:
+                        json.dump(data, stream)
+                        stream.flush()
+                        os.fsync(stream.fileno())
+                    os.replace(temporary, path)
+                finally:
+                    Path(temporary).unlink(missing_ok=True)
+            def rewritten(source, remaining):
+                data = json.loads(journal_path(source).read_text(encoding='utf-8'))
+                state[data['identity']] = data['cursor']
+                self._save_index(state)
+                journal_path(source).unlink()
+            return archive_logs(self.directory, today, eligible=eligible, prepared=prepared, rewritten=rewritten)
 
     def start(self):
         if self._thread is not None:
@@ -202,10 +272,11 @@ class ErrorLogCollector:
                 try:
                     self.collect()
                     day = datetime.now().date()
-                    if self._archive_day != day:
-                        from core.log_archive import archive_logs
-                        archive_logs(self.directory, today=day)
+                    import time
+                    if self._archive_day != day or time.monotonic() - self._last_archive >= 60:
+                        self.archive_completed_logs(today=day)
                         self._archive_day = day
+                        self._last_archive = time.monotonic()
                     self._last_failure = None
                 except Exception as exc:
                     failure = f"{type(exc).__name__}: {exc}"
