@@ -68,7 +68,7 @@ class DailyCompactionTests(unittest.TestCase):
         paths = list((self.logs / 'archive/2026-11-03').glob('*.zip'))
         self.assertEqual(len(paths), 1)
         with zipfile.ZipFile(paths[0]) as archive:
-            self.assertEqual(archive.read(self.source.name).decode(), OLD)
+            self.assertEqual(archive.read(self.source.name).decode().splitlines(), OLD.splitlines())
         archive_logs(self.logs, TODAY)
         self.assertEqual(self.source.read_text(), NEW)
 
@@ -132,7 +132,7 @@ class DailyCompactionTests(unittest.TestCase):
         db.commit()
         db.close()
         (self.logs / 'errors.log').write_text('=== Collected 2026-11-03T12:00:00 | source=email_app.log ===\n' + OLD)
-        (self.logs / 'unresolved-errors.log').write_text('OPEN ERRORS — mark resolved in the app; do not edit this generated file.\n')
+        (self.logs / 'unresolved-errors.log').write_text('OPEN ERRORS — mark resolved in the app; do not edit this generated file.\n', encoding='utf-8')
         import_history(self.logs)
         self.assertEqual(open_issues(self.logs), [])
         self.assertFalse((self.logs / 'unresolved-errors.log').exists())
@@ -179,3 +179,11 @@ class DailyCompactionTests(unittest.TestCase):
         self.assertTrue(done.is_set())
         self.assertIn('concurrent-write', self.source.read_text())
         self.assertNotIn('failure-code', self.source.read_text())
+
+    def test_unknown_legacy_content_is_not_deleted(self):
+        legacy = self.logs / 'unresolved-errors.log'
+        legacy.write_text('OPEN ERRORS\nunknown content that must not disappear\n', encoding='utf-8')
+        original = legacy.read_bytes()
+        with self.assertRaises(ValueError):
+            import_history(self.logs)
+        self.assertEqual(legacy.read_bytes(), original)

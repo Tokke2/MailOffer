@@ -60,51 +60,48 @@ def record_error(directory, source, message):
 
 
 def import_history(directory):
-    """One-time, idempotent import of retained errors.log history on upgrade."""
+    """Migrate retained history and the old generated view without reopening fixes."""
     from core.error_log import redact, is_error
     directory = Path(directory)
+    legacy = directory / 'unresolved-errors.log'
     db = _connect(directory)
     try:
         with db:
             db.execute('BEGIN IMMEDIATE')
-            if db.execute("SELECT 1 FROM metadata WHERE key='canonical-error-log-v2'").fetchone():
-                if not (directory / NAME).exists():
-                    _render(db, directory)
-                legacy = directory / 'unresolved-errors.log'
-                if legacy.exists() and not legacy.is_symlink():
-                    legacy.unlink()
-                return
-            header = re.compile(r'^=== Collected ([^|]+) \| source=(.+) ===$', re.M)
-            for path in sorted(directory.glob('errors.log*')):
-                if not re.fullmatch(r'errors\.log(?:\.\d+)?', path.name) or path.is_symlink():
-                    continue
-                text = path.read_text(encoding='utf-8', errors='replace')
-                matches = list(header.finditer(text))
-                if matches:
-                    from core.log_archive import snapshot
-                    snapshot(directory, path.name, datetime.fromtimestamp(path.stat().st_mtime).date(), path.read_bytes())
-                for i, match in enumerate(matches):
-                    message = redact(text[match.end():matches[i + 1].start() if i + 1 < len(matches) else len(text)].strip())
-                    if not is_error(message, match[2]):
+            migrated = db.execute("SELECT 1 FROM metadata WHERE key='canonical-error-log-v2'").fetchone()
+            if not migrated:
+                header = re.compile(r'^=== Collected ([^|]+) \| source=(.+) ===$', re.M)
+                for path in sorted(directory.glob('errors.log*')):
+                    if not re.fullmatch(r'errors\.log(?:\.\d+)?', path.name) or path.is_symlink():
                         continue
-                    family, key = _identity(match[2], message)
-                    stamp = match[1].strip()
-                    db.execute('INSERT OR IGNORE INTO issues VALUES (?, ?, ?, ?, ?, 1, 0)', (key, family, message, stamp, stamp))
-            legacy = directory / 'unresolved-errors.log'
-            if legacy.exists() and not legacy.is_symlink():
-                text = legacy.read_text(encoding='utf-8')
+                    text = path.read_text(encoding='utf-8-sig', errors='replace')
+                    matches = list(header.finditer(text))
+                    if matches:
+                        from core.log_archive import snapshot
+                        snapshot(directory, path.name, datetime.fromtimestamp(path.stat().st_mtime).date(), path.read_bytes())
+                    for i, match in enumerate(matches):
+                        message = redact(text[match.end():matches[i + 1].start() if i + 1 < len(matches) else len(text)].strip())
+                        if not is_error(message, match[2]):
+                            continue
+                        family, key = _identity(match[2], message)
+                        stamp = match[1].strip()
+                        db.execute('INSERT OR IGNORE INTO issues VALUES (?, ?, ?, ?, ?, 1, 0)', (key, family, message, stamp, stamp))
+            has_legacy = legacy.exists() and not legacy.is_symlink()
+            if has_legacy:
+                text = legacy.read_text(encoding='utf-8-sig')
                 pattern = re.compile(r'^=== ID ([0-9a-f]+) \| source=(.+) \| first=(.+) \| last=(.+) \| count=(\d+) ===$', re.M)
                 matches = list(pattern.finditer(text))
+                if text.strip() and not matches and (not text.startswith('OPEN ERRORS') or len(text.strip().splitlines()) > 1):
+                    raise ValueError('Okänd gammal fellogg; filen lämnas orörd')
                 for i, match in enumerate(matches):
                     message = redact(text[match.end():matches[i + 1].start() if i + 1 < len(matches) else len(text)].strip())
                     db.execute('INSERT OR IGNORE INTO issues VALUES (?, ?, ?, ?, ?, ?, 0)', (match[1], match[2], message, match[3], match[4], int(match[5])))
-                if text.strip() and not matches and not text.startswith('OPEN ERRORS'):
-                    raise ValueError('Okänd gammal fellogg; filen lämnas orörd')
-            db.execute("INSERT OR REPLACE INTO metadata VALUES ('canonical-error-log-v2', '1')")
-            _render(db, directory)
+            if not migrated or has_legacy or not (directory / NAME).exists():
+                _render(db, directory)
+            if not migrated:
+                db.execute("INSERT INTO metadata VALUES ('canonical-error-log-v2', '1')")
     finally:
         db.close()
-    legacy = directory / 'unresolved-errors.log'
     if legacy.exists() and not legacy.is_symlink():
         legacy.unlink()
 
