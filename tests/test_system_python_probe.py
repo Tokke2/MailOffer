@@ -29,5 +29,5 @@ class SystemPythonProbeTests(unittest.TestCase):
 
     def test_startup_uses_probe_file_not_quoted_inline_python(self):
         source = (ROOT / 'tools/ensure_python.ps1').read_text()
-        self.assertIn("$output = & $exe -I (Join-Path $PSScriptRoot 'probe_system_python.py')", source)
+        self.assertIn("Invoke-PythonCheck $exe (Join-Path $PSScriptRoot 'probe_system_python.py')", source)
         self.assertNotIn(' -c ', source)

@@ -2839,3 +2839,8 @@ Användaren valde från redan-valda: tema-knapp (§34 #6) och tydligare
 - Start/autostart/omstart använder VBS och befintlig system-Python, aldrig äldre EXE.
 - Uppdateraren hoppar över .exe. Egna GUI-ikoner och minimerad start behålls; processikon kan vara Python.
 - Version 1.0.0, bygg 2026102335.
+
+### V7.42 – system-Python 3.15 först, 3.14 som reserv
+- Prioriterar 3.15 sedan 3.14 bland installerade Python-versioner. Provar nästa om tillägg eller offline Qt-starttest misslyckas.
+- Sparad sökväg testas offline och normaliseras till UTF-16 för VBS. Veckogränsen för paketunderhåll behålls.
+- Ingen ny Python, egen miljö eller EXE; version 1.0.0, bygg 2026102336.

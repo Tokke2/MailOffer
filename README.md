@@ -809,3 +809,13 @@ stderr i pythonw. GUI-läget skapar ingen konsollogger när stdout saknas.
 Strukturerade stderr-loggrader behåller sin nivå; oformaterade fel/tracebacks
 behålls som fel. Tidigare felloggsposter raderas eller markeras inte automatiskt
 som åtgärdade av denna ändring.
+
+### Python 3.15 först, 3.14 som reserv
+Vid val av system-Python provas installerad 3.15 först och därefter 3.14.
+Misslyckade versions-, tilläggs- eller Qt-starttester leder vidare till nästa
+befintliga kandidat. Äldre stödda systemversioner provas sist. Ett fungerande
+sparat val behålls mellan veckokontrollerna, men kontrolleras offline vid start.
+Tillägg uppdateras bara när veckounderhållet är aktuellt. Reservvalet installerar
+inte Python, ändrar inte PATH och skapar ingen separat miljö. Ett misslyckat
+paketunderhåll kan redan ha ändrat tillägg i den gemensamma installationen;
+dessa paketändringar återställs inte automatiskt när nästa Python provas.

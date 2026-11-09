@@ -1,6 +1,7 @@
 # Windows PowerShell 5.1: use existing shared Python; update app packages only.
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'weekly_python.ps1')
+. (Join-Path $PSScriptRoot 'python_runtime_checks.ps1')
 $appRoot = Split-Path $PSScriptRoot
 $statePath = Join-Path $appRoot 'logs/python-maintenance.json'
 $runtimePath = Join-Path $appRoot 'logs/python-runtime.txt'
@@ -10,13 +11,19 @@ try {
     New-Item -ItemType Directory -Force -Path $logDirectory | Out-Null
     $startupLock = [IO.File]::Open((Join-Path $logDirectory 'python-startup.lock'), [IO.FileMode]::OpenOrCreate, [IO.FileAccess]::ReadWrite, [IO.FileShare]::None)
     Register-PythonMaintenance $appRoot
-    if (-not (Test-PythonMaintenanceDue $statePath)) {
-        if (Test-Path $runtimePath) {
-            $existingRuntime = [IO.File]::ReadAllText($runtimePath).Trim()
-            if (Test-Path -LiteralPath $existingRuntime -PathType Leaf) {
+    $maintenanceDue = Test-PythonMaintenanceDue $statePath
+    if (-not $maintenanceDue -and (Test-Path $runtimePath)) {
+        $existingRuntime = [IO.File]::ReadAllText($runtimePath).Trim().Trim([char]0xFEFF)
+        $cachedExe = $existingRuntime -replace 'pythonw\.exe$', 'python.exe'
+        if ((Test-Path -LiteralPath $existingRuntime -PathType Leaf) -and (Test-Path -LiteralPath $cachedExe -PathType Leaf)) {
+            $check = Invoke-PythonCheck $cachedExe (Join-Path $PSScriptRoot 'probe_app_python.py')
+            if ($check.Code -eq 0) {
+                # Always normalize encoding, including manually edited UTF-8 paths.
+                [IO.File]::WriteAllText($runtimePath, $existingRuntime, [Text.Encoding]::Unicode)
                 Write-Host 'Veckans tillaggskontroll ar redan klar. Systemets Python andras inte.'
                 exit 0
             }
+            Write-Host ('Sparad Python klarade inte starttestet: ' + $check.Text)
         }
     }
     $candidates = @()
@@ -69,7 +76,13 @@ try {
     }
     # Get-Command can return several launchers. Never invoke an array of paths.
     foreach ($launcher in @(Get-Command py.exe -CommandType Application -ErrorAction SilentlyContinue)) {
-        foreach ($line in @(& $launcher.Source -0p 2>$null)) {
+        $previousPreference = $ErrorActionPreference
+        try {
+            $ErrorActionPreference = 'Continue'
+            $launcherLines = @(& $launcher.Source -0p 2>$null)
+        } catch { $launcherLines = @() }
+        finally { $ErrorActionPreference = $previousPreference }
+        foreach ($line in $launcherLines) {
             if ("$line" -match '([A-Za-z]:\\.+\\python(?:w)?\.exe)\s*$') {
                 $exe = $Matches[1] -replace 'pythonw\.exe$', 'python.exe'
                 if (Test-Path $exe) { $detected = $true; $candidates += $exe }
@@ -79,8 +92,9 @@ try {
     $versions = @()
     $runtimes = @()
     foreach ($exe in @($candidates | Select-Object -Unique)) {
-        $output = & $exe -I (Join-Path $PSScriptRoot 'probe_system_python.py') 2>$null
-        if ($LASTEXITCODE -eq 0 -and "$output" -match '^(\d+)\.(\d+)$') {
+        $probe = Invoke-PythonCheck $exe (Join-Path $PSScriptRoot 'probe_system_python.py')
+        $output = $probe.Text.Trim()
+        if ($probe.Code -eq 0 -and "$output" -match '^(\d+)\.(\d+)$') {
             $versions += "$output"
             if ([version]"$output" -ge [version]"3.10") {
                 $runtimes += [pscustomobject]@{Version=[version]"$output"; Path=$exe}
@@ -90,21 +104,19 @@ try {
     if ($detected) {
         # Crucial: this branch NEVER falls back to a fresh installation.
         if (-not $versions.Count) { throw 'Python finns men kunde inte kontrolleras. Ingen ny installation gjordes.' }
-        $runtime = $runtimes | Select-Object -First 1
-        if (-not $runtime) { throw 'Ingen gemensam Python 3.10+ hittades. Ingen separat miljo skapas.' }
-        # Run with exactly the interpreter the GUI will use, before importing Qt.
-        & $runtime.Path (Join-Path $PSScriptRoot 'update_python_packages.py')
-        if ($LASTEXITCODE -ne 0) { throw 'Kontroll/uppdatering av Python-tillagg misslyckades. Se logs/python-startup.log.' }
+        $runtime = Select-WorkingRuntime $runtimes $PSScriptRoot $maintenanceDue
+        if (-not $runtime) { throw 'Ingen befintlig system-Python klarade tillaggs-/starttestet. Se ovan. Ingen Python installerades eller uppgraderades.' }
         $pythonw = Join-Path (Split-Path $runtime.Path) 'pythonw.exe'
-        if (-not (Test-Path $pythonw)) { throw 'Gemensam pythonw.exe saknas.' }
         $logs = Join-Path (Split-Path $PSScriptRoot) 'logs'
         New-Item -ItemType Directory -Force -Path $logs | Out-Null
         [IO.File]::WriteAllText((Join-Path $logs 'python-runtime.txt'), $pythonw, [Text.Encoding]::Unicode)
 
-        $state = @{slot=(Get-PythonMaintenanceSlot).ToString('s'); completed=(Get-Date).ToString('s')} | ConvertTo-Json
-        $temporaryState = $statePath + '.tmp'
-        [IO.File]::WriteAllText($temporaryState, $state)
-        Move-Item -LiteralPath $temporaryState -Destination $statePath -Force
+        if ($maintenanceDue) {
+            $state = @{slot=(Get-PythonMaintenanceSlot).ToString('s'); completed=(Get-Date).ToString('s')} | ConvertTo-Json
+            $temporaryState = $statePath + '.tmp'
+            [IO.File]::WriteAllText($temporaryState, $state)
+            Move-Item -LiteralPath $temporaryState -Destination $statePath -Force
+        }
         exit 0
     }
 

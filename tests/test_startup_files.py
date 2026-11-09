@@ -41,7 +41,8 @@ class TestInstallBat(unittest.TestCase):
         self.assertIn('HKLM:', helper)
         self.assertIn('-0p', helper)
         branch = helper[helper.index('    if ($detected) {'):helper.index('    # No installed interpreter found')]
-        self.assertIn('update_python_packages.py', branch)
+        self.assertIn('Select-WorkingRuntime', branch)
+        self.assertIn('update_python_packages.py', (ROOT / 'tools/python_runtime_checks.ps1').read_text())
         self.assertNotIn('Start-Process', branch)
         self.assertNotIn(' winget install ', branch)
         self.assertIn('exit 0', branch)
@@ -57,7 +58,7 @@ class TestInstallBat(unittest.TestCase):
         for forbidden in ('winget', 'Invoke-WebRequest', 'Start-Process', 'python.org', 'SkipPythonUpgrade'):
             self.assertNotIn(forbidden, helper)
         self.assertIn('Systemets Python saknas', helper)
-        self.assertIn('Select-Object -First 1', helper)
+        self.assertIn('Select-WorkingRuntime', helper)
 
 
 
