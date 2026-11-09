@@ -795,3 +795,17 @@ Gamla EXE-filer används inte, även om de ligger kvar från en tidigare version
 Stäng appen och radera en sådan gammal fil manuellt; återställ inte en fil som
 Defender har satt i karantän. Gamla fastnålade EXE-genvägar måste ersättas.
 Uppdateraren installerar inga .exe-filer.
+
+### Alltid minimerad start
+Appen startar alltid i systemfältet när brickan är tillgänglig, även vid
+dubbelklick och oavsett äldre startinställning. Saknas systembricka startar
+fönstret minimerat i aktivitetsfältet, inte oåtkomligt dolt. En andra start
+visar fortfarande den befintliga instansen. Återställning av utkast väntar
+tills fönstret visas.
+
+### Rätt nivå för stderr-loggar
+Normal INFO-/DEBUG-utmatning blir inte längre ERROR bara för att den passerar
+stderr i pythonw. GUI-läget skapar ingen konsollogger när stdout saknas.
+Strukturerade stderr-loggrader behåller sin nivå; oformaterade fel/tracebacks
+behålls som fel. Tidigare felloggsposter raderas eller markeras inte automatiskt
+som åtgärdade av denna ändring.

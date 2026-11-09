@@ -622,6 +622,8 @@ def main() -> None:
         main_window = MainWindow(settings, event_bus, recovery)
         from core.app_icon import get_app_icon
         main_window.setWindowIcon(get_app_icon())
+        from core.window_focus import install_focus_handler
+        install_focus_handler(main_window)
         log.debug("MainWindow initierad.")
 
         # SystemTray

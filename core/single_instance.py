@@ -535,6 +535,10 @@ class SingleInstance:
         - Windows: EnumWindows (fönstertitel matchar app-namn)
         - POSIX: skickar "focus" via Unix-socket till första instansen
         """
+        if IS_WINDOWS:
+            from core.window_focus import request_focus
+            if request_focus():
+                return True
         if IS_WINDOWS and HAS_WIN32:
             return self._focus_existing_windows()
         if IS_POSIX:
