@@ -187,3 +187,11 @@ class DailyCompactionTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             import_history(self.logs)
         self.assertEqual(legacy.read_bytes(), original)
+
+    def test_canonical_view_can_recover_open_errors_after_missing_database(self):
+        record_error(self.logs, 'email_app.log', 'ERROR preserved-535')
+        key = open_issues(self.logs)[0][0]
+        (self.logs / 'error-issues.sqlite3').unlink()
+        import_history(self.logs)
+        self.assertEqual(open_issues(self.logs)[0][0], key)
+        self.assertIn('preserved-535', (self.logs / 'errors.log').read_text())

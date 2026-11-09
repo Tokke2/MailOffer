@@ -59,6 +59,17 @@ def record_error(directory, source, message):
     return key
 
 
+def _import_generated(db, text):
+    from core.error_log import redact
+    pattern = re.compile(r'^=== ID ([0-9a-f]+) \| source=(.+) \| first=(.+) \| last=(.+) \| count=(\d+) ===$', re.M)
+    matches = list(pattern.finditer(text))
+    if text.strip() and not matches and (not text.startswith('OPEN ERRORS') or len(text.strip().splitlines()) > 1):
+        raise ValueError('Okänd gammal fellogg; filen lämnas orörd')
+    for i, match in enumerate(matches):
+        message = redact(text[match.end():matches[i + 1].start() if i + 1 < len(matches) else len(text)].strip())
+        db.execute('INSERT OR IGNORE INTO issues VALUES (?, ?, ?, ?, ?, ?, 0)', (match[1], match[2], message, match[3], match[4], int(match[5])))
+
+
 def import_history(directory):
     """Migrate retained history and the old generated view without reopening fixes."""
     from core.error_log import redact, is_error
@@ -76,6 +87,8 @@ def import_history(directory):
                         continue
                     text = path.read_text(encoding='utf-8-sig', errors='replace')
                     matches = list(header.finditer(text))
+                    if not matches and text.startswith('OPEN ERRORS'):
+                        _import_generated(db, text)
                     if matches:
                         from core.log_archive import snapshot
                         snapshot(directory, path.name, datetime.fromtimestamp(path.stat().st_mtime).date(), path.read_bytes())
@@ -89,13 +102,7 @@ def import_history(directory):
             has_legacy = legacy.exists() and not legacy.is_symlink()
             if has_legacy:
                 text = legacy.read_text(encoding='utf-8-sig')
-                pattern = re.compile(r'^=== ID ([0-9a-f]+) \| source=(.+) \| first=(.+) \| last=(.+) \| count=(\d+) ===$', re.M)
-                matches = list(pattern.finditer(text))
-                if text.strip() and not matches and (not text.startswith('OPEN ERRORS') or len(text.strip().splitlines()) > 1):
-                    raise ValueError('Okänd gammal fellogg; filen lämnas orörd')
-                for i, match in enumerate(matches):
-                    message = redact(text[match.end():matches[i + 1].start() if i + 1 < len(matches) else len(text)].strip())
-                    db.execute('INSERT OR IGNORE INTO issues VALUES (?, ?, ?, ?, ?, ?, 0)', (match[1], match[2], message, match[3], match[4], int(match[5])))
+                _import_generated(db, text)
             if not migrated or has_legacy or not (directory / NAME).exists():
                 _render(db, directory)
             if not migrated:
