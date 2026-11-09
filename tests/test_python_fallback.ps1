@@ -56,6 +56,12 @@ try {
     try { $text = $stream.ReadAll().Trim() } finally { $stream.Close() }
     if ($text -ne (Join-Path $temporary 'pythonw.exe')) { throw 'Runtime encoding is not readable by VBS' }
     Write-Host 'Runtime preference, failures, offline fallback and VBS encoding passed.'
+} catch {
+    $detail = ($_ | Out-String) + $_.ScriptStackTrace
+    Write-Host ('::error::' + $detail.Replace('%', '%25').Replace("`r", '%0D').Replace("`n", '%0A'))
+    exit 1
 } finally {
     Remove-Item -LiteralPath $temporary -Recurse -Force
 }
+
+exit 0
