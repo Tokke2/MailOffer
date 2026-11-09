@@ -1,6 +1,6 @@
 @echo off
 setlocal EnableExtensions
-REM Detect Python first. Upgrade existing only; install only when missing.
+REM Compatibility filename: check existing system Python, update add-ons only.
 set "SILENT="
 if /I "%~1"=="/silent" set "SILENT=1"
 if /I "%~1"=="--silent" set "SILENT=1"

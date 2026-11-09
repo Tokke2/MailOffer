@@ -50,3 +50,23 @@ log.info('normal shutdown marker')
             self.assertNotEqual(result.returncode, 0)
             self.assertIn('ModuleNotFoundError', (Path(tmp) / 'logs' / 'diagnostics.log').read_text())
             self.assertIn('ModuleNotFoundError', (Path(tmp) / 'logs' / 'errors.log').read_text())
+
+    def test_structured_stderr_info_is_not_error_but_tracebacks_remain_errors(self):
+        from unittest import mock
+        from core.diagnostics import ErrorStream
+        logger = mock.Mock()
+        stream = ErrorStream(logger)
+        for name, level in [('DEBUG', logging.DEBUG), ('INFO', logging.INFO), ('WARNING', logging.WARNING), ('ERROR', logging.ERROR), ('CRITICAL', logging.CRITICAL)]:
+            text = f'2026-11-03 15:36:05 | {name:<8} | core.email_sender | Sändning klar\n'
+            self.assertEqual(stream.write(text), len(text))
+            self.assertEqual(logger.log.call_args.args[0], level)
+        stream.write('Traceback (most recent call last):\n')
+        self.assertEqual(logger.log.call_args.args[0], logging.ERROR)
+        stream.write('RuntimeError: raw error\n')
+        self.assertEqual(logger.log.call_args.args[0], logging.ERROR)
+
+    def test_gui_console_logging_does_not_feed_stderr(self):
+        from unittest import mock
+        from core.logger import _add_console_handler
+        with mock.patch('core.logger.sys.stdout', None):
+            self.assertIsNone(_add_console_handler(logging.Formatter('%(message)s')))

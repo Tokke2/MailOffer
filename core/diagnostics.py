@@ -93,7 +93,11 @@ class ErrorStream:
         self.logger = logger
     def write(self, text):
         if text.strip():
-            self.logger.error('stderr: %s', text.rstrip())
+            # Structured console records can arrive here under pythonw. Preserve
+            # their severity; stderr alone does not turn a successful INFO into ERROR.
+            match = re.match(r'^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}(?:[,.]\d+)?\s*\|\s*(DEBUG|INFO|WARNING|ERROR|CRITICAL)\s*\|', text)
+            level = getattr(logging, match[1]) if match else logging.ERROR
+            self.logger.log(level, 'stderr: %s', text.rstrip())
         return len(text)
     def flush(self):
         pass

@@ -2796,3 +2796,15 @@ Användaren valde från redan-valda: tema-knapp (§34 #6) och tydligare
 - Äldre start_minimized=False och manuella starter ändrar inte policyn.
 - Andra start fortsätter visa befintlig instans via native-fokushändelsen.
 - Version 1.0.0, bygg 2026102330.
+
+## V7.37 (APP 1.0.0)
+- Använd befintlig system-Python; ingen installation, nedladdning eller
+  uppgradering av Python, inte heller vid saknad/för gammal interpreter.
+- Endast tillägg underhålls veckovis, fortsatt måndag 08.00 lokal tid.
+  Behåll senast vald tolk; annars PATH före register/standardmappar. Ingen venv.
+- Ta bort gammal Python-installationsreserv i main.pyw. BAT-namnet behålls
+  för kompatibilitet men utför endast interpreterval och paketunderhåll.
+- Förhindra konsollogger från att falla tillbaka till stderr i GUI-läge;
+  strukturerade stderr-poster behåller INFO/DEBUG/WARNING/ERROR-nivå.
+  Oformaterade fel och spårningar bevaras. Befintliga felloggar lämnas orörda.
+- Version 1.0.0, bygg 2026102331.

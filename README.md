@@ -73,27 +73,26 @@ Den har appens egen ikon och startar utan konsolfönster. Behåll hela
 appmappen tillsammans – EXE-filen är en processvärd, inte en fristående
 paketering av Python-appen. Den laddar datorns befintliga gemensamma CPython
 och använder den dolda veckokontrollen före uppstart.
-`Installera_Python.bat` kontrollerar först befintlig Python via registret,
-PATH, Python Launcher och standardmappar. Finns Python används endast
-`winget upgrade` för den befintliga versionsserien (t.ex. 3.12.x); ingen
-parallell installation eller automatisk övergång till en annan versionsserie.
-Saknas winget eller stöd för installationen visas ett fel och du får uppdatera
-manuellt. Endast när Python saknas hämtas senaste stabila Windows-versionen
-från python.org, med kontroll av installatörens signatur och returkod.
-Python och appens tillägg kontrolleras/uppgraderas **en gång per vecka,
+`Installera_Python.bat` har kvar sitt namn för kompatibilitet men **installerar
+eller uppgraderar aldrig Python**. Appen använder befintlig gemensam Python
+3.10+ (x64 för EXE-värden). Saknas den visas ett fel; användaren/IT behöver
+själv installera eller välja en lämplig systeminstallation. Ingen winget,
+Python-nedladdning eller separat virtuell miljö används.
+Endast appens tillägg kontrolleras/uppgraderas **en gång per vecka,
 måndagar kl. 08.00 enligt datorns lokala tid**. Ett dolt Windows-schema
 registreras för aktuell inloggad användare, utan sparat lösenord eller krav
 på administratörskonto. Ingen app behöver vara öppen. Om tiden missas kan
 Windows köra uppgiften senare när användaren är inloggad. Datorn väcks inte.
 Vanlig start läser bara lokal veckostatus och vald interpreter; ingen ny
-winget-/pip-kontroll görs när veckans kontroll redan lyckats. Missad kontroll
+pip-kontroll görs när veckans kontroll redan lyckats. Missad kontroll
 tas även igen vid nästa appstart. Första starten eller saknad interpreter
 kräver initial kontroll. Misslyckade kontroller kan försöka igen vid nästa start.
 Om arbetsdatorns policy blockerar schemat varnas det i loggen och nästa
 appstart efter måndag 08.00 används som reserv.
 
-Ingen egen virtuell miljö skapas eller väljs: senaste hittade gemensamma
-Python-serien som stöds används. Bara den valda serien uppgraderas.
+Befintligt tidigare valt Python behålls om det fungerar; annars prioriteras
+systemets PATH och därefter registrerade/standardinstallerade tolkar.
+Python-versionen ändras inte. Ingen egen virtuell miljö skapas eller väljs.
 Paket i requirements.txt används som minimiversioner vid veckokontrollen;
 pip hämtar nyare stabila kompatibla paket och kör därefter pip check.
 **Gemensamma uppgraderingar kan påverka andra program** som använder samma
@@ -801,3 +800,10 @@ dubbelklick och oavsett äldre startinställning. Saknas systembricka startar
 fönstret minimerat i aktivitetsfältet, inte oåtkomligt dolt. En andra start
 visar fortfarande den befintliga instansen. Återställning av utkast väntar
 tills fönstret visas.
+
+### Rätt nivå för stderr-loggar
+Normal INFO-/DEBUG-utmatning blir inte längre ERROR bara för att den passerar
+stderr i pythonw. GUI-läget skapar ingen konsollogger när stdout saknas.
+Strukturerade stderr-loggrader behåller sin nivå; oformaterade fel/tracebacks
+behålls som fel. Tidigare felloggsposter raderas eller markeras inte automatiskt
+som åtgärdade av denna ändring.

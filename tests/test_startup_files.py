@@ -41,7 +41,7 @@ class TestInstallBat(unittest.TestCase):
         self.assertIn('HKLM:', helper)
         self.assertIn('-0p', helper)
         branch = helper[helper.index('    if ($detected) {'):helper.index('    # No installed interpreter found')]
-        self.assertIn(' upgrade --exact', branch)
+        self.assertIn('update_python_packages.py', branch)
         self.assertNotIn('Start-Process', branch)
         self.assertNotIn(' winget install ', branch)
         self.assertIn('exit 0', branch)
@@ -52,14 +52,13 @@ class TestInstallBat(unittest.TestCase):
         self.assertIn('exit /b %RESULT%', self.src)
         self.assertGreater(self.src.rfind('pause'), self.src.rfind('if not defined SILENT'))
 
-    def test_latest_stable_and_verified_installer(self):
+    def test_system_python_is_never_downloaded_installed_or_upgraded(self):
         helper = (ROOT / "tools" / "ensure_python.ps1").read_text()
-        self.assertIn('Latest Python 3 Release', helper)
-        self.assertIn('Get-AuthenticodeSignature', helper)
-        self.assertIn('Python Software Foundation', helper)
-        self.assertIn('-Wait -PassThru', helper)
-        self.assertIn('ExitCode', helper)
-        self.assertIn('/quiet InstallAllUsers=0', helper)
+        for forbidden in ('winget', 'Invoke-WebRequest', 'Start-Process', 'python.org', 'SkipPythonUpgrade'):
+            self.assertNotIn(forbidden, helper)
+        self.assertIn('Systemets Python saknas', helper)
+        self.assertIn('Select-Object -First 1', helper)
+
 
 
 class TestStartVbs(unittest.TestCase):
@@ -140,14 +139,10 @@ class TestMainPythonGuard(unittest.TestCase):
         self.assertFalse(ok((2, 7, 18)))
         self.assertTrue(ok())  # testmiljön själv kör 3.10+
 
-    def test_silent_launcher_uses_no_console(self):
+    def test_old_python_does_not_launch_installer(self):
         src = (ROOT / "main.pyw").read_text(encoding="utf-8")
-        block = src.split("def _launch_python_installer_silent", 1)[1]
-        block = block.split("def _safe_show_critical", 1)[0]
-        self.assertIn("PYTHON_INSTALLER_BAT", block)
-        self.assertIn('"/silent"', block)
-        self.assertIn("CREATE_NO_WINDOW", block)
-        self.assertIn("DEVNULL", block)
+        self.assertNotIn('_launch_python_installer_silent', src)
+        self.assertIn('Appen installerar eller uppgraderar inte Python.', src)
 
 
 class TestIcons(unittest.TestCase):

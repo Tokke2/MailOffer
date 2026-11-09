@@ -680,6 +680,8 @@ def _add_console_handler(
     formatter: logging.Formatter,
 ) -> Optional[logging.Handler]:
     """Skapa StreamHandler för konsol-utmatning (dev/debug-läge)."""
+    if sys.stdout is None:
+        return None  # pythonw/native GUI: do not redirect console logs into stderr diagnostics
     try:
         handler = logging.StreamHandler(sys.stdout)
         handler.setLevel(logging.DEBUG)
