@@ -195,3 +195,19 @@ class DailyCompactionTests(unittest.TestCase):
         import_history(self.logs)
         self.assertEqual(open_issues(self.logs)[0][0], key)
         self.assertIn('preserved-535', (self.logs / 'errors.log').read_text())
+
+    def test_windows_crlf_history_does_not_reopen_legacy_resolved_id(self):
+        import sqlite3
+        self.source.write_bytes((OLD + NEW).replace('\n', '\r\n').encode('utf-8'))
+        collector = ErrorLogCollector(self.base)
+        collector.collect()
+        key = open_issues(self.logs)[0][0]
+        db = sqlite3.connect(self.logs / 'error-issues.sqlite3')
+        db.execute('UPDATE issues SET id=?, resolved=1 WHERE id=?', ('a' * 24, key))
+        db.execute("DELETE FROM metadata WHERE key='canonical-error-log-v2'")
+        db.commit()
+        db.close()
+        (self.logs / 'errors.log').write_bytes(('=== Collected 2026-11-03T12:00:00 | source=email_app.log ===\n' + OLD).replace('\n', '\r\n').encode())
+        import_history(self.logs)
+        self.assertEqual(open_issues(self.logs), [])
+        self.assertNotIn('failure-code', (self.logs / 'errors.log').read_text())

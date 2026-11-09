@@ -36,6 +36,7 @@ def _render(db, directory):
 
 def _identity(source, message):
     family = re.sub(r'\.\d+$', '', Path(source).name)
+    message = message.replace('\r\n', '\n').replace('\r', '\n')
     normalized = re.sub(r'^\d{4}-\d\d-\d\d[ T]\d\d:\d\d:\d\d(?:[,.]\d+)?\s*\|?\s*', '', message, flags=re.M)
     normalized = re.sub(r'pid=\d+', 'pid=*', normalized)
     key = hashlib.sha256((family + '\n' + normalized.strip()).encode()).hexdigest()[:24]
@@ -59,6 +60,23 @@ def record_error(directory, source, message):
     return key
 
 
+def _normalize_legacy_ids(db):
+    # Old Windows collectors hashed CRLF, while history reads normalized LF.
+    # Re-key stored issues FIRST so importing history cannot reopen fixed issues.
+    rows = db.execute('SELECT id, source, message, first_seen, last_seen, count, resolved FROM issues').fetchall()
+    for old, source, message, first, last, count, resolved in rows:
+        _, key = _identity(source, message)
+        if key == old:
+            continue
+        prior = db.execute('SELECT first_seen, last_seen, count, resolved FROM issues WHERE id=?', (key,)).fetchone()
+        if prior:
+            db.execute('UPDATE issues SET first_seen=?, last_seen=?, count=?, resolved=? WHERE id=?',
+                (min(first, prior[0]), max(last, prior[1]), count + prior[2], min(resolved, prior[3]), key))
+            db.execute('DELETE FROM issues WHERE id=?', (old,))
+        else:
+            db.execute('UPDATE issues SET id=? WHERE id=?', (key, old))
+
+
 def _import_generated(db, text):
     from core.error_log import redact
     pattern = re.compile(r'^=== ID ([0-9a-f]+) \| source=(.+) \| first=(.+) \| last=(.+) \| count=(\d+) ===$', re.M)
@@ -67,7 +85,8 @@ def _import_generated(db, text):
         raise ValueError('Okänd gammal fellogg; filen lämnas orörd')
     for i, match in enumerate(matches):
         message = redact(text[match.end():matches[i + 1].start() if i + 1 < len(matches) else len(text)].strip())
-        db.execute('INSERT OR IGNORE INTO issues VALUES (?, ?, ?, ?, ?, ?, 0)', (match[1], match[2], message, match[3], match[4], int(match[5])))
+        family, key = _identity(match[2], message)
+        db.execute('INSERT OR IGNORE INTO issues VALUES (?, ?, ?, ?, ?, ?, 0)', (key, family, message, match[3], match[4], int(match[5])))
 
 
 def import_history(directory):
@@ -81,6 +100,7 @@ def import_history(directory):
             db.execute('BEGIN IMMEDIATE')
             migrated = db.execute("SELECT 1 FROM metadata WHERE key='canonical-error-log-v2'").fetchone()
             if not migrated:
+                _normalize_legacy_ids(db)
                 header = re.compile(r'^=== Collected ([^|]+) \| source=(.+) ===$', re.M)
                 for path in sorted(directory.glob('errors.log*')):
                     if not re.fullmatch(r'errors\.log(?:\.\d+)?', path.name) or path.is_symlink():
