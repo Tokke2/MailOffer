@@ -15,8 +15,8 @@ class WindowsLauncherTests(unittest.TestCase):
     def test_no_bundled_executable_or_native_launcher(self):
         self.assertFalse((ROOT / 'MailOffer.exe').exists())
         self.assertFalse((ROOT / 'launcher').exists())
-        self.assertNotIn('MailOffer.exe', (ROOT / 'Starta EmailApp.vbs').read_text())
-        self.assertNotIn('MailOffer.exe', (ROOT / 'main.pyw').read_text())
+        self.assertNotIn('MailOffer.exe', (ROOT / 'Starta EmailApp.vbs').read_text(encoding='utf-8'))
+        self.assertNotIn('MailOffer.exe', (ROOT / 'main.pyw').read_text(encoding='utf-8'))
 
     def test_extension_archive_contains_current_shared_icon(self):
         with ZipFile(ROOT / 'thunderbird/MailOffer.xpi') as package:
