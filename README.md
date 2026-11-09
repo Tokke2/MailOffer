@@ -708,7 +708,7 @@ hänförs till senaste läsbara ISO-datum, annars filens ändringsdatum.
 Det sker vid start, dygnsskifte och uppföljande försök ungefär varje minut.
 Innan något tas bort måste insamlaren ha hunnit spara källans fel i registret.
 Appens filskrivare pausas med handlerlås. På Windows stängs deras filhandtag
-under kontrollen och källan öppnas exklusivt; upptagna externa filer väntar.
+under kontrollen och källan får exklusiv skrivåtkomst; upptagna externa filer väntar.
 Den färdiga dagsfilen skrivs till en temporär fil och synkas till disk innan
 ett atomiskt namnbyte. Inga öppna filer skrivs om med oskyddad trunkering.
 En liten arkivjournal gör att läspositionen kan återställas efter avbrott,

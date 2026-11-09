@@ -4,7 +4,7 @@ import sys
 import unittest
 root = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(root))
-suite = unittest.defaultTestLoader.discover(str(root / 'tests'), pattern='test_native_host.py')
+suite = unittest.defaultTestLoader.discover(str(root / 'tests'), pattern=sys.argv[1] if len(sys.argv) > 1 else 'test_native_host.py')
 result = unittest.TextTestRunner(verbosity=2).run(suite)
 for _, text in result.errors + result.failures:
     print('::error::' + text.replace('%', '%25').replace('\r', '%0D').replace('\n', '%0A'))

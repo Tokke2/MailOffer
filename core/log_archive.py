@@ -1,6 +1,6 @@
 """Verified daily archives, then compact active logs to today's records.
 
-Windows obtains an exclusive file handle after closing our locked log handlers.
+Windows obtains exclusive write access after closing our locked log handlers.
 Busy external writers are skipped and retried, never truncated underneath them.
 """
 from collections import defaultdict
@@ -73,7 +73,7 @@ def _exclusive(source):
             kernel = ctypes.WinDLL('kernel32', use_last_error=True)
             kernel.CreateFileW.argtypes = [wintypes.LPCWSTR, wintypes.DWORD, wintypes.DWORD, ctypes.c_void_p, wintypes.DWORD, wintypes.DWORD, wintypes.HANDLE]
             kernel.CreateFileW.restype = wintypes.HANDLE
-            handle = kernel.CreateFileW(str(source), 0xC0000000, 0, None, 3, 0x80, None)
+            handle = kernel.CreateFileW(str(source), 0xC0000000, 1, None, 3, 0x80, None)
             if handle == ctypes.c_void_p(-1).value:
                 code = ctypes.get_last_error()
                 if code in (5, 32, 33):
