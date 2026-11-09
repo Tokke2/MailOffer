@@ -2828,3 +2828,8 @@ Användaren valde från redan-valda: tema-knapp (§34 #6) och tydligare
 - Python-kontrollen anropar varje hittad py.exe separat, aldrig en sammanslagen lista.
 - Regressionstest i Windows PowerShell 5.1 för noll, en och flera launchers med blanksteg i sökvägen.
 - Systemets Python oförändrad; version 1.0.0, bygg 2026102333.
+
+### V7.40 – Python-kontroll utan PowerShell-citatfel
+- Kör isolerad kontroll från tools/probe_system_python.py i stället för citerad -c-kod.
+- Befintlig system-Python används; separat miljö avvisas och Python ändras aldrig.
+- Version 1.0.0, bygg 2026102334.

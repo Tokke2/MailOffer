@@ -79,7 +79,7 @@ try {
     $versions = @()
     $runtimes = @()
     foreach ($exe in @($candidates | Select-Object -Unique)) {
-        $output = & $exe -I -c 'import sys; print("%d.%d" % sys.version_info[:2] if sys.prefix == sys.base_prefix else "virtual")' 2>$null
+        $output = & $exe -I (Join-Path $PSScriptRoot 'probe_system_python.py') 2>$null
         if ($LASTEXITCODE -eq 0 -and "$output" -match '^(\d+)\.(\d+)$') {
             $versions += "$output"
             if ([version]"$output" -ge [version]"3.10") {

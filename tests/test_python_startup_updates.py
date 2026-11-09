@@ -45,7 +45,7 @@ class PythonStartupTests(unittest.TestCase):
         helper = (ROOT / 'tools/ensure_python.ps1').read_text()
         self.assertIn('[IO.FileShare]::None', helper)
         self.assertIn('$startupLock.Dispose()', helper)
-        self.assertIn('sys.prefix == sys.base_prefix', helper)
+        self.assertIn('sys.prefix == sys.base_prefix', (ROOT / 'tools/probe_system_python.py').read_text())
         self.assertIn('update_python_packages.py', helper)
 
     def test_weekly_gate_skips_network_before_candidate_probes(self):
