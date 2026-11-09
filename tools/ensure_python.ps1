@@ -67,8 +67,8 @@ try {
             if (Test-Path $exe) { $candidates += $exe }
         }
     }
-    $launcher = Get-Command py.exe -CommandType Application -ErrorAction SilentlyContinue
-    if ($launcher) {
+    # Get-Command can return several launchers. Never invoke an array of paths.
+    foreach ($launcher in @(Get-Command py.exe -CommandType Application -ErrorAction SilentlyContinue)) {
         foreach ($line in @(& $launcher.Source -0p 2>$null)) {
             if ("$line" -match '([A-Za-z]:\\.+\\python(?:w)?\.exe)\s*$') {
                 $exe = $Matches[1] -replace 'pythonw\.exe$', 'python.exe'

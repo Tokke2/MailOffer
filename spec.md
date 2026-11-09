@@ -2823,3 +2823,8 @@ Användaren valde från redan-valda: tema-knapp (§34 #6) och tydligare
 - Historiska stderr-INFO-felklassningar läses inte in igen; riktiga spårningar
   bevaras. Registerposter åtgärdsmarkeras inte automatiskt.
 - Version 1.0.0, bygg 2026102332.
+
+### V7.39 – flera systemlaunchers
+- Python-kontrollen anropar varje hittad py.exe separat, aldrig en sammanslagen lista.
+- Regressionstest i Windows PowerShell 5.1 för noll, en och flera launchers med blanksteg i sökvägen.
+- Systemets Python oförändrad; version 1.0.0, bygg 2026102333.
