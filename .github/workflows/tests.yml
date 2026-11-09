@@ -85,8 +85,12 @@ jobs:
       - name: Testa Python 3.15 med reservval 3.14
         shell: powershell
         run: ./tests/test_python_fallback.ps1
-      - name: Installera Qt för hostens fokustest
-        run: python -m pip install --quiet PyQt6
+      - name: Installera appens tillägg och testa verklig Qt-start
+        run: |
+          python tools/update_python_packages.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python -I tools/probe_app_python.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Testa skriptstart och autostart utan egen EXE
         run: python tools/run_windows_tests.py test_windows_launcher.py
       - name: Testa fokus på dolt Python-fönster utan egen EXE
