@@ -12,16 +12,11 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class WindowsLauncherTests(unittest.TestCase):
-    def test_native_launcher_has_gui_subsystem_and_embedded_artwork(self):
-        data = (ROOT / 'MailOffer.exe').read_bytes()
-        self.assertEqual(data[:2], b'MZ')
-        pe = struct.unpack_from('<I', data, 60)[0]
-        self.assertEqual(data[pe:pe + 4], b'PE\x00\x00')
-        self.assertEqual(struct.unpack_from('<H', data, pe + 4)[0], 0x8664)
-        self.assertEqual(struct.unpack_from('<H', data, pe + 24 + 68)[0], 2)
-        self.assertIn(b'\x89PNG\r\n\x1a\n', data)
-        self.assertIn('Rickard Längkvist'.encode('utf-16le'), data)
-        self.assertIn('MailOffer'.encode('utf-16le'), data)
+    def test_no_bundled_executable_or_native_launcher(self):
+        self.assertFalse((ROOT / 'MailOffer.exe').exists())
+        self.assertFalse((ROOT / 'launcher').exists())
+        self.assertNotIn('MailOffer.exe', (ROOT / 'Starta EmailApp.vbs').read_text())
+        self.assertNotIn('MailOffer.exe', (ROOT / 'main.pyw').read_text())
 
     def test_extension_archive_contains_current_shared_icon(self):
         with ZipFile(ROOT / 'thunderbird/MailOffer.xpi') as package:
@@ -34,13 +29,13 @@ class WindowsLauncherTests(unittest.TestCase):
         (base / '.portable').touch()
         return SettingsManager(base)
 
-    def test_autostart_prefers_branded_exe_not_python_or_pyw(self):
+    def test_autostart_ignores_leftover_exe(self):
         settings = self.make_settings()
         (settings.base_dir / 'MailOffer.exe').touch()
         (settings.base_dir / 'Starta EmailApp.vbs').touch()
         with mock.patch('core.settings_manager.IS_WINDOWS', True), mock.patch('core.settings_manager.sys.frozen', False, create=True):
-            self.assertEqual(settings._get_autostart_args(), [str(settings.base_dir / 'MailOffer.exe'), '--background'])
-            self.assertEqual(settings._get_autostart_command(), f'"{settings.base_dir / "MailOffer.exe"}" --background')
+            self.assertEqual(settings._get_autostart_args()[0], 'wscript.exe')
+            self.assertNotIn('MailOffer.exe', settings._get_autostart_command())
 
     def test_missing_exe_uses_script_host_never_direct_python(self):
         settings = self.make_settings()

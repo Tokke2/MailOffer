@@ -14,7 +14,7 @@ Ikonen används på:
   - Startup-feldialoger (main.pyw _safe_show_critical)
 
 Fil: icons/app_icon.png (1024x1024 RGBA) + .ico (16–256px, Windows).
-Samma ICO är inbyggd i MailOffer.exe för Explorer och autostart.
+Samma ICO kan användas för manuella Windows-genvägar till VBS-startfilen.
 
 Fallback-säkerhet:
   - Saknas PNG-filen ritas en snygg kuvertikon programmatiskt

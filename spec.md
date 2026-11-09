@@ -2833,3 +2833,9 @@ Användaren valde från redan-valda: tema-knapp (§34 #6) och tydligare
 - Kör isolerad kontroll från tools/probe_system_python.py i stället för citerad -c-kod.
 - Befintlig system-Python används; separat miljö avvisas och Python ändras aldrig.
 - Version 1.0.0, bygg 2026102334.
+
+### V7.41 – ingen egen EXE
+- Tar bort binär, C-host, byggverktyg och värdspecifik fokushantering.
+- Start/autostart/omstart använder VBS och befintlig system-Python, aldrig äldre EXE.
+- Uppdateraren hoppar över .exe. Egna GUI-ikoner och minimerad start behålls; processikon kan vara Python.
+- Version 1.0.0, bygg 2026102335.

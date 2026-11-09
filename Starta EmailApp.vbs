@@ -2,9 +2,8 @@
 ' Starta EmailApp.vbs - starta E-postofferten UTAN konsolfonster.
 '
 ' Kedja vid dubbelklick och autostart (registret pekar hit via wscript):
-'   1. Kontrollera/uppdatera gemensam Python och tillagg veckovis, mandagar 08:00.
-'   2. Kor Installera_Python.bat /silent DOLT och vanta
-'      tills installationen ar klar, leta sedan igen.
+'   1. Kontrollera befintlig system-Python och uppdatera endast tillagg veckovis.
+'   2. Kor kontrollen via Installera_Python.bat /silent utan konsolfonster.
 '   3. Starta main.pyw med pythonw (ingen konsol). Argument skickas
 '      vidare, t.ex. --background fran autostarten.
 '
@@ -18,15 +17,6 @@ Set shell = CreateObject("WScript.Shell")
 Set fso = CreateObject("Scripting.FileSystemObject")
 scriptDir = fso.GetParentFolderName(WScript.ScriptFullName)
 logWarningShown = False
-
-If fso.FileExists(scriptDir & "\MailOffer.exe") Then
-    args = ""
-    For i = 0 To WScript.Arguments.Count - 1
-        args = args & " """ & WScript.Arguments(i) & """"
-    Next
-    exitCode = shell.Run("""" & scriptDir & "\MailOffer.exe""" & args, 1, False)
-    WScript.Quit 0
-End If
 
 LogStage "Launcher started; folder=" & scriptDir
 pythonw = ""

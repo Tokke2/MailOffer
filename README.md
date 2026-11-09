@@ -68,14 +68,12 @@ pip install -r requirements.txt
 python main.pyw
 ```
 
-**Enklast på Windows 10/11 (x64):** dubbelklicka **`MailOffer.exe`**.
-Den har appens egen ikon och startar utan konsolfönster. Behåll hela
-appmappen tillsammans – EXE-filen är en processvärd, inte en fristående
-paketering av Python-appen. Den laddar datorns befintliga gemensamma CPython
-och använder den dolda veckokontrollen före uppstart.
+**Enklast på Windows:** dubbelklicka **`Starta EmailApp.vbs`**.
+Starten använder datorns befintliga system-Python via pythonw, utan konsolfönster.
+Ingen egen EXE eller Python-runtime medföljer.
 `Installera_Python.bat` har kvar sitt namn för kompatibilitet men **installerar
 eller uppgraderar aldrig Python**. Appen använder befintlig gemensam Python
-3.10+ (x64 för EXE-värden). Saknas den visas ett fel; användaren/IT behöver
+3.10+. Saknas den visas ett fel; användaren/IT behöver
 själv installera eller välja en lämplig systeminstallation. Ingen winget,
 Python-nedladdning eller separat virtuell miljö används.
 Endast appens tillägg kontrolleras/uppgraderas **en gång per vecka,
@@ -480,7 +478,7 @@ bakgrunden utan konsolfönster. Versionen förblir 1.0.0 även vid nya byggen.
 
 ### Ingen konsol vid normal Windows-start
 
-Starta med `MailOffer.exe` (eller reservstarten `Starta EmailApp.vbs`) för appfönster utan
+Starta med `Starta EmailApp.vbs` för appfönster utan
 terminal. Om `.pyw` är associerad med konsol-Python i Windows kan den
 associationen skapa en konsol innan appkoden hinner köra; VBS-starten
 undviker det. En redan öppnad terminal som användaren själv startat stängs
@@ -549,18 +547,18 @@ namn behöver kopplingen också göras för det nya namnet.
 ### Ny MailOffer-ikon och Windows-autostart
 
 Den valda kuvertikonen med turkos offertbricka används i app/dialoger,
-systemfältet (med statusmärken), Thunderbird-tillägget och `MailOffer.exe`.
+systemfältet (med statusmärken), Thunderbird-tillägget och Windows-genvägar.
 PNG har transparenta hörn, ICO innehåller 16–256px-varianter. EXE-startfilen
 har inbyggd ikon och produktinformation med Rickard Längkvist som skapare.
 
-Windows-autostart använder i första hand `MailOffer.exe --background`.
+Windows-autostart använder `wscript.exe` och `Starta EmailApp.vbs --background`.
 Aktiverad äldre autostart migreras av den befintliga synkroniseringen vid
 appstart. Om EXE saknas används VBS via wscript som reserv; aldrig en direkt
 Python/.pyw-post. Om båda startfilerna saknas rapporteras fel. Avstängd
 autostart aktiveras inte av uppdateringen. Python/pythonw kan fortfarande
 användas internt – appen ändrar inte Windows globala filassociationer.
 
-Skapa genvägar till **MailOffer.exe**, inte till python.exe eller main.pyw.
+Skapa genvägar till **Starta EmailApp.vbs**; välj icons/app_icon.ico som genvägsikon.
 Gamla aktivitetsfältsnålar till Python behöver lossas och ersättas med den
 nya startfilen; vi ändrar inte användarens nålar automatiskt. Windows kan
 behålla en gammal ikon i sin ikoncache. Startfilen är inte kodsignerad och
@@ -785,44 +783,15 @@ anonymiserad export. Diskfel/strömavbrott kan aldrig ge en absolut datagaranti.
   i steg 2. Mappar och webblänkar accepteras inte; redan tillagda sökvägar
   läggs inte till en gång till. Ingen fil flyttas eller skickas automatiskt.
 
-### Egen processikon och en enda instans (Windows x64)
+### Skriptstart utan egen EXE
 
-`MailOffer.exe` är nu även processvärd: den laddar den befintliga gemensamma
-CPython-installationens DLL i sin egen process. Ingen extra Python eller
-virtuell miljö paketeras/skapas. Huvudprocessen heter därför **MailOffer.exe**
-i Aktivitetshanteraren och har appens inbyggda kuvert-/offertikon i stället
-för Python-processens ikon. Samma original används för fönster, dialoger,
-systemfält och startfil. Vanlig start/autostart och direkt main.pyw går via
-EXE-filen när den finns. Hela appmappen krävs fortfarande.
+Appen distribueras utan egen EXE. Start, autostart och omstart använder
+`Starta EmailApp.vbs` och datorns befintliga system-Python via pythonw.
+Appens fönster och systemfält behåller egna ikoner, men Aktivitetshanteraren
+kan visa Python som processnamn och processikon. Befintligt enkelinstansskydd
+finns kvar. Första start är minimerad.
 
-Ett Windows-mutex tas **före** veckokontrollen och hålls tills appen avslutas.
-En andra start signalerar den redan körande appen och avslutas direkt:
-fönstret visas även från minimerat/dolt systemfältsläge. Om första starten
-fortfarande förbereds ligger visningsbegäran kvar tills GUI:t är redo.
-Detta gäller inom samma Windows-inloggningssession, även från olika appmappar.
-
-Separata kortlivade Python-/Windows-hjälpprocesser vid underhåll kan fortfarande
-ha sina egna systemikoner. Äldre fastnålade genvägar kan behöva tas bort och
-fästas på nytt som MailOffer.exe. Reservstart utan EXE använder fortfarande
-pythonw och kan inte ge dess processbild en annan inbyggd ikon. Windows kan
-också visa grupper/cache på olika sätt; ingen absolut garanti ges för alla
-vyer i alla Windows-versioner. Processvärden kräver standard-CPython x64 med
-kompatibelt DLL/API; saknas det visas fel, ingen extra runtime installeras.
-
-Vid godkänd releaseuppdatering byts EXE-filen via en färdigskriven temporär
-fil och namnbyte, inte genom att skriva i den körande processbilden. Föregående
-EXE behålls i `.data/executable-backups/`; kopiorna gallras inte automatiskt.
-
-### Alltid minimerad start
-Appen startar alltid i systemfältet när brickan är tillgänglig, även vid
-dubbelklick och oavsett äldre startinställning. Saknas systembricka startar
-fönstret minimerat i aktivitetsfältet, inte oåtkomligt dolt. En andra start
-visar fortfarande den befintliga instansen. Återställning av utkast väntar
-tills fönstret visas.
-
-### Rätt nivå för stderr-loggar
-Normal INFO-/DEBUG-utmatning blir inte längre ERROR bara för att den passerar
-stderr i pythonw. GUI-läget skapar ingen konsollogger när stdout saknas.
-Strukturerade stderr-loggrader behåller sin nivå; oformaterade fel/tracebacks
-behålls som fel. Tidigare felloggsposter raderas eller markeras inte automatiskt
-som åtgärdade av denna ändring.
+Gamla EXE-filer används inte, även om de ligger kvar från en tidigare version.
+Stäng appen och radera en sådan gammal fil manuellt; återställ inte en fil som
+Defender har satt i karantän. Gamla fastnålade EXE-genvägar måste ersättas.
+Uppdateraren installerar inga .exe-filer.
