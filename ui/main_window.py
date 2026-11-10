@@ -2504,6 +2504,18 @@ class MainWindow(QMainWindow):
         self._template_bcc_label.setWordWrap(True)
         outer.addWidget(self._template_bcc_label)
 
+        recipient_row = QHBoxLayout()
+        recipient_row.addWidget(QLabel('Mallens mottagare:'))
+        self._template_recipient_combo = QComboBox()
+        recipient_row.addWidget(self._template_recipient_combo, 1)
+        self._template_recipient_add = QPushButton('Lägg till i Till')
+        self._template_recipient_add.clicked.connect(self._add_template_recipient)
+        recipient_row.addWidget(self._template_recipient_add)
+        link_recipients = QPushButton('Koppla adresser…')
+        link_recipients.clicked.connect(self._edit_template_recipients)
+        recipient_row.addWidget(link_recipients)
+        outer.addLayout(recipient_row)
+
         subject_row = QHBoxLayout()
         subject_row.addWidget(QLabel("Ämne:"))
         self._subject = QLineEdit()
@@ -6473,7 +6485,72 @@ class MainWindow(QMainWindow):
         self._refresh_template_tools_list()
         return widget
 
+    def _refresh_template_recipients(self):
+        from core.template_recipients import template_recipients
+        combo = getattr(self, '_template_recipient_combo', None)
+        if combo is None:
+            return
+        previous = combo.currentData()
+        name = self._last_tpl.name if self._last_tpl else ''
+        emails = template_recipients(name, self.settings.get('template_recipient_rules', {}))
+        combo.clear()
+        if emails:
+            combo.addItem('Alla kopplade (' + str(len(emails)) + ')', '')
+            for email in emails:
+                combo.addItem(email, email)
+            index = combo.findData(previous)
+            if index >= 0:
+                combo.setCurrentIndex(index)
+        else:
+            combo.addItem('Inga adresser kopplade', '')
+        combo.setEnabled(bool(emails))
+        self._template_recipient_add.setEnabled(bool(emails))
+
+    def _add_template_recipient(self):
+        from core.template_recipients import template_recipients
+        name = self._last_tpl.name if self._last_tpl else ''
+        emails = template_recipients(name, self.settings.get('template_recipient_rules', {}))
+        selected = self._template_recipient_combo.currentData()
+        if selected:
+            emails = [email for email in emails if email == selected]
+        count = sum(self._add_recipient('to', email=email, show_warning=False,
+            lang=self._contact_lang(email)) for email in emails)
+        self._refresh_preview()
+        self._status(f'{count} nya mottagare tillagda i Till', 'success' if count else 'info')
+
+    def _edit_template_recipients(self):
+        from core.template_recipients import normalize_template_recipients, template_recipients
+        from ui.template_recipients import TemplateRecipientsDialog
+        if not self._last_tpl:
+            QMessageBox.information(self, 'Koppla adresser', 'Välj en mall först.')
+            return
+        name = self._last_tpl.name
+        contacts = {}
+        if self._contact_store is not None:
+            for contact in self._contact_store.all():
+                email = str(getattr(contact, 'email', '') or '').strip()
+                if _looks_like_email(email):
+                    contacts[email.lower()] = (email, str(getattr(contact, 'name', '') or email))
+        rules = normalize_template_recipients(self.settings.get('template_recipient_rules', {}))
+        dialog = TemplateRecipientsDialog(self, name, template_recipients(name, rules),
+            sorted(contacts.values(), key=lambda row: (row[1].casefold(), row[0].casefold())))
+        if dialog.exec() != QDialog.DialogCode.Accepted:
+            return
+        emails = dialog.emails()
+        if emails:
+            rules[name] = emails
+        else:
+            rules.pop(name, None)
+        previous = self.settings.get('template_recipient_rules', {})
+        self.settings.set('template_recipient_rules', rules)
+        if not self.settings.save():
+            self.settings.set('template_recipient_rules', previous)
+            QMessageBox.warning(self, 'Koppla adresser', tr('safety.save_failed'))
+            return
+        self._refresh_template_recipients()
+
     def _refresh_template_bcc_label(self):
+        self._refresh_template_recipients()
         from core.template_bcc import template_bcc
         label = getattr(self, "_template_bcc_label", None)
         if label is None:

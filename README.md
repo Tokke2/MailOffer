@@ -819,3 +819,12 @@ Tillägg uppdateras bara när veckounderhållet är aktuellt. Reservvalet instal
 inte Python, ändrar inte PATH och skapar ingen separat miljö. Ett misslyckat
 paketunderhåll kan redan ha ändrat tillägg i den gemensamma installationen;
 dessa paketändringar återställs inte automatiskt när nästa Python provas.
+
+### Koppla mottagare till en mall
+Välj mall i steg 1 och klicka **Koppla adresser…**. Välj från dropdown,
+skriv en adress eller markera flera i **Adressbok…**. Spara kopplingen.
+Under **Mallens mottagare** väljer du en adress eller alla kopplade och
+klickar **Lägg till i Till**. Mallbyte lägger inte till eller tar bort
+mottagare automatiskt. Kopplingarna sparas per exakt mallfilnamn, globalt
+för appen (inte per avsändarprofil). Byter du namn på filen behöver kopplingen
+läggas upp igen. Befintliga Bcc-regler är separata och ändras inte.

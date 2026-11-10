@@ -2844,3 +2844,9 @@ Användaren valde från redan-valda: tema-knapp (§34 #6) och tydligare
 - Prioriterar 3.15 sedan 3.14 bland installerade Python-versioner. Provar nästa om tillägg eller offline Qt-starttest misslyckas.
 - Sparad sökväg testas offline och normaliseras till UTF-16 för VBS. Veckogränsen för paketunderhåll behålls.
 - Ingen ny Python, egen miljö eller EXE; version 1.0.0, bygg 2026102336.
+
+### V7.43 – mottagare kopplade till mall
+- Validerade och deduplicerade Till-kopplingar per mallfilnamn, sparade i inställningar.
+- Redigering via kontakt-dropdown, manuell adress eller sökbar adressbok; avbryt ändrar inget.
+- Explicit Lägg till i Till för vald adress/alla; mallbyte skickar/lägger inte till automatiskt.
+- Version 1.0.0, bygg 2026102337.

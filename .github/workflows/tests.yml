@@ -97,5 +97,9 @@ jobs:
         run: |
           $env:QT_QPA_PLATFORM = 'offscreen'
           python tools/run_windows_tests.py test_window_focus.py
+      - name: Testa mallkopplade mottagare i Qt
+        run: |
+          $env:QT_QPA_PLATFORM = 'offscreen'
+          python tools/run_windows_tests.py test_template_recipients_ui.py
       - name: Testa dagsarkivering med öppna Windows-loggfiler
         run: python tools/run_windows_tests.py test_log_compaction.py
