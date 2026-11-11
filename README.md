@@ -842,3 +842,10 @@ Shift+F10 eller Meny-tangenten öppnar snabbmenyn i listor med sådan meny.
 - F1: kortkommandohjälp. Ctrl+Enter öppnar befintligt sändningsflöde med
   dess kontroller; Tab och fokusförflyttning skickar aldrig mejl.
 Dialoger från Windows (exempelvis filväljaren) använder Windows egna kortkommandon.
+
+### Musens bakåt-/framåtknappar
+När huvudfönstret är aktivt går musens bakåtknapp till föregående besökta
+flik och framåtknappen framåt i flikhistoriken. Ett nytt flikval efter bakåt
+ersätter framåthistoriken. Dolda/inaktiverade flikar hoppas över. Upp till
+100 besök behålls under sessionen. Knapparna fångas inte i andra fönster,
+dialoger eller öppna popupmenyer. Funktionen ändrar inte fält eller skickar mejl.

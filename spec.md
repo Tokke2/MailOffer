@@ -2856,3 +2856,8 @@ Användaren valde från redan-valda: tema-knapp (§34 #6) och tydligare
 - Fokus skrollas fram, synliga fokusramar och fältetiketter. Shift+F10/Meny för listors snabbmenyer.
 - Kortkommandon för Till/Bcc, bilagor, adressbok, mallkoppling och sändningskontroll.
 - Version 1.0.0, bygg 2026102338.
+
+### V7.45 – musnavigering
+- Bakåt/framåt via musens sidoknappar i aktivt huvudfönster, med flikhistorik.
+- Dialoger/popup/andra program undantas; dolda och inaktiverade flikar hoppas över.
+- Version 1.0.0, bygg 2026102339.

@@ -1103,6 +1103,8 @@ class MainWindow(QMainWindow):
         self._install_shortcuts()
         self._bind_events()
         self._setup_keyboard_access()
+        from ui.mouse_navigation import install_mouse_navigation
+        install_mouse_navigation(self, self.tabs)
         self._restore_geo()
 
         # (v5.4) Tyst GitHub-uppdateringssökning strax efter start
