@@ -828,3 +828,17 @@ klickar **Lägg till i Till**. Mallbyte lägger inte till eller tar bort
 mottagare automatiskt. Kopplingarna sparas per exakt mallfilnamn, globalt
 för appen (inte per avsändarprofil). Byter du namn på filen behöver kopplingen
 läggas upp igen. Befintliga Bcc-regler är separata och ändras inte.
+
+### Tangentbord utan mus
+Tab/Shift+Tab följer layoutordningen genom utskickets fyra steg, även ut ur
+mejltext och fritext. Dynamiska mallfält tas med när de byggs om. Fokuserade
+kontroller skrollas fram och markeras; dialoger får layoutbaserad tabbordning.
+Använd piltangenter i dropdown/listor och Mellanslag på knappar/kryssrutor.
+Shift+F10 eller Meny-tangenten öppnar snabbmenyn i listor med sådan meny.
+- Ctrl+1–4: gå till steg; Ctrl+M: mall; Ctrl+L: avsändarprofil.
+- Ctrl+Shift+R/B: Till/Bcc. Ctrl+Shift+A: lägg till bilagor.
+- Ctrl+Shift+O: adressbok. Ctrl+Shift+M: koppla mallens mottagare.
+- Ctrl+Shift+P: sändningskontroll. F5: förhandsgranskning.
+- F1: kortkommandohjälp. Ctrl+Enter öppnar befintligt sändningsflöde med
+  dess kontroller; Tab och fokusförflyttning skickar aldrig mejl.
+Dialoger från Windows (exempelvis filväljaren) använder Windows egna kortkommandon.

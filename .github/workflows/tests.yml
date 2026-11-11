@@ -101,5 +101,9 @@ jobs:
         run: |
           $env:QT_QPA_PLATFORM = 'offscreen'
           python tools/run_windows_tests.py test_template_recipients_ui.py
+      - name: Testa tangentbordsnavigering utan mus
+        run: |
+          $env:QT_QPA_PLATFORM = 'offscreen'
+          python tools/run_windows_tests.py test_keyboard_navigation.py
       - name: Testa dagsarkivering med öppna Windows-loggfiler
         run: python tools/run_windows_tests.py test_log_compaction.py

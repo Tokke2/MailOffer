@@ -1454,6 +1454,12 @@ class MainWindow(QMainWindow):
             ("Ctrl+L", lambda: self._focus_send_field("_send_profile_combo")),
             ("Ctrl+M", lambda: self._focus_send_field("_tpl_combo")),
             ("Ctrl+Shift+T", self._send_test_mail),
+            ("Ctrl+Shift+R", lambda: self._focus_send_field("_to_input")),
+            ("Ctrl+Shift+B", lambda: self._focus_send_field("_bcc_input")),
+            ("Ctrl+Shift+A", self._add_att),
+            ("Ctrl+Shift+O", self._open_address_book),
+            ("Ctrl+Shift+M", self._edit_template_recipients),
+            ("Ctrl+Shift+P", self._show_preflight_only),
             ("F1", self._show_keyboard_help),
             ("Ctrl+1", lambda: self._jump_wizard_step(0)),
             ("Ctrl+2", lambda: self._jump_wizard_step(1)),
@@ -1474,15 +1480,14 @@ class MainWindow(QMainWindow):
         fields = [("_send_profile_combo", tr("profile.label")),
                   ("_tpl_combo", tr("keys.template")), ("_subject", tr("keys.subject")),
                   ("_editor", tr("keys.body")), ("_free_edit", tr("keys.free"))]
-        ordered = []
         for name, label in fields:
             widget = getattr(self, name, None)
             if widget is not None:
                 widget.setAccessibleName(label)
-                ordered.append(widget)
-        for before, after in zip(ordered, ordered[1:]):
-            QWidget.setTabOrder(before, after)
-        self.setStyleSheet(self.styleSheet() + "\nQLineEdit:focus, QComboBox:focus, QTextEdit:focus, QPushButton:focus, QListWidget:focus { border: 2px solid #729fff; }")
+        from ui.keyboard_navigation import install_keyboard_navigation, configure_tab_flow
+        install_keyboard_navigation()
+        configure_tab_flow(getattr(self, '_wizard_steps', []))
+        self.setStyleSheet(self.styleSheet() + "\nQLineEdit:focus, QComboBox:focus, QTextEdit:focus, QPlainTextEdit:focus, QPushButton:focus, QListWidget:focus, QTreeWidget:focus, QTableWidget:focus { border: 2px solid #729fff; }")
 
     def _focus_send_field(self, name):
         self.select_tab("send")
@@ -3085,6 +3090,8 @@ class MainWindow(QMainWindow):
 
         grid.setColumnStretch(1, 1)
         self._ph_area.addLayout(grid)
+        from ui.keyboard_navigation import configure_tab_flow
+        configure_tab_flow(getattr(self, '_wizard_steps', []))
         self._ensure_subject_contains_model_and_reg(update_field=True)
         self._update_en_only_placeholder_visibility()
         self._update_ph_status()

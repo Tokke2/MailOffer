@@ -2850,3 +2850,9 @@ Användaren valde från redan-valda: tema-knapp (§34 #6) och tydligare
 - Redigering via kontakt-dropdown, manuell adress eller sökbar adressbok; avbryt ändrar inget.
 - Explicit Lägg till i Till för vald adress/alla; mallbyte skickar/lägger inte till automatiskt.
 - Version 1.0.0, bygg 2026102337.
+
+### V7.44 – tangentbordsnavigering
+- Layoutbaserad tabbordning genom alla steg och dialoger; Tab lämnar textytor.
+- Fokus skrollas fram, synliga fokusramar och fältetiketter. Shift+F10/Meny för listors snabbmenyer.
+- Kortkommandon för Till/Bcc, bilagor, adressbok, mallkoppling och sändningskontroll.
+- Version 1.0.0, bygg 2026102338.
