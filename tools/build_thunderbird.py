@@ -1,5 +1,6 @@
 """Build installable Thunderbird extension without native host or private data."""
 from pathlib import Path
+import shutil
 from zipfile import ZipFile, ZipInfo, ZIP_DEFLATED
 
 
@@ -12,6 +13,7 @@ def build(root=None):
             info.compress_type = ZIP_DEFLATED
             info.external_attr = 0o644 << 16
             archive.writestr(info, (root / 'thunderbird' / name).read_bytes())
+    shutil.copyfile(target, root / 'E-postofferten-kontakter.xpi')
     return target
 
 
