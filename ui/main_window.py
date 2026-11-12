@@ -5023,7 +5023,7 @@ class MainWindow(QMainWindow):
         try:
             return get_log_file_path(log_dir)
         except Exception:
-            path = log_dir / "email_app.log"
+            path = log_dir / "app.log"
             return path if path.exists() else None
 
     # ────────────────────────────────────────────────────────────────

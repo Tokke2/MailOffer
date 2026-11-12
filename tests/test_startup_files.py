@@ -36,7 +36,8 @@ class TestInstallBat(unittest.TestCase):
 
     def test_detect_existing_before_install(self):
         helper = (ROOT / "tools" / "ensure_python.ps1").read_text()
-        self.assertIn('ensure_python.ps1', self.src)
+        self.assertIn('startup_logging.ps1', self.src)
+        self.assertIn('ensure_python.ps1', (ROOT / 'tools/startup_logging.ps1').read_text())
         self.assertIn('HKCU:', helper)
         self.assertIn('HKLM:', helper)
         self.assertIn('-0p', helper)

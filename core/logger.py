@@ -92,7 +92,7 @@ from typing import Any, Callable, List, Optional
 # Konstanter
 # ═══════════════════════════════════════════════════════════════════════════
 
-LOG_FILENAME = "email_app.log"
+LOG_FILENAME = "app.log"
 MAX_LOG_SIZE_BYTES = 5 * 1024 * 1024  # 5 MB
 BACKUP_COUNT = 5
 
@@ -279,45 +279,18 @@ def _register_atexit() -> None:
         _atexit_registered = True
 
 
-def cleanup_old_logs(log_dir: Path, days: int = 10) -> int:
-    """Ta bort loggfiler äldre än *days* dagar. Fail-safe, returnerar antal."""
-    removed = 0
-    try:
-        folder = Path(log_dir)
-        if not folder.is_dir():
-            return 0
-        cutoff = time.time() - max(1, int(days)) * 86400
-        patterns = (
-            "email_app.log",
-            "email_app.log.*",
-            "startup_crash.log",
-            "launch_*.log",
-            "bootstrap_trace.log",
-            "low_level_crash.log",
-        )
-        seen = set()
-        for pattern in patterns:
-            for path in folder.glob(pattern):
-                try:
-                    resolved = path.resolve()
-                    if resolved in seen or not path.is_file():
-                        continue
-                    seen.add(resolved)
-                    if path.stat().st_mtime < cutoff:
-                        path.unlink()
-                        removed += 1
-                        logging.getLogger(__name__).info(
-                            "Tog bort gammal logg: %s", path.name
-                        )
-                except Exception:
-                    logging.getLogger(__name__).debug(
-                        "Kunde inte ta bort logg %s", path, exc_info=True
-                    )
-    except Exception:
-        logging.getLogger(__name__).debug(
-            "cleanup_old_logs misslyckades", exc_info=True
-        )
-    return removed
+def cleanup_old_logs(log_dir: Path, days: int = 7) -> int:
+    """Compatibility entry point: verified archives, never blind age deletion.
+
+    Retention is the central seven-day policy; the old days argument is ignored.
+    """
+    folder = Path(log_dir)
+    if folder.name != 'logs' or not folder.is_dir():
+        return 0
+    from core.error_log import ErrorLogCollector
+    before = set(folder.glob('*.log*'))
+    ErrorLogCollector(folder.parent, canonical_layout=True).archive_completed_logs()
+    return len(before - set(folder.glob('*.log*')))
 
 
 def shutdown_logging() -> None:
@@ -665,9 +638,8 @@ def _add_file_handler(
 ) -> Optional[logging.Handler]:
     """Open eagerly so denied writes surface during startup, not silently later."""
     try:
-        handler = RotatingFileHandler(
-            filename=log_file, mode="a", maxBytes=MAX_LOG_SIZE_BYTES,
-            backupCount=BACKUP_COUNT, encoding="utf-8", delay=False,
+        handler = logging.FileHandler(
+            filename=log_file, mode="a", encoding="utf-8", delay=False,
         )
     except OSError as exc:
         raise OSError(f"Kunde inte skriva loggfilen {log_file}. Kontrollera skrivbehörighet och diskutrymme.") from exc

@@ -35,7 +35,7 @@ def is_error(text, source):
         return False  # old diagnostics versions mislabeled normal stderr logging
     if _LEVEL.search(text) or _TRACE.search(text):
         return True
-    if 'launcher' in source.lower():
+    if 'launcher' in source.lower() or source == 'startup.log':
         # Successful "exit code=0; script error=0" must not become an error.
         for value in re.findall(r'(?:exit code|script error|error)\s*=\s*(-?\d+)', text, re.I):
             if int(value):
@@ -70,10 +70,17 @@ def _locked(directory):
 
 
 class ErrorLogCollector:
-    def __init__(self, base):
+    def __init__(self, base, *, canonical_layout=False):
+        self.canonical_layout = canonical_layout
         self.base = Path(base).resolve()
         self.directory = self.base / 'logs'
         self.directory.mkdir(parents=True, exist_ok=True)
+        if canonical_layout:
+            for name in ('app.log', 'startup.log'):
+                target = self.directory / name
+                if target.is_symlink():
+                    raise OSError('Aktiv logg får inte vara en symbolisk länk')
+                target.touch(exist_ok=True)
         self.path = self.directory / NAME
         self.state_path = self.directory / 'errors.state.json'
         self.inputs = [self.directory]
@@ -262,7 +269,37 @@ class ErrorLogCollector:
                 state[data['identity']] = data['cursor']
                 self._save_index(state)
                 journal_path(source).unlink()
-            return archive_logs(self.directory, today, eligible=eligible, prepared=prepared, rewritten=rewritten)
+            archived = archive_logs(self.directory, today, eligible=eligible, prepared=prepared, rewritten=rewritten)
+            if self.canonical_layout:
+                from core.log_archive import _exclusive, snapshot
+                import logging
+                legacy = set(self._sources())
+                legacy.update(p for p in self.directory.glob('errors.log.*')
+                              if re.fullmatch(r'errors\.log\.\d+', p.name) and p.is_file() and not p.is_symlink())
+                for source in sorted(legacy):
+                    if source.name in ('app.log', 'startup.log'):
+                        continue
+                    # Never retire files still owned by a running handler/writer.
+                    if any(isinstance(ref(), logging.FileHandler) and
+                           Path(ref().baseFilename).resolve() == source.resolve()
+                           for ref in list(logging._handlerList) if ref() is not None):
+                        continue
+                    with _exclusive(source) as stream:
+                        if stream is None:
+                            continue
+                        raw = stream.read(50 * 1024 * 1024 + 1)
+                        if len(raw) > 50 * 1024 * 1024 or not eligible(source, raw):
+                            continue
+                        day = datetime.fromtimestamp(source.stat().st_mtime).date()
+                        path = snapshot(self.directory, source.name, day, raw)
+                        stream.close()
+                        try:
+                            source.unlink()
+                        except PermissionError:
+                            continue
+                        if path:
+                            archived.append(path)
+            return archived
 
     def start(self):
         if self._thread is not None:

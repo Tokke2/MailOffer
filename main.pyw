@@ -331,7 +331,7 @@ def handle_uncaught_exception(
     except Exception:
         pass
 
-    log_file = BASE_DIR / "logs" / "email_app.log"
+    log_file = BASE_DIR / "logs" / "app.log"
     message = (
         f"{APP_NAME} har stött på ett oväntat fel:\n\n"
         f"{exc_value}\n\n"
@@ -387,16 +387,16 @@ def _setup_app_logging(log_dir: Path) -> bool:
 def _write_startup_crash_file(exc: BaseException) -> None:
     """Sista skyddsnät för pythonw/tyst krasch: skriv crash-fil."""
     try:
-        crash_path = BASE_DIR / "logs" / "startup_crash.log"
+        crash_path = BASE_DIR / "logs" / "startup.log"
         crash_path.parent.mkdir(parents=True, exist_ok=True)
-        crash_path.write_text(
-            "Startup crash\n"
+        with crash_path.open("a", encoding="utf-16" if os.name == "nt" else "utf-8") as crash_stream:
+            crash_stream.write(
+            __import__("datetime").datetime.now().strftime("%Y-%m-%d %H:%M:%S") + " | ERROR | Startup crash\n"
             f"Python: {sys.version}\n"
             f"Platform: {platform.platform()}\n"
             f"Error: {exc}\n\n"
-            f"{traceback.format_exc()}\n",
-            encoding="utf-8",
-        )
+            f"{traceback.format_exc()}\n"
+            )
     except Exception:
         pass
 

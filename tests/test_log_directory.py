@@ -36,7 +36,7 @@ class LogDirectoryTests(unittest.TestCase):
             self.assertEqual(mkdir.call_count, 1)
 
     def test_file_open_failure_is_reported_without_temp_fallback(self):
-        with mock.patch('core.logger.RotatingFileHandler', side_effect=PermissionError('denied')) as handler, mock.patch('tempfile.gettempdir', side_effect=AssertionError('No TEMP logs')):
+        with mock.patch('core.logger.logging.FileHandler', side_effect=PermissionError('denied')) as handler, mock.patch('tempfile.gettempdir', side_effect=AssertionError('No TEMP logs')):
             with self.assertRaisesRegex(OSError, 'skrivbehörighet'):
                 _add_file_handler(Path('/app/logs/email_app.log'), logging.INFO, logging.Formatter())
             handler.assert_called_once()
@@ -44,11 +44,11 @@ class LogDirectoryTests(unittest.TestCase):
 
     def test_early_diagnostics_does_not_try_another_folder_when_denied(self):
         from core import diagnostics
-        with tempfile.TemporaryDirectory() as tmp, mock.patch.object(diagnostics, '_logger', None), mock.patch('core.diagnostics.logging.handlers.RotatingFileHandler', side_effect=PermissionError('denied')) as handler, mock.patch('tempfile.gettempdir', side_effect=AssertionError('No TEMP logs')):
+        with tempfile.TemporaryDirectory() as tmp, mock.patch.object(diagnostics, '_logger', None), mock.patch('core.diagnostics.DiagnosticFileHandler', side_effect=PermissionError('denied')) as handler, mock.patch('tempfile.gettempdir', side_effect=AssertionError('No TEMP logs')):
             logger = diagnostics.install(Path(tmp))
             self.assertEqual(logger.name, 'mailoffer.diagnostics.unavailable')
             handler.assert_called_once()
-            self.assertEqual(handler.call_args.args[0], Path(tmp) / 'logs/diagnostics.log')
+            self.assertEqual(handler.call_args.args[0], Path(tmp) / 'logs/app.log')
 
     def test_launcher_uses_app_log_folder_and_reports_write_failure(self):
         source = (ROOT / 'Starta EmailApp.vbs').read_text()

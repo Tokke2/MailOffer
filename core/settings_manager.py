@@ -1597,8 +1597,8 @@ class SettingsManager:
                     "RunAtLoad": True,
                     "KeepAlive": False,
                     "WorkingDirectory": str(self.base_dir),
-                    "StandardOutPath": str(log_dir / "launch_stdout.log"),
-                    "StandardErrorPath": str(log_dir / "launch_stderr.log"),
+                    "StandardOutPath": str(log_dir / "startup.log"),
+                    "StandardErrorPath": str(log_dir / "startup.log"),
                 }
                 with open(plist_path, "wb") as handle:
                     plistlib.dump(plist, handle)

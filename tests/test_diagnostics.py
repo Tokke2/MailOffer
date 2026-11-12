@@ -36,7 +36,7 @@ log.info('normal shutdown marker')
 '''
             result = subprocess.run([sys.executable, '-c', script, tmp], cwd=ROOT, capture_output=True, text=True, timeout=15)
             self.assertEqual(result.returncode, 0, result.stderr)
-            text = (Path(tmp) / 'logs' / 'diagnostics.log').read_text()
+            text = (Path(tmp) / 'logs' / 'app.log').read_text()
             for marker in ('PROCESS START', 'diagnostic warning', 'thread-failure-marker', 'caught-failure-marker', 'Traceback', 'normal shutdown marker', 'PROCESS EXIT'):
                 self.assertIn(marker, text)
             combined = (Path(tmp) / 'logs' / 'errors.log').read_text()
@@ -48,7 +48,7 @@ log.info('normal shutdown marker')
             script = 'from core.diagnostics import install; install(%r); import definitely_missing_mailoffer_module' % tmp
             result = subprocess.run([sys.executable, '-c', script], cwd=ROOT, capture_output=True, timeout=15)
             self.assertNotEqual(result.returncode, 0)
-            self.assertIn('ModuleNotFoundError', (Path(tmp) / 'logs' / 'diagnostics.log').read_text())
+            self.assertIn('ModuleNotFoundError', (Path(tmp) / 'logs' / 'app.log').read_text())
             self.assertIn('ModuleNotFoundError', (Path(tmp) / 'logs' / 'errors.log').read_text())
 
     def test_structured_stderr_info_is_not_error_but_tracebacks_remain_errors(self):

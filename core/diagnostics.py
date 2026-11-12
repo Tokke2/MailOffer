@@ -3,6 +3,7 @@ import atexit
 import faulthandler
 import logging
 import logging.handlers
+from core.daily_log_handler import DiagnosticFileHandler
 import os
 from pathlib import Path
 import re
@@ -33,7 +34,7 @@ def install(base):
     directory = Path(base).resolve() / 'logs'
     try:
         directory.mkdir(parents=True, exist_ok=True)
-        handler = logging.handlers.RotatingFileHandler(directory / 'diagnostics.log', maxBytes=5*1024*1024, backupCount=5, encoding='utf-8')
+        handler = DiagnosticFileHandler(directory / 'app.log', encoding='utf-8')
     except OSError:
         # Normal logging setup will report the unwritable app log directory.
         # Do not create log files elsewhere or a console on pythonw startup.
@@ -67,20 +68,15 @@ def install(base):
     if sys.stderr is None:
         sys.stderr = ErrorStream(_logger)
     try:
-        fault_path = directory / ('native-crash-%s.log' % os.getpid())
-        for old in sorted(directory.glob('native-crash-*.log'), key=lambda p: p.stat().st_mtime, reverse=True)[9:]:
-            try:
-                old.unlink()
-            except OSError:
-                pass
-        _fault_file = fault_path.open('a', encoding='utf-8')
-        faulthandler.enable(file=_fault_file, all_threads=True)
+        handler.native_capture = True
+        handler.resume_fault()
+        _fault_file = handler
     except (OSError, RuntimeError):
         _logger.exception('Could not enable native crash diagnostics')
     atexit.register(lambda: _logger.info('PROCESS EXIT (Python atexit reached)'))
     try:
         from core.error_log import ErrorLogCollector
-        _error_collector = ErrorLogCollector(base)
+        _error_collector = ErrorLogCollector(base, canonical_layout=True)
         _error_collector.start()
     except Exception:
         _logger.exception('Could not start combined error log')
@@ -113,7 +109,7 @@ def attach_root():
         def emit(self, record):
             _logger.handle(record)
     forward = Forward()
-    forward.addFilter(ErrorFilter())
+    forward.addFilter(lambda record: bool(record.exc_info) and record.levelno < logging.WARNING)
     root.addHandler(forward)
 
 

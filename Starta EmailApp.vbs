@@ -35,7 +35,7 @@ On Error GoTo 0
 LogStage "Python startup check ended; exit code=" & exitCode & "; error=" & launchCode & " " & launchError
 If launchCode <> 0 Or exitCode <> 0 Then
     MsgBox "Kunde inte kontrollera/uppdatera Python och tillagg." & vbCrLf & _
-           "Se logs\python-startup.log och logs\launcher.log." & vbCrLf & _
+           "Se logs\startup.log." & vbCrLf & _
            "Ingen separat Python-miljo installeras som reserv.", vbExclamation, "MailOffer"
     WScript.Quit 1
 End If
@@ -65,10 +65,10 @@ If pythonw <> "" Then
     launchError = Err.Description
     If Err.Number <> 0 Then
         LogStage "Launch error=" & launchError
-        MsgBox "Kunde inte starta appen: " & launchError & vbCrLf & "Se logs\launcher.log", vbExclamation, "E-postofferten"
+        MsgBox "Kunde inte starta appen: " & launchError & vbCrLf & "Se logs\startup.log", vbExclamation, "E-postofferten"
     Else
         LogStage "Process ended; exit code=" & exitCode
-        If exitCode <> 0 Then MsgBox "Appen avslutades med felkod " & exitCode & vbCrLf & "Se logs\diagnostics.log och logs\launcher.log", vbExclamation, "E-postofferten"
+        If exitCode <> 0 Then MsgBox "Appen avslutades med felkod " & exitCode & vbCrLf & "Se logs\app.log och logs\startup.log", vbExclamation, "E-postofferten"
     End If
     On Error GoTo 0
 End If
@@ -79,13 +79,7 @@ Sub LogStage(message)
     On Error Resume Next
     folder = scriptDir & "\logs"
     If Not fso.FolderExists(folder) Then fso.CreateFolder folder
-    path = folder & "\launcher.log"
-    If fso.FileExists(path) Then
-        If fso.GetFile(path).Size > 1048576 Then
-            If fso.FileExists(path & ".1") Then fso.DeleteFile path & ".1", True
-            fso.MoveFile path, path & ".1"
-        End If
-    End If
+    path = folder & "\startup.log"
     Set stream = fso.OpenTextFile(path, 8, True, -1)
     If Err.Number <> 0 Then
         reason = Err.Description

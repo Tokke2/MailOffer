@@ -2870,3 +2870,10 @@ Användaren valde från redan-valda: tema-knapp (§34 #6) och tydligare
 - Stäng till tray kräver återställbar, tillgänglig bricka; annars minimeras fönstret.
 - Ny gemensam vektorprofil: SVG med bokstavsbanor, svart variant, PNG/ICO/ICNS och Thunderbird-ikon.
 - Version 1.0.0, bygg 2026102340.
+
+### V7.47 – tre aktiva textloggar
+- app.log, startup.log och errors.log; inga nya rotations-/crashfiler.
+- Tidigare dagar arkiveras verifierat, sju avslutade dagar behålls. Olösta fel ligger kvar centralt.
+- Säker migrering efter full felinsamling och ZIP-verifiering; upptagna källor väntar.
+- Gemensam UTF-16-startlogg på Windows; faulthandler binds om vid app.log-komprimering.
+- Version 1.0.0, bygg 2026102341.

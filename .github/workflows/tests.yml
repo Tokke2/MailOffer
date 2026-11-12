@@ -39,7 +39,7 @@ jobs:
       - name: Kontrollera PowerShell och VBS utan installation
         shell: powershell
         run: |
-          foreach ($file in @('tools/ensure_python.ps1', 'tools/weekly_python.ps1', 'tools/python_runtime_checks.ps1')) {
+          foreach ($file in @('tools/ensure_python.ps1', 'tools/weekly_python.ps1', 'tools/python_runtime_checks.ps1', 'tools/startup_logging.ps1')) {
             $tokens = $null
             $errors = $null
             [System.Management.Automation.Language.Parser]::ParseFile((Join-Path $pwd $file), [ref]$tokens, [ref]$errors) | Out-Null
@@ -114,6 +114,12 @@ jobs:
           $env:QT_QPA_PLATFORM = 'offscreen'
           python tools/run_windows_tests.py test_minimize_to_tray_ui.py
           python tools/run_windows_tests.py test_tray_close_safety.py
+      - name: Testa tre dagsloggar och gemensam startlogg
+        shell: powershell
+        run: |
+          python tools/run_windows_tests.py test_three_daily_logs.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          ./tests/test_startup_logging.ps1
       - name: Testa dagsarkivering med öppna Windows-loggfiler
         run: python tools/run_windows_tests.py test_log_compaction.py
 

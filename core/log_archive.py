@@ -62,6 +62,8 @@ def _exclusive(source):
         for handler in handlers:
             handler.acquire()
             held.append(handler)
+            if hasattr(handler, 'pause_fault'):
+                handler.pause_fault()
             if handler.stream is not None:
                 handler.flush()
                 handler.stream.close()
@@ -105,7 +107,11 @@ def _exclusive(source):
             stream.close()
         for handler in reversed(held):
             # Lazy reopening on emit avoids keeping unnecessary handles alive.
-            handler.release()
+            try:
+                if hasattr(handler, 'resume_fault'):
+                    handler.resume_fault()
+            finally:
+                handler.release()
 
 
 def archive_logs(directory, today=None, *, eligible=None, prepared=None, rewritten=None):

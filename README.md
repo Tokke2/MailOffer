@@ -96,7 +96,7 @@ pip hämtar nyare stabila kompatibla paket och kör därefter pip check.
 **Gemensamma uppgraderingar kan påverka andra program** som använder samma
 Python och paket. Nätåtkomst krävs när underhållet utförs, inte vid vanliga
 starter däremellan. Fel vid kontroll avbryter appstart med synlig varning.
-Detaljer finns i logs/python-startup.log, veckostatus i
+Detaljer finns i logs/startup.log, veckostatus i
 logs/python-maintenance.json. Parallella kontroller i samma appmapp spärras.
 Veckouppgiften heter MailOffer-Python-Weekly-<appmappens ID>; ta bort den i
 Windows Schemaläggaren om appmappen avinstalleras manuellt.
@@ -394,21 +394,16 @@ uppdaterare kan behöva en första manuell uppdatering trots samma 1.0.0.
 
 ### Avancerad start- och feldiagnostik
 
-Dubbelklicksstarten loggar nu även innan Python körs. Vid fel: skicka
-`logs/launcher.log`, `logs/diagnostics.log` och de sista raderna i
-`logs/email_app.log` från samma försök. Innehållet kan innehålla lokala
-sökvägar och felmeddelanden; granska det före delning.
-
-- `launcher.log`: sökta/tillgängliga Python-tolkar, installationssteg,
-  startfel och processens avslutningskod. UTF-16, roterar vid 1 MB.
-- `diagnostics.log`: start före Qt-import, process-id, tråd, Python-sökväg,
-  arbetsmapp, varningar, Qt-meddelanden, ofångade huvud-/bakgrundstrådsfel,
-  unraisable-fel och fångade exceptions som loggas även på DEBUG-nivå.
-  Fullständiga stackspår, utan dump av lokala variabler. 5 MB, fem arkiv.
-- `native-crash-<pid>.log`: faulthandler för vissa lågnivåkrascher, högst
-  tio filer. Kan vara tom efter normal körning.
-- Alla appens loggar skrivs i `<appmapp>/logs/`. Om mappen inte går att
-  skapa/skriva visas ett startfel; inga loggar omdirigeras till tempmappen.
+Vid fel: granska och dela vid behov `logs/startup.log`, `logs/app.log` och
+`logs/errors.log`. Innehållet kan innehålla lokala sökvägar och kunduppgifter.
+- `startup.log`: startfil, system-Python-kontroll, tillägg och startfel.
+- `app.log`: appkörning, tidig diagnostik, trådar, varningar, Qt och fullständiga
+  stackspår. Faulthandler skriver också här; ingen separat crash-logg skapas.
+- `errors.log`: alla insamlade öppna fel och varningar från de andra loggarna.
+- Inga storleksroterade .log.1-kopior skapas. Äldre dagar går till verifierade
+  ZIP-filer i logs/archive; sju avslutade dagar behålls.
+- Loggar skrivs bara i appmappens logs. Kan mappen inte skrivas visas fel,
+  ingen tempmapp används som dold reserv.
 
 Den fristående diagnostiken överlever ominitiering av den vanliga loggern.
 Vanliga lösenords-/tokenfält och SMTP AUTH-data maskeras i diagnostikloggen,
@@ -602,9 +597,8 @@ Tyst sökning, godkännande före installation och automatisk säker omstart
 ### Samlad fellogg för snabb felsökning
 
 **`logs/errors.log`** samlar identifierade fel, varningar och stackspår från
-appens tillgängliga `.log`-filer och deras roterade kopior: bland annat
-`email_app.log`, `diagnostics.log`, `launcher.log`, `startup_crash.log` och
-`native-crash-*.log`. Varje post anger källfil och insamlingstid; ursprunglig
+`app.log` och `startup.log`. Äldre loggformat läses också in vid migrering.
+Varje post anger källfil och insamlingstid; ursprunglig
 tid och feltext behålls. Äldre källposter flyttas därefter till dagsarkiv.
 
 Loggarna läses inkrementellt i en bakgrundstråd ungefär var femte sekund,
@@ -615,7 +609,7 @@ Samma fel kan finnas under flera källfiler om originalen loggat det på
 flera ställen. Normal start/avslut med felkod 0 tas inte med.
 
 Öppna **Loggar → Öppna samlad fellogg** för att uppdatera och öppna filen.
-Samtliga loggar, rotationskopior och insamlarens index/lås ligger i
+Samtliga loggar, arkiv och insamlarens index/lås ligger i
 `<appmapp>\logs\`. Insamlaren läser bara loggar i denna undermapp, inte
 gamla reservloggar eller andra filer i tempmappen.
 
@@ -684,8 +678,8 @@ behöver provas på användardatorn.
 
 Alla loggar samlas i **`<appmapp>\logs\`**, exempelvis
 `D:\Program\MailOffer\logs\`. Undermappen skapas automatiskt och innehåller
-`email_app.log`, `diagnostics.log`, `launcher.log`, `errors.log`, eventuella
-`startup_crash.log`/`native-crash-<pid>.log` och roterade kopior. Felloggens
+exakt tre aktiva textloggar: `app.log`, `startup.log` och `errors.log`.
+Felloggens databas,
 index och lås ligger också där, inte bland appfilerna i roten.
 
 Ingen ny loggning sker till `%TEMP%`. Startfilen varnar om den inte kan
@@ -880,3 +874,21 @@ Se `docs/BRANDING.md`. SVG-original finns i `icons/mailoffer-logo.svg`,
 `icons/mailoffer-logo-black.svg` och `icons/app_icon.svg`. Texten är banor,
 inte ett typsnittsberoende eller en inbäddad bild. PNG, ICO och ICNS exporteras
 från samma vektorsymbol. Aktivitetshanteraren kan fortfarande visa Python-ikon.
+
+### Tre aktiva textloggar och sju dagars arkiv
+Från bygg 2026102341 används app.log, startup.log och errors.log. Äldre
+loggfiler säkerhetskopieras till verifierade ZIP-filer och tas bort först
+efter att insamlaren läst hela innehållet. Även dagens äldre format kan
+finnas i migrationsarkivet, i stället för som en extra aktiv logg.
+Vanliga dagsloggar behåller bara dagens och eventuella framtidsdaterade poster.
+Olösta fel behålls i errors.log oavsett ålder tills de åtgärdsmarkeras.
+Databas, läsindex, låsfiler och underhållsstatus är tekniska filer, inte
+ytterligare textloggar, och behövs för att bevara fel och läspositioner.
+Windows-startlogg använder genomgående UTF-16 för både VBS och PowerShell;
+app.log är UTF-8. macOS-startlogg använder systemets UTF-8-utmatning.
+Faulthandler pausas kort under verifierad filkomprimering och binds om till
+den nya app.log-filen; en native-krasch just under pausen kan sakna stackdump.
+Låsta/otolkbara/för stora eller ännu inte helt inlästa källor lämnas kvar
+och provas igen. Därför kan äldre extra loggar tillfälligt finnas vid migration.
+Arkivering sker vid start och med återförsök under körning; efter avstängning
+behandlas föregående dagar vid nästa start. Ingen separat ständig loggtjänst.
