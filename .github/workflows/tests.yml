@@ -129,8 +129,8 @@ jobs:
           python-version: "3.12"
       - name: Testa autostartkonfiguration och säkert stängbeteende
         run: |
-          python -m unittest discover -s tests -p test_desktop_portability.py -v
-          python -m unittest discover -s tests -p test_tray_close_safety.py -v
-          python -m unittest discover -s tests -p test_vector_branding.py -v
+          python tools/run_windows_tests.py test_desktop_portability.py
+          python tools/run_windows_tests.py test_tray_close_safety.py
+          python tools/run_windows_tests.py test_vector_branding.py
           sh -n 'Starta MailOffer.sh'
           sh -n 'Starta MailOffer.command'

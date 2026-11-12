@@ -28,7 +28,7 @@ class DesktopPortabilityTests(unittest.TestCase):
                 target = linux_autostart_dir() / (APP_NAME + '.desktop')
                 self.assertTrue(target.exists())
                 self.assertIn('Terminal=false', target.read_text())
-                self.assertIn('Path=' + str(base), target.read_text())
+                self.assertIn('Path=' + str(settings.base_dir), target.read_text())
                 self.assertEqual(settings.classify_autostart(), 'correct')
                 self.assertTrue(settings.is_autostart_enabled())
                 self.assertTrue(settings._set_autostart_linux(False))
