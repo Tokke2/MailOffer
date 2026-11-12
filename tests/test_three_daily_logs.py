@@ -43,7 +43,7 @@ class ThreeDailyLogsTests(unittest.TestCase):
         self.collector.archive_completed_logs(self.today)
         self.assertFalse(source.exists())
         backups = list((self.logs / 'archive').rglob('*.zip'))
-        self.assertTrue(any(ZipFile(path).read('diagnostics.log').decode() == payload for path in backups))
+        self.assertTrue(any(ZipFile(path).read('diagnostics.log').decode().replace('\r\n', '\n') == payload for path in backups))
         self.assertIn('legacy-error', (self.logs / 'errors.log').read_text())
 
     def test_failed_legacy_backup_leaves_original(self):
