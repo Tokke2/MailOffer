@@ -101,6 +101,8 @@ jobs:
         run: |
           $env:QT_QPA_PLATFORM = 'offscreen'
           python tools/run_windows_tests.py test_template_recipients_ui.py
+      - name: Testa sändningsdiagnostik utan nätverk
+        run: python tools/run_windows_tests.py test_send_diagnostics.py
       - name: Testa tangentbordsnavigering utan mus
         run: |
           $env:QT_QPA_PLATFORM = 'offscreen'

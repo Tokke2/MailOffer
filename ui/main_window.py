@@ -944,6 +944,9 @@ class SendWorker(QThread):
             except Exception:
                 pass
 
+            from core.send_diagnostics import audit_dns
+            self.progress.emit(0, 1, 'Kontrollerar avsändardomänens DNS (SPF/DMARC/DKIM)…')
+            audit_dns(kwargs.get('sender_email', ''))
             result = send_email(**kwargs)
             self.finished.emit(result)
         except Exception as exc:
@@ -2515,7 +2518,7 @@ class MainWindow(QMainWindow):
         recipient_row.addWidget(QLabel('Mallens mottagare:'))
         self._template_recipient_combo = QComboBox()
         recipient_row.addWidget(self._template_recipient_combo, 1)
-        self._template_recipient_add = QPushButton('Lägg till i Till')
+        self._template_recipient_add = QPushButton('Lägg till i Bcc')
         self._template_recipient_add.clicked.connect(self._add_template_recipient)
         recipient_row.addWidget(self._template_recipient_add)
         link_recipients = QPushButton('Koppla adresser…')
@@ -6527,13 +6530,13 @@ class MainWindow(QMainWindow):
         return widget
 
     def _refresh_template_recipients(self):
-        from core.template_recipients import template_recipients
+        from core.template_recipients import linked_bcc
         combo = getattr(self, '_template_recipient_combo', None)
         if combo is None:
             return
         previous = combo.currentData()
         name = self._last_tpl.name if self._last_tpl else ''
-        emails = template_recipients(name, self.settings.get('template_recipient_rules', {}))
+        emails = linked_bcc(name, self.settings.get('template_recipient_rules', {}), self.settings.get('template_bcc_rules', {}))
         combo.clear()
         if emails:
             combo.addItem('Alla kopplade (' + str(len(emails)) + ')', '')
@@ -6548,19 +6551,19 @@ class MainWindow(QMainWindow):
         self._template_recipient_add.setEnabled(bool(emails))
 
     def _add_template_recipient(self):
-        from core.template_recipients import template_recipients
+        from core.template_recipients import linked_bcc
         name = self._last_tpl.name if self._last_tpl else ''
-        emails = template_recipients(name, self.settings.get('template_recipient_rules', {}))
+        emails = linked_bcc(name, self.settings.get('template_recipient_rules', {}), self.settings.get('template_bcc_rules', {}))
         selected = self._template_recipient_combo.currentData()
         if selected:
             emails = [email for email in emails if email == selected]
-        count = sum(self._add_recipient('to', email=email, show_warning=False,
+        count = sum(self._add_recipient('bcc', email=email, show_warning=False,
             lang=self._contact_lang(email)) for email in emails)
         self._refresh_preview()
-        self._status(f'{count} nya mottagare tillagda i Till', 'success' if count else 'info')
+        self._status(f'{count} nya mottagare tillagda i Bcc', 'success' if count else 'info')
 
     def _edit_template_recipients(self):
-        from core.template_recipients import normalize_template_recipients, template_recipients
+        from core.template_recipients import normalize_template_recipients, linked_bcc
         from ui.template_recipients import TemplateRecipientsDialog
         if not self._last_tpl:
             QMessageBox.information(self, 'Koppla adresser', 'Välj en mall först.')
@@ -6573,7 +6576,7 @@ class MainWindow(QMainWindow):
                 if _looks_like_email(email):
                     contacts[email.lower()] = (email, str(getattr(contact, 'name', '') or email))
         rules = normalize_template_recipients(self.settings.get('template_recipient_rules', {}))
-        dialog = TemplateRecipientsDialog(self, name, template_recipients(name, rules),
+        dialog = TemplateRecipientsDialog(self, name, linked_bcc(name, rules, self.settings.get('template_bcc_rules', {})),
             sorted(contacts.values(), key=lambda row: (row[1].casefold(), row[0].casefold())))
         if dialog.exec() != QDialog.DialogCode.Accepted:
             return
@@ -6583,80 +6586,66 @@ class MainWindow(QMainWindow):
         else:
             rules.pop(name, None)
         previous = self.settings.get('template_recipient_rules', {})
+        old_bcc = self.settings.get('template_bcc_rules', {})
+        new_bcc = dict(old_bcc)
+        new_bcc.pop(name, None)
+        self.settings.set('template_bcc_rules', new_bcc)
         self.settings.set('template_recipient_rules', rules)
         if not self.settings.save():
             self.settings.set('template_recipient_rules', previous)
+            self.settings.set('template_bcc_rules', old_bcc)
             QMessageBox.warning(self, 'Koppla adresser', tr('safety.save_failed'))
             return
-        self._refresh_template_recipients()
+        self._refresh_preview()
+
+    def _sync_template_bcc(self):
+        """Refresh owned rows, preserving manual BCC and removing linked To exposure."""
+        from core.template_recipients import linked_bcc
+        if not hasattr(self, '_bcc_list') or getattr(self, '_syncing_template_bcc', False):
+            return
+        self._syncing_template_bcc = True
+        try:
+            name = self._last_tpl.name if self._last_tpl else ''
+            emails = linked_bcc(name, self.settings.get('template_recipient_rules', {}),
+                                self.settings.get('template_bcc_rules', {}))
+            wanted = {email.casefold() for email in emails}
+            role = int(Qt.ItemDataRole.UserRole) + 1
+            for row in range(self._bcc_list.count() - 1, -1, -1):
+                item = self._bcc_list.item(row)
+                addresses = extract_email_addresses(item.text())
+                if item.data(role) == 'template-bcc' and (not addresses or addresses[0].casefold() not in wanted):
+                    self._bcc_list.takeItem(row)
+            # A linked recipient must not also be exposed in the To header.
+            for row in range(self._to_list.count() - 1, -1, -1):
+                item = self._to_list.item(row)
+                email = extract_email_addresses(item.text())
+                if email and email[0].casefold() in wanted:
+                    self._to_list.takeItem(row)
+            existing = {email.casefold() for email in self._list_items(self._bcc_list)}
+            for email in emails:
+                if email.casefold() in existing:
+                    continue
+                if self._add_recipient('bcc', email=email, show_warning=False, lang=self._contact_lang(email)):
+                    self._bcc_list.item(self._bcc_list.count() - 1).setData(role, 'template-bcc')
+        finally:
+            self._syncing_template_bcc = False
 
     def _refresh_template_bcc_label(self):
+        self._sync_template_bcc()
         self._refresh_template_recipients()
-        from core.template_bcc import template_bcc
+        from core.template_recipients import linked_bcc
         label = getattr(self, "_template_bcc_label", None)
         if label is None:
             return
         name = self._last_tpl.name if self._last_tpl else ""
-        emails = template_bcc(name, self.settings.get("template_bcc_rules", {}))
+        emails = linked_bcc(name, self.settings.get("template_recipient_rules", {}), self.settings.get("template_bcc_rules", {}))
         label.setTextFormat(Qt.TextFormat.PlainText)
         label.setText(tr("template_bcc.active", emails=", ".join(emails)) if emails else "")
         label.setVisible(bool(emails))
 
     def _edit_template_bcc(self):
-        from core.template_bcc import normalize_template_bcc, template_bcc
-        names = self._template_names(all_profiles=True)
-        if not names:
-            return
-        current = self._selected_template_tool_name()
-        name, ok = QInputDialog.getItem(self, tr("template_bcc.button"),
-            tr("safety.choose_template"), names, names.index(current) if current in names else 0, False)
-        if not ok or not name:
-            return
-        rules = normalize_template_bcc(self.settings.get("template_bcc_rules", {}))
-        selected = template_bcc(name, rules)
-        contacts = {}
-        if self._contact_store is not None:
-            for contact in self._contact_store.all():
-                email = str(getattr(contact, "email", "") or "").strip()
-                if _looks_like_email(email):
-                    contacts[email.lower()] = (email, str(getattr(contact, "name", "") or email))
-        for email in selected:
-            contacts.setdefault(email.lower(), (email, email))
-        dialog = QDialog(self)
-        dialog.setWindowTitle(tr("template_bcc.button") + " – " + name)
-        layout = QVBoxLayout(dialog)
-        info = QLabel(tr("template_bcc.info"))
-        info.setWordWrap(True)
-        layout.addWidget(info)
-        choices = QListWidget()
-        picked = {email.lower() for email in selected}
-        for key, (email, display) in sorted(contacts.items()):
-            item = QListWidgetItem(f"{display} <{email}>" if display != email else email)
-            item.setData(Qt.ItemDataRole.UserRole, email)
-            item.setFlags(item.flags() | Qt.ItemFlag.ItemIsUserCheckable)
-            item.setCheckState(Qt.CheckState.Checked if key in picked else Qt.CheckState.Unchecked)
-            choices.addItem(item)
-        layout.addWidget(choices)
-        buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
-        buttons.accepted.connect(dialog.accept)
-        buttons.rejected.connect(dialog.reject)
-        layout.addWidget(buttons)
-        if dialog.exec() != QDialog.DialogCode.Accepted:
-            return
-        emails = [choices.item(i).data(Qt.ItemDataRole.UserRole) for i in range(choices.count())
-                  if choices.item(i).checkState() == Qt.CheckState.Checked]
-        if emails:
-            rules[name] = emails
-        else:
-            rules.pop(name, None)
-        previous = self.settings.get("template_bcc_rules", {})
-        self.settings.set("template_bcc_rules", rules)
-        if not self.settings.save():
-            self.settings.set("template_bcc_rules", previous)
-            QMessageBox.warning(self, tr("template_bcc.button"), tr("safety.save_failed"))
-            return
-        self._refresh_template_bcc_label()
-        self._refresh_preview()
+        # A single editor avoids conflicting hidden legacy BCC defaults.
+        self._edit_template_recipients()
 
     def _edit_template_access(self):
         names = self._template_names(all_profiles=True)
@@ -6879,10 +6868,10 @@ class MainWindow(QMainWindow):
         self, profile: Optional[Mapping[str, Any]] = None
     ) -> List[str]:
         """Standard-Bcc + vald profils arkivkopia (deduplicerat)."""
-        from core.template_bcc import template_bcc
+        from core.template_recipients import linked_bcc
         default_bcc = list(self.settings.get("default_bcc", []) or [])
         name = self._last_tpl.name if self._last_tpl else ""
-        default_bcc.extend(template_bcc(name, self.settings.get("template_bcc_rules", {})))
+        default_bcc.extend(linked_bcc(name, self.settings.get("template_recipient_rules", {}), self.settings.get("template_bcc_rules", {})))
         archive_source = (
             profile.get("archive_copy_email")
             if profile is not None
@@ -6896,6 +6885,7 @@ class MainWindow(QMainWindow):
         return _dedupe(default_bcc)
 
     def _gather_send_params(self) -> Dict[str, Any]:
+        self._sync_template_bcc()
         recipients_to = _dedupe(self._list_items(self._to_list))
         recipients_bcc = _dedupe(self._list_items(self._bcc_list))
         replacements = self._get_ph()

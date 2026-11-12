@@ -1628,10 +1628,12 @@ def send_email(
                 extra_headers = extra_headers,
                 request_receipts = request_receipts,
             )
-            log.debug(
-                "[DRY RUN] Batch %s (%s):\n%s",
-                kind, ", ".join(rcpts), msg_obj.as_string()[:2000],
-            )
+            from core.send_diagnostics import audit_message
+            audit_message(msg_obj, signature_text=signature_text,
+                          signature_contact=signature_contact, signature_logo=signature_logo,
+                          bcc_batch=kind.startswith('bcc'),
+                          hidden_recipients=rcpts if kind.startswith('bcc') else ())
+            log.debug("[DRY RUN] Batch %s recipients=%d; message content omitted", kind, len(rcpts))
         log.info(
             "[DRY RUN] Skulle skickat till %d mottagare "
             "(SV=%d, EN=%d). Ämne: %s",
@@ -1680,6 +1682,11 @@ def send_email(
                 extra_headers = extra_headers,
                 request_receipts = request_receipts,
             )
+            from core.send_diagnostics import audit_message
+            audit_message(msg_obj, signature_text=signature_text,
+                          signature_contact=signature_contact, signature_logo=signature_logo,
+                          bcc_batch=kind.startswith('bcc'),
+                          hidden_recipients=rcpts if kind.startswith('bcc') else ())
             message_str = msg_obj.as_string()
 
             server = send_with_retry(

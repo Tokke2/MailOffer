@@ -23,3 +23,12 @@ class TemplateRecipientTests(unittest.TestCase):
             loaded = SettingsManager(root)
             self.assertEqual(loaded.get('template_recipient_rules'), {'A.txt': ['a@example.com']})
             self.assertEqual(loaded.get('template_bcc_rules'), {'A.txt': ['b@example.com']})
+
+    def test_legacy_and_new_rules_union_as_bcc(self):
+        from core.template_recipients import linked_bcc
+        rules = {'A.txt': ['a@example.com', 'b@example.com'], 'B.txt': ['b@example.com']}
+        bcc = {'A.txt': ['A@EXAMPLE.COM', 'c@example.com']}
+        self.assertEqual(linked_bcc('A.txt', rules, bcc), ['a@example.com', 'b@example.com', 'c@example.com'])
+        self.assertEqual(linked_bcc('B.txt', rules, bcc), ['b@example.com'])
+        self.assertEqual(linked_bcc('', rules, bcc), [])
+        self.assertEqual(len(bcc['A.txt']), 2)

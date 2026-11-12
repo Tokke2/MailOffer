@@ -2877,3 +2877,10 @@ Användaren valde från redan-valda: tema-knapp (§34 #6) och tydligare
 - Säker migrering efter full felinsamling och ZIP-verifiering; upptagna källor väntar.
 - Gemensam UTF-16-startlogg på Windows; faulthandler binds om vid app.log-komprimering.
 - Version 1.0.0, bygg 2026102341.
+
+### V7.48 – automatiska mall-Bcc och sändningsdiagnostik
+- Alla sparade mallmottagare/äldre Bcc-regler förenas, visas automatiskt i Bcc och sparas via samma editor.
+- Mallbyte rensar automatiska rader, behåller manuella. Kopplade adresser exponeras inte i Till.
+- SEND_CHECK: MIME/signatur/logo/headers/bildreferenser; sekretesskontroll stoppar läckande Bcc-header.
+- Automatisk DNS-postkontroll i sändningstråd, ingen garanti för verifierad autentisering eller inkorg.
+- Version 1.0.0, bygg 2026102342.

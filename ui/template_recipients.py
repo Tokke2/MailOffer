@@ -1,4 +1,4 @@
-"""Edit a template's suggested recipients without changing the current message."""
+"""Edit saved automatic BCC recipients for a template."""
 from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QLabel, QComboBox,
     QPushButton, QListWidget, QListWidgetItem, QDialogButtonBox, QLineEdit, QMessageBox)
@@ -13,7 +13,7 @@ class TemplateRecipientsDialog(QDialog):
         self.resize(560, 440)
         self.contacts = contacts
         layout = QVBoxLayout(self)
-        info = QLabel('Spara adresser för denna mall. De läggs inte till i mejlet förrän du väljer ”Lägg till i Till”.')
+        info = QLabel('Spara alla mottagare för denna mall. De visas automatiskt i Bcc-listan när mallen väljs och skickas som hemliga kopior. Ta bort en sparad koppling här för att utesluta den.')
         info.setWordWrap(True)
         layout.addWidget(info)
         row = QHBoxLayout()

@@ -817,11 +817,17 @@ dessa paketändringar återställs inte automatiskt när nästa Python provas.
 ### Koppla mottagare till en mall
 Välj mall i steg 1 och klicka **Koppla adresser…**. Välj från dropdown,
 skriv en adress eller markera flera i **Adressbok…**. Spara kopplingen.
-Under **Mallens mottagare** väljer du en adress eller alla kopplade och
-klickar **Lägg till i Till**. Mallbyte lägger inte till eller tar bort
-mottagare automatiskt. Kopplingarna sparas per exakt mallfilnamn, globalt
-för appen (inte per avsändarprofil). Byter du namn på filen behöver kopplingen
-läggas upp igen. Befintliga Bcc-regler är separata och ändras inte.
+Alla sparade adresser visas automatiskt i **Bcc-listan** och skickas som
+hemliga kopior. Dropdownens **Lägg till i Bcc** kan återlägga valda adresser.
+Mallbyte tar bort automatiska rader från föregående mall men behåller manuella
+Bcc-adresser. Kopplade adresser tas bort ur Till för att inte exponeras där.
+Språk från adressboken används, och ändrat språk på en befintlig rad behålls.
+Ta bort en koppling i dialogen och spara för att utesluta den permanent;
+att bara radera en automatisk rad återlägger den vid nästa uppdatering.
+Både äldre mottagarkopplingar och äldre Bcc-regler används; vid sparande
+samlas de under den redigerade mallens mottagarkoppling. Avbryt ändrar inget.
+Kopplingarna gäller exakt mallfilnamn och är globala för appen, inte per profil.
+Byter du namn på filen behöver kopplingen läggas upp igen.
 
 ### Tangentbord utan mus
 Tab/Shift+Tab följer layoutordningen genom utskickets fyra steg, även ut ur
@@ -892,3 +898,28 @@ Låsta/otolkbara/för stora eller ännu inte helt inlästa källor lämnas kvar
 och provas igen. Därför kan äldre extra loggar tillfälligt finnas vid migration.
 Arkivering sker vid start och med återförsök under körning; efter avstängning
 behandlas föregående dagar vid nästa start. Ingen separat ständig loggtjänst.
+
+### Sändningsdiagnostik (bygg 2026102342)
+Vid sändning från appen kontrolleras avsändardomänens SPF-/DMARC-poster och
+vanliga DKIM-selektorer automatiskt i sändningstråden. Uppslagen använder
+befintlig DNS-over-HTTPS mot Google, nu även automatiskt; endast domännamn
+skickas i DNS-frågorna, inte mottagare, signatur eller meddelandetext. Varje
+uppslag har 0,7 sekunders nätverkstimeout (tio uppslag; operativsystemets
+namnuppslagning kan ta längre tid). DNS-fel stoppar inte utskicket.
+Före varje verklig MIME-batch kontrolleras text/HTML, signaturtext,
+kontakttext, inbäddad signaturlogo, bildreferenser, ämne, centrala headers
+och kvarvarande {{platshållare}}. Brister ger SEND_CHECK-varningar i app.log
+och samlas i errors.log; Bcc-header eller exponering av batchens hemliga
+mottagare i Till/Kopia stoppar sändningen. Torrkörning använder samma
+MIME-kontroller utan SMTP eller automatiska DNS-anrop. De nya kontrollraderna
+loggar inte meddelandetext, signaturtext, lösenord eller mottagarlistor.
+Befintlig SMTP-loggning visar anslutning, TLS/SSL och autentiseringsresultat.
+Övriga befintliga loggar kan fortfarande innehålla adresser; granska innan delning.
+
+**Ingen inkorgsgaranti:** hittad SPF-post innebär inte att sändande server
+är auktoriserad; hittad DKIM-nyckel bevisar inte giltig signering. Att ingen
+vanlig DKIM-selektor hittas betyder okänt, inte säkert saknad DKIM. DMARC-
+alignment och faktiska SPF/DKIM-resultat måste kontrolleras i mottagarens
+Authentication-Results från ett mottaget testmejl. Spam kan också bero på
+rykte, innehåll, länkar, mottagarpolicy och medgivande. Kontrollerna ändrar
+inte DNS, leverantörens DKIM-signering eller mottagarens spamfilter.
