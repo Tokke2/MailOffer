@@ -109,5 +109,28 @@ jobs:
         run: |
           $env:QT_QPA_PLATFORM = 'offscreen'
           python tools/run_windows_tests.py test_mouse_navigation.py
+      - name: Testa systemfältets minimera och stäng
+        run: |
+          $env:QT_QPA_PLATFORM = 'offscreen'
+          python tools/run_windows_tests.py test_minimize_to_tray_ui.py
+          python tools/run_windows_tests.py test_tray_close_safety.py
       - name: Testa dagsarkivering med öppna Windows-loggfiler
         run: python tools/run_windows_tests.py test_log_compaction.py
+
+  desktop-portability:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Testa autostartkonfiguration och säkert stängbeteende
+        run: |
+          python -m unittest discover -s tests -p test_desktop_portability.py -v
+          python -m unittest discover -s tests -p test_tray_close_safety.py -v
+          python -m unittest discover -s tests -p test_vector_branding.py -v
+          sh -n 'Starta MailOffer.sh'
+          sh -n 'Starta MailOffer.command'

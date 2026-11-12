@@ -849,3 +849,34 @@ flik och framåtknappen framåt i flikhistoriken. Ett nytt flikval efter bakåt
 ersätter framåthistoriken. Dolda/inaktiverade flikar hoppas över. Upp till
 100 besök behålls under sessionen. Knapparna fångas inte i andra fönster,
 dialoger eller öppna popupmenyer. Funktionen ändrar inte fält eller skickar mejl.
+
+### Start, systemfält och olika operativsystem
+- **Windows:** Starta EmailApp.vbs, befintlig system-Python, ingen egen EXE.
+- **Linux:** `./Starta MailOffer.sh`; tillägg måste redan finnas för vald system-Python.
+- **macOS:** `Starta MailOffer.command` (kan öppna Terminal vid manuell start),
+  eller start med befintlig Python. Registrerad LaunchAgent öppnar ingen Terminal.
+- Shell-starten provar 3.15, 3.14 och övriga listade systemversioner och testar
+  Qt/tillägg utan att installera Python eller skapa en virtuell miljö.
+- Under **Inställningar → Autostart**: välj **Starta med systemet** och spara.
+  **Kontrollera/reparera autostart…** kan aktivera efter bekräftelse och visar
+  registrerat kommando/status. Autostart betyder vid **användarinloggning**.
+- Windows använder aktuell användares Run-post. Om Windows själv blockerat
+  posten visas det; appen kringgår inte OS-inställning, Defender eller policy.
+- macOS använder användarens LaunchAgent, Linux XDG-autostart (inklusive
+  XDG_CONFIG_HOME). Linux Exec får korrekt escaping och arbetsmapp/ikon.
+- Registrerad post är inte ett bevis på lyckad inloggningsstart. Desktop-policy,
+  macOS bakgrundsbehörigheter och miljön kan fortfarande hindra den.
+- Med synlig, tillgänglig systembricka gömmer minimera/stäng appen i brickan.
+  Saknas brickan minimeras den i stället och blir inte oåtkomligt dold.
+  Välj **Avsluta** i app/systembricka för fullständig avslutning.
+- Linux behöver en skrivbordsmiljö med systemfält/AppIndicator-stöd för bricka.
+  macOS använder menyraden. Fysisk inloggning/tray har inte verifierats på alla
+  skrivbordsmiljöer; se tester och OS-inställningar vid problem.
+- Veckovis automatiskt tilläggsunderhåll är Windows-funktionen; på macOS/Linux
+  hanteras installation/uppdatering av tillägg manuellt i systemets Python.
+
+### Ny logotyp och tryckoriginal
+Se `docs/BRANDING.md`. SVG-original finns i `icons/mailoffer-logo.svg`,
+`icons/mailoffer-logo-black.svg` och `icons/app_icon.svg`. Texten är banor,
+inte ett typsnittsberoende eller en inbäddad bild. PNG, ICO och ICNS exporteras
+från samma vektorsymbol. Aktivitetshanteraren kan fortfarande visa Python-ikon.

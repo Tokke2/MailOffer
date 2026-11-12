@@ -42,6 +42,11 @@ class TestMinimizeToTray(unittest.TestCase):
         except Exception as exc:
             raise unittest.SkipTest(f"MainWindow otillgänglig: {exc}")
 
+    def setUp(self):
+        patcher = mock.patch('PyQt6.QtWidgets.QSystemTrayIcon.isSystemTrayAvailable', return_value=True)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
     def _make_window(self, **overrides):
         from core.event_bus import EventBus
         from core.recovery_manager import RecoveryManager

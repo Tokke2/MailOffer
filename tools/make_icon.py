@@ -1,43 +1,29 @@
-"""Export the selected MailOffer artwork to all app and extension icon formats.
+"""Render committed vector artwork. Build-only dependencies: Pillow, resvg-py.
 
-Requires Pillow. Source: icons/mailoffer-source.png (selected generated artwork).
-The connected light backdrop is removed; white envelope pixels are retained.
+No generated imagery or fonts are needed at runtime. Print masters stay SVG.
 """
-from collections import deque
 from pathlib import Path
-from PIL import Image
+import io
+import xml.etree.ElementTree as ET
 
 ROOT = Path(__file__).resolve().parents[1]
 
 
 def build():
-    image = Image.open(ROOT / 'icons/mailoffer-source.png').convert('RGBA')
-    width, height = image.size
-    pixels = image.load()
-    visited = bytearray(width * height)
-    queue = deque([(0, 0), (width - 1, 0), (0, height - 1), (width - 1, height - 1)])
-    while queue:
-        x, y = queue.popleft()
-        index = y * width + x
-        if visited[index]:
-            continue
-        visited[index] = 1
-        r, g, b, a = pixels[x, y]
-        if min(r, g, b) <= 105 or max(r, g, b) - min(r, g, b) >= 55:
-            continue
-        pixels[x, y] = (r, g, b, 0)
-        if x: queue.append((x - 1, y))
-        if y: queue.append((x, y - 1))
-        if x + 1 < width: queue.append((x + 1, y))
-        if y + 1 < height: queue.append((x, y + 1))
-    image = image.crop(image.getbbox())
-    scale = 936 / max(image.size)
-    image = image.resize((round(image.width * scale), round(image.height * scale)), Image.Resampling.LANCZOS)
-    master = Image.new('RGBA', (1024, 1024))
-    master.alpha_composite(image, ((1024 - image.width) // 2, (1024 - image.height) // 2))
-    master.save(ROOT / 'icons/app_icon.png')
-    master.save(ROOT / 'icons/app_icon.ico', sizes=[(s, s) for s in (16, 24, 32, 48, 64, 128, 256)])
-    master.resize((256, 256), Image.Resampling.LANCZOS).save(ROOT / 'thunderbird/icon.png')
+    import resvg_py
+    from PIL import Image
+    def render(name, width):
+        root = ET.parse(ROOT / 'icons' / name).getroot()
+        _, _, w, h = root.attrib['viewBox'].split()
+        root.set('width', w)
+        root.set('height', h)
+        return resvg_py.svg_to_bytes(svg_string=ET.tostring(root, encoding='unicode'), width=width, skip_system_fonts=True)
+    image = Image.open(io.BytesIO(render('app_icon.svg', 1024))).convert('RGBA')
+    image.save(ROOT / 'icons/app_icon.png')
+    image.save(ROOT / 'icons/app_icon.ico', sizes=[(s, s) for s in (16, 24, 32, 48, 64, 128, 256)])
+    image.save(ROOT / 'icons/app_icon.icns')
+    image.resize((256, 256), Image.Resampling.LANCZOS).save(ROOT / 'thunderbird/icon.png')
+    (ROOT / 'icons/mailoffer-logo.png').write_bytes(render('mailoffer-logo.svg', 2560))
 
 
 if __name__ == '__main__':

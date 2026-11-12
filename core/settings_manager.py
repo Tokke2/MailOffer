@@ -1327,7 +1327,8 @@ class SettingsManager:
             except Exception:
                 pass
             raise FileNotFoundError("VBS-startfilen saknas; återställ hela appmappen.")
-        return f'"{sys.executable}" "{script}" {flag}'
+        from core.desktop_startup import desktop_exec
+        return desktop_exec(self._get_autostart_args())
 
     def _get_autostart_args(self) -> List[str]:
         script = self._script_path()
@@ -1450,8 +1451,6 @@ class SettingsManager:
                         data = plistlib.load(handle)
                     args = [str(a) for a in data.get("ProgramArguments", [])]
                     joined = " ".join(args)
-                    if self._uses_console_python(joined):
-                        return "stale_console"
                     if AUTOSTART_BACKGROUND_FLAG not in joined:
                         return "stale_args"
                     if self._norm_cmd(joined) == self._norm_cmd(
@@ -1462,7 +1461,8 @@ class SettingsManager:
             except Exception:
                 return "different"
             return "correct"
-        desktop = Path.home() / ".config" / "autostart" / f"{APP_NAME}.desktop"
+        from core.desktop_startup import linux_autostart_dir
+        desktop = linux_autostart_dir() / f"{APP_NAME}.desktop"
         if not desktop.exists():
             return "missing"
         try:
@@ -1474,19 +1474,36 @@ class SettingsManager:
             if line.startswith("Exec="):
                 exec_line = line[5:]
                 break
-        if self._uses_console_python(exec_line):
-            return "stale_console"
         if AUTOSTART_BACKGROUND_FLAG not in exec_line:
             return "stale_args"
         if self._norm_cmd(exec_line) == expected:
             return "correct"
         return "different"
 
+    def _windows_startup_blocked(self):
+        """Read OS approval only; never override the user's Windows disable switch."""
+        if not IS_WINDOWS or not HAS_WINREG or winreg is None:
+            return None
+        try:
+            with winreg.OpenKey(winreg.HKEY_CURRENT_USER,
+                    r'Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run',
+                    0, winreg.KEY_READ) as key:
+                data, _ = winreg.QueryValueEx(key, APP_NAME)
+            if isinstance(data, bytes) and data:
+                if data[0] in (3, 7):
+                    return True
+                if data[0] in (2, 6):
+                    return False
+        except OSError:
+            pass
+        return None
+
     def get_autostart_info(self) -> Dict[str, Any]:
         """Diagnostik för autostart (UI/logg). Rör aldrig andras poster."""
         classification = self.classify_autostart()
         info: Dict[str, Any] = {
             "wanted": bool(self.get("autostart", False)),
+            "os_blocked": self._windows_startup_blocked(),
             "os_enabled": self.is_autostart_enabled(),
             "classification": classification,
             "command": self._get_autostart_command(),
@@ -1528,11 +1545,9 @@ class SettingsManager:
         self._backup_run_value(existing)
 
         try:
-            key = winreg.OpenKey(
-                winreg.HKEY_CURRENT_USER,
-                self._run_key_path(),
-                0,
-                winreg.KEY_ALL_ACCESS,
+            key = winreg.CreateKeyEx(
+                winreg.HKEY_CURRENT_USER, self._run_key_path(), 0,
+                winreg.KEY_SET_VALUE | winreg.KEY_QUERY_VALUE,
             )
             try:
                 if enable:
@@ -1598,7 +1613,8 @@ class SettingsManager:
             return False
 
     def _set_autostart_linux(self, enable: bool) -> bool:
-        autostart_dir = Path.home() / ".config" / "autostart"
+        from core.desktop_startup import linux_autostart_dir
+        autostart_dir = linux_autostart_dir()
         desktop_path = autostart_dir / f"{APP_NAME}.desktop"
         try:
             if enable:
@@ -1609,6 +1625,8 @@ class SettingsManager:
                     "Type=Application\n"
                     f"Name={APP_NAME}\n"
                     f"Exec={cmd}\n"
+                    f"Path={self.base_dir}\n"
+                    f"Icon={self.base_dir / 'icons' / 'app_icon.png'}\n"
                     "Terminal=false\n"
                     "Hidden=false\n"
                     "NoDisplay=false\n"
@@ -1647,9 +1665,8 @@ class SettingsManager:
                     Path.home() / "Library" / "LaunchAgents"
                     / f"{LAUNCH_AGENT_ID}.plist"
                 ).exists()
-            return (
-                Path.home() / ".config" / "autostart" / f"{APP_NAME}.desktop"
-            ).exists()
+            from core.desktop_startup import linux_autostart_dir
+            return (linux_autostart_dir() / f"{APP_NAME}.desktop").exists()
         except Exception:
             log.exception("Kunde inte kontrollera autostart")
             return False

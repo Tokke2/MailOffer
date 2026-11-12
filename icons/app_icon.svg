@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128mm" height="128mm" viewBox="0 0 512 512" role="img"><title>E-postofferten – symbol</title><rect x="32" y="32" width="448" height="448" rx="108" fill="#123247"/>
+<path d="M112 160h288v192H112z" fill="#fff"/>
+<path d="m112 160 144 112 144-112" fill="none" stroke="#123247" stroke-width="22" stroke-linejoin="round"/>
+<path d="m112 352 100-100m188 100-100-100" fill="none" stroke="#123247" stroke-width="14"/>
+<path d="M298 292h116l42 56-42 56H298z" fill="#00A996" stroke="#123247" stroke-width="14" stroke-linejoin="round"/>
+<path d="m322 348 22 22 42-46" fill="none" stroke="#fff" stroke-width="18" stroke-linecap="round" stroke-linejoin="round"/></svg>

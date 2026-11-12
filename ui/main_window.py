@@ -5343,8 +5343,39 @@ class MainWindow(QMainWindow):
         form.addRow("Close to tray", self._make_settings_checkbox("close_to_tray", "Stäng till tray"))
         form.addRow("Minimize to tray", self._make_settings_checkbox("minimize_to_tray", "Minimera till tray"))
         form.addRow("Autostart", self._make_settings_checkbox("autostart", "Starta med systemet"))
+        startup_help = QPushButton('Kontrollera/reparera autostart…')
+        startup_help.clicked.connect(self._check_desktop_startup)
+        form.addRow('Startdiagnostik', startup_help)
         # (v5.4) Ingen "Inkludera engelsk del" – språk styrs per mottagare
         return group
+
+    def _check_desktop_startup(self):
+        if not self.settings.get('autostart', False):
+            answer = QMessageBox.question(self, 'Autostart',
+                'Autostart är avstängd. Vill du aktivera start vid inloggning?')
+            if answer != QMessageBox.StandardButton.Yes:
+                return
+            ok = self.settings.set_autostart(True)
+            if ok:
+                ok = self.settings.save()
+            checkbox = self._settings_widgets.get('autostart')
+            if checkbox is not None:
+                checkbox.setChecked(bool(self.settings.get('autostart', False)))
+        else:
+            ok = self.settings.sync_autostart()
+        try:
+            info = self.settings.get_autostart_info()
+            status = ('Autostartposten är korrekt registrerad.' if info['classification'] == 'correct'
+                      else 'Autostartpostens status: ' + info['classification'])
+            if info.get('os_blocked') is True:
+                status += '\nWindows har inaktiverat posten. Aktivera den i Inställningar → Appar → Autostart.'
+            status += '\nStart gäller vid användarinloggning, inte före inloggning. OS-policy kan blockera starten.'
+            status += '\nKommando: ' + info['command']
+            if not ok:
+                status = 'Autostart kunde inte sparas/repareras. Se loggarna.\n' + status
+            QMessageBox.information(self, 'Autostart – kontroll', status)
+        except Exception as exc:
+            QMessageBox.warning(self, 'Autostart', str(exc))
 
     def _build_settings_group_sending(self) -> QGroupBox:
         group = QGroupBox("📤 Sändning")
@@ -5667,7 +5698,8 @@ class MainWindow(QMainWindow):
 
         if self.settings.save():
             try:
-                self.settings.sync_autostart()
+                if not self.settings.sync_autostart():
+                    QMessageBox.warning(self, 'Autostart', 'Inställningarna sparades, men OS-autostarten kunde inte uppdateras. Använd Kontrollera/reparera autostart.')
             except Exception:
                 log.debug(
                     "sync_autostart misslyckades efter settings save",
@@ -7646,9 +7678,10 @@ class MainWindow(QMainWindow):
         if icon is None:
             return False
         try:
-            return bool(icon.isVisible())
+            from PyQt6.QtWidgets import QSystemTrayIcon
+            return bool(icon.isVisible() and QSystemTrayIcon.isSystemTrayAvailable())
         except Exception:
-            return True
+            return False
 
     def _minimize_to_tray(self) -> None:
         """Dölj minimerat fönster till trayen (körs uppskjutet)."""
@@ -7683,7 +7716,10 @@ class MainWindow(QMainWindow):
         self._save_draft_at_exit()
         if self.settings.get("close_to_tray", True):
             event.ignore()
-            self.hide()
+            if self._can_hide_to_tray():
+                self.hide()
+            else:
+                self.showMinimized()
             return
 
         if self._tray_ref is not None and hasattr(

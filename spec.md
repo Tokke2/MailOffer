@@ -2861,3 +2861,12 @@ Användaren valde från redan-valda: tema-knapp (§34 #6) och tydligare
 - Bakåt/framåt via musens sidoknappar i aktivt huvudfönster, med flikhistorik.
 - Dialoger/popup/andra program undantas; dolda och inaktiverade flikar hoppas över.
 - Version 1.0.0, bygg 2026102339.
+
+### V7.46 – autostart, systemfält, OS-stöd och vektorprofil
+- Kontroll/reparation av autostart med explicit aktivering och synlig felstatus.
+- Windows Run-nyckel skapas vid behov; OS-blockering läses utan att kringgå den.
+- macOS/Linux klassar inte legitim system-Python som Windows-konsolstart.
+- Linux XDG_CONFIG_HOME, desktop-escaping, arbetsmapp och ikon. Shell-start för Linux/macOS.
+- Stäng till tray kräver återställbar, tillgänglig bricka; annars minimeras fönstret.
+- Ny gemensam vektorprofil: SVG med bokstavsbanor, svart variant, PNG/ICO/ICNS och Thunderbird-ikon.
+- Version 1.0.0, bygg 2026102340.
