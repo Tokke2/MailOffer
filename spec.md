@@ -2904,3 +2904,9 @@ Användaren valde från redan-valda: tema-knapp (§34 #6) och tydligare
 - Bildkandidater i unika tempundermappar; Pillow först/enda bildoptimerare för metadata/animationsskydd.
 - PNG/WebP förlustfritt; JPEG minst 95 utan chroma subsampling, inte förlustfritt. Endast mindre filer används.
 - Version 1.0.0, bygg 2026102345.
+
+### V7.52 – individuell Bcc och sekretessbegränsad rapport
+- Ett eget MIME/Message-ID per Bcc-adress, avsändare i Till, endast kunden i SMTP-kuvertet.
+- Överlapp stoppas före dedup; MIME kontrolleras mot alla hemliga mottagare, Bcc/Resent-Bcc förbjuds.
+- Loggar-flik: exportera senaste felsökningsrapport via strikt status-allowlist, ingen rålogg/mejltext/lösenord/adress/sökväg.
+- Version 1.0.0, bygg 2026102346.

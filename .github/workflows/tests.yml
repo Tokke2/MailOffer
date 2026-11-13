@@ -103,6 +103,8 @@ jobs:
           python tools/run_windows_tests.py test_template_recipients_ui.py
       - name: Testa sändningsdiagnostik utan nätverk
         run: |
+          python tools/run_windows_tests.py test_private_bcc_report.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python tools/run_windows_tests.py test_send_diagnostics.py
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python tools/run_windows_tests.py test_attachment_optimization.py

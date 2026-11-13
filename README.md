@@ -978,3 +978,28 @@ matematiskt förlustfritt**. Dimensionerna bevaras med standardinställningen
 preserve_image_dimensions=True. Endast mindre kandidater används. Redan
 optimerade/små bilder kan behållas oförändrade; viss storleksminskning kan
 inte garanteras för alla bilder. Originalfilerna ändras aldrig.
+
+### Separata hemliga mejl och säker rapport (bygg 2026102346)
+Varje Bcc-adress får nu ett eget MIME-meddelande med eget Message-ID och
+endast sin egen adress i SMTP-kuvertets mottagarlista. Till-headern innehåller
+avsändaradressen, inte kundadressen; inget Cc-/Bcc-fält läggs till. Äldre
+bcc_batch_size grupperar inte längre flera hemliga mottagare. Språkval och
+befintlig fördröjning mellan batcher behålls. Synliga Till-mottagare skickas
+som tidigare, separat. Egen Till-adress medför inte en extra SMTP-kopia i
+Bcc-batchen, men en separat egen-kopia-inställning kan fortfarande göra det.
+Säkerhetsspärren stoppar överlapp mellan hemliga mottagare och Till/egen
+adress/avsändare före deduplicering. Rensa överlappande standard-/arkiv-Bcc
+om samma adress ligger där och som avsändare. Färdig MIME kontrolleras mot
+hela utskickets hemliga lista, inte bara aktuell batch. Även tom Bcc-header
+och Resent-Bcc stoppas. Ingen garanti mot spam; SMTP-godkännande är inte
+bevis på inkorgsleverans. Återförsöksbeteendet är oförändrat.
+
+Loggar → Exportera senaste felsökningsrapport… sparar en UTF-8-textfil på
+vald plats. Rapporten använder en strikt tillåten uppsättning statusfält
+från senaste start/sändningsmarkörer i högst sista 2 MiB per app.log/startup.log.
+Adresser och sökvägar utelämnas helt (strängare än maskering); råa feltexter,
+lösenord, ämnen, mejltext, bilagor, signaturtext och råloggar exporteras inte.
+Byggnumret för exporterande app och tillgängliga körande byggnummer visas
+separat. Saknade markörer redovisas. Samtidiga instanser kan ge blandade
+loggrader, och exporten är en begränsad sammanfattning, inte full kraschdump.
+Granska rapporten före delning. Avbryt i spara-dialogen skapar ingen fil.

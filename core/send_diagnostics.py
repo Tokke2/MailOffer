@@ -49,7 +49,7 @@ def audit_message(message, *, signature_text='', signature_contact='', signature
         if not message.get(header):
             warnings.append('missing_' + header.lower())
     # A Bcc header would expose the hidden recipient list in the transmitted MIME.
-    if message.get('Bcc'):
+    if message.get_all('Bcc') is not None or message.get_all('Resent-Bcc') is not None:
         raise ValueError('Bcc-header får inte finnas i utgående MIME')
     visible = {email.casefold() for _, email in getaddresses(message.get_all('To', []) + message.get_all('Cc', []))}
     if visible.intersection(str(email).casefold() for email in hidden_recipients):
@@ -85,3 +85,13 @@ def audit_dns(sender_email, *, checker=None):
     except Exception:
         log.warning('SEND_CHECK DNS unavailable; delivery authentication remains unverified')
         return None
+
+
+def check_hidden_overlap(visible, hidden, defaults, own_email, sender):
+    """Do not silently promote hidden addresses to visible To via deduplication."""
+    hidden_set = {str(email).strip().casefold() for email in list(hidden) + list(defaults)}
+    visible_set = {str(email).strip().casefold() for email in visible}
+    if own_email:
+        visible_set.add(str(own_email).strip().casefold())
+    if hidden_set.intersection(visible_set) or str(sender).strip().casefold() in hidden_set:
+        raise ValueError('En hemlig mottagare överlappar Till/avsändare. Ta bort överlappningen före sändning.')

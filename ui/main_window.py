@@ -4922,6 +4922,9 @@ class MainWindow(QMainWindow):
         btn_open_errors = QPushButton("⚠ Öppna fel / markera åtgärdade")
         btn_open_errors.clicked.connect(self._manage_open_errors)
         buttons.addWidget(btn_open_errors)
+        export_report = QPushButton("Exportera senaste felsökningsrapport…")
+        export_report.clicked.connect(self._export_support_report)
+        buttons.addWidget(export_report)
         archive_button = QPushButton("📦 Öppna loggarkiv")
         archive_button.clicked.connect(self._open_log_archive)
         buttons.addWidget(archive_button)
@@ -4934,6 +4937,22 @@ class MainWindow(QMainWindow):
         buttons.addStretch()
         layout.addLayout(buttons)
         return widget
+
+    def _export_support_report(self):
+        path, _ = QFileDialog.getSaveFileName(self, 'Exportera senaste felsökningsrapport',
+                                            'E-postofferten-felsokning.txt', 'Text (*.txt)')
+        if not path:
+            return
+        try:
+            from core.logger import flush_logging
+            from core.support_report import build_support_report
+            flush_logging()
+            Path(path).write_text(build_support_report(self._base_dir()), encoding='utf-8')
+            QMessageBox.information(self, 'Felsökningsrapport',
+                'Rapport sparad. Adresser, sökvägar och mejltext är utelämnade. Granska före delning.')
+        except Exception:
+            log.exception('Kunde inte exportera felsökningsrapport')
+            QMessageBox.warning(self, 'Felsökningsrapport', 'Kunde inte spara rapporten.')
 
     def _refresh_log(self) -> None:
         log_path = self._log_path()
