@@ -50,8 +50,10 @@ class SendDiagnosticsTests(unittest.TestCase):
         msg.replace_header('To', 'hidden@example.com')
         with self.assertRaises(ValueError):
             audit_message(msg, bcc_batch=True, hidden_recipients=['HIDDEN@example.com'])
-        # Independent, explicitly visible To recipient is valid.
         msg.replace_header('To', 'visible@example.com')
+        with self.assertRaises(ValueError):
+            audit_message(msg, bcc_batch=True, hidden_recipients=['hidden@example.com'])
+        msg.replace_header('To', 'sender@example.com')
         audit_message(msg, bcc_batch=True, hidden_recipients=['hidden@example.com'])
 
     def test_dns_record_presence_never_claims_authentication_pass(self):

@@ -52,6 +52,14 @@ def audit_message(message, *, signature_text='', signature_contact='', signature
     if message.get_all('Bcc') is not None or message.get_all('Resent-Bcc') is not None:
         raise ValueError('Bcc-header får inte finnas i utgående MIME')
     visible = {email.casefold() for _, email in getaddresses(message.get_all('To', []) + message.get_all('Cc', []))}
+    if bcc_batch:
+        sender_addresses = getaddresses(message.get_all('From', []))
+        to_addresses = getaddresses(message.get_all('To', []))
+        if (len(sender_addresses) != 1 or len(to_addresses) != 1 or
+                not sender_addresses[0][1] or
+                to_addresses[0][1].casefold() != sender_addresses[0][1].casefold() or
+                message.get_all('Cc') is not None or len(message.get_all('To', [])) != 1):
+            raise ValueError('Hemligt mejl måste ha endast avsändaren i Till och inget Cc-fält')
     if visible.intersection(str(email).casefold() for email in hidden_recipients):
         raise ValueError('Bcc-mottagare skulle exponeras i Till/Kopia')
     log.info('SEND_CHECK MIME plain=%s html=%s signature_text=%s signature_contact=%s '
