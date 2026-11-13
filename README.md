@@ -923,3 +923,22 @@ alignment och faktiska SPF/DKIM-resultat måste kontrolleras i mottagarens
 Authentication-Results från ett mottaget testmejl. Spam kan också bero på
 rykte, innehåll, länkar, mottagarpolicy och medgivande. Kontrollerna ändrar
 inte DNS, leverantörens DKIM-signering eller mottagarens spamfilter.
+
+### Autostartreparation, bygg 2026102343
+Vid första manuella start efter uppdateringen aktiveras/repareras autostart
+vid användarinloggning och önskemålet sparas när OS-registrering och
+inställningssparning lyckats. Öppna appen manuellt en gång efter uppdatering.
+Efter denna engångsaktivering respekteras om du själv stänger av autostart
+i appens inställningar. Misslyckade försök provas igen vid nästa start.
+Windows-blockeringar via Autostart-appar/StartupApproved och IT-policy
+kringgås inte. Status och kommando loggas på INFO i logs/app.log; misslyckad
+verifiering ger varning även i errors.log. Inställningarnas autostartkontroll
+visar diagnostik och möjlighet till reparation.
+Appen startar alltid minimerad: systemfält om synlig bricka finns, annars
+minimerad i aktivitetsfältet, oberoende av gamla start_minimized-värden.
+En extra --background/--minimized-start väcker inte ett redan öppet fönster;
+en andra manuell start får fortfarande visa den befintliga instansen.
+VBS sätter appmappen som arbetsmapp redan före Python-kontrollen, även vid
+inloggning från Windows systemmapp. Ingen EXE, Pythoninstallation eller
+ändring av andra programs autostartposter görs. Faktisk inloggning på din
+dator kan inte verifieras av CI-tester.

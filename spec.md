@@ -2884,3 +2884,10 @@ Användaren valde från redan-valda: tema-knapp (§34 #6) och tydligare
 - SEND_CHECK: MIME/signatur/logo/headers/bildreferenser; sekretesskontroll stoppar läckande Bcc-header.
 - Automatisk DNS-postkontroll i sändningstråd, ingen garanti för verifierad autentisering eller inkorg.
 - Version 1.0.0, bygg 2026102342.
+
+### V7.49 – begärd autostartreparation och alltid minimerad
+- Engångsaktivering/reparation vid nästa start; markör sparas först efter OS-verifiering och lyckat settings-save.
+- Senare explicit avstängning respekteras; inga policy-/StartupApproved-blockeringar kringgås.
+- Bakgrundsstart av andra instansen visar inte befintligt fönster. Manuell andra start visar det.
+- VBS sätter arbetsmappen före hjälpskript. Autostartfel synliga i INFO/WARNING och statusrad.
+- Version 1.0.0, bygg 2026102343.

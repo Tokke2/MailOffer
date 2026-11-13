@@ -119,6 +119,8 @@ jobs:
       - name: Testa tre dagsloggar och gemensam startlogg
         shell: powershell
         run: |
+          python tools/run_windows_tests.py test_autostart_request.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python tools/run_windows_tests.py test_three_daily_logs.py
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           ./tests/test_startup_logging.ps1

@@ -513,9 +513,9 @@ def main() -> None:
         acquired, instance = ensure_single_instance(APP_NAME)
         if not acquired:
             log.info(
-                "En annan instans kör – fokuserar den och avslutar."
+                "En annan instans kör – avslutar extra start (bakgrund=%s).", background_start
             )
-            if instance is not None:
+            if instance is not None and not background_start:
                 try:
                     instance.focus_existing()
                 except Exception:
@@ -636,22 +636,22 @@ def main() -> None:
             main_window.set_tray(tray)
             log.debug("main_window.set_tray() anropad.")
 
-        # Sync autostart (v24.7: reparerar python.exe/stale_console)
+        # Apply requested login startup once; later user opt-outs are respected.
         try:
-            settings.sync_autostart()
-            try:
-                info = settings.get_autostart_info()
-                log.debug(
-                    "Autostart: wanted=%s klass=%s pythonw=%s",
-                    info.get("wanted"),
-                    info.get("classification"),
-                    info.get("pythonw"),
-                )
-            except Exception:
-                pass
-            log.debug("Autostart synkroniserad.")
-        except Exception as exc:
-            log.warning("sync_autostart misslyckades: %s", exc)
+            from core.desktop_startup import repair_requested_autostart
+            autostart_ok = repair_requested_autostart(settings)
+            info = settings.get_autostart_info()
+            log.info("Autostart: ok=%s wanted=%s klass=%s blocked=%s command=%s",
+                     autostart_ok, info.get('wanted'), info.get('classification'),
+                     info.get('os_blocked'), info.get('command'))
+            if not autostart_ok:
+                log.warning("Autostart kunde inte aktiveras/verifieras. Kontrollera Inställningar → "
+                            "Kontrollera/reparera autostart och Windows Autostart-appar. "
+                            "Ingen OS-blockering har kringgåtts.")
+                main_window.statusBar().showMessage(
+                    "Autostart ej verifierad – se Inställningar och logs/app.log.")
+        except Exception:
+            log.exception("Autostartkontroll misslyckades")
 
         # Startup event
         try:

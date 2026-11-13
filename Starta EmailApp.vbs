@@ -17,6 +17,8 @@ Set shell = CreateObject("WScript.Shell")
 Set fso = CreateObject("Scripting.FileSystemObject")
 scriptDir = fso.GetParentFolderName(WScript.ScriptFullName)
 logWarningShown = False
+' Login startup can inherit System32; set the app directory before any helper.
+shell.CurrentDirectory = scriptDir
 
 LogStage "Launcher started; folder=" & scriptDir
 pythonw = ""
