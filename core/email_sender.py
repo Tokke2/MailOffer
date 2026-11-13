@@ -754,7 +754,7 @@ def _compress_with_qimage(
         quality = png_level
     else:
         quality = webp_quality
-    out = out_path.with_name(f"{src.stem}_c{suffix}")
+    out = out_path / f"{src.stem}_c{suffix}"
 
     # JPEG har ingen alfakanal – lägg transparenta bilder på vit bakgrund
     if fmt == "JPG" and img.hasAlphaChannel():
@@ -788,7 +788,7 @@ def _compress_with_pillow(
 ) -> Optional[Path]:
     """Komprimera med Pillow (fallback om PyQt6 saknas)."""
     try:
-        from PIL import Image  # type: ignore
+        from PIL import Image, ImageOps  # type: ignore
     except Exception:
         return None
 
@@ -799,10 +799,19 @@ def _compress_with_pillow(
     sharp        = bool(cfg.get("sharp", True))
 
     fmt, suffix, _ = _pick_output_format(ext)
-    out = out_path.with_name(f"{src.stem}_c{suffix}")
+    out = out_path / f"{src.stem}_c{suffix}"
 
     try:
-        with Image.open(src) as im:
+        with Image.open(src) as original:
+            if getattr(original, 'is_animated', False):
+                return None
+            icc = original.info.get('icc_profile')
+            im = ImageOps.exif_transpose(original)
+            metadata = {'icc_profile': icc} if icc else {}
+            # Preserve EXIF except the orientation already applied above.
+            exif = im.getexif()
+            if exif:
+                metadata['exif'] = exif.tobytes()
             # Skala ner endast om dimensioner INTE ska bevaras
             if not preserve_dim:
                 longest = max(im.size)
@@ -828,11 +837,11 @@ def _compress_with_pillow(
                     im = bg
                 else:
                     im = im.convert("RGB")
-                im.save(out, "JPEG", quality=jpeg_quality, optimize=True)
+                im.save(out, "JPEG", quality=max(95, jpeg_quality), subsampling=0, optimize=True, **metadata)
             elif fmt == "PNG":
-                im.save(out, "PNG", optimize=True, compress_level=png_level)
+                im.save(out, "PNG", optimize=True, compress_level=9, **metadata)
             else:  # WEBP
-                im.save(out, "WEBP", quality=webp_quality)
+                im.save(out, "WEBP", lossless=True, method=6, **metadata)
     except Exception as exc:
         log.warning("Pillow-komprimering av '%s' misslyckades: %s – "
                     "behåller original.", src.name, exc)
@@ -870,18 +879,12 @@ def _compress_single_image(
         if orig_size < MIN_IMAGE_SIZE_TO_COMPRESS:
             return None
 
-        # 1) Primär: PyQt6 QImage (finns i appen, ingen ny dependency)
-        out = _compress_with_qimage(src, tmp_dir, ext, orig_size, cfg)
-        if out is not None:
-            log.info("Bild komprimerad (QImage): %s (%.0f KB → %.0f KB)",
-                     src.name, orig_size / 1024, out.stat().st_size / 1024)
-            return out
-
-        # 2) Fallback: Pillow (om installerat)
+        # Pillow preserves orientation/colour metadata and animation checks.
+        # Avoid Qt fallback: it may flatten animations or discard colour profiles.
         out = _compress_with_pillow(src, tmp_dir, ext, orig_size, cfg)
         if out is not None:
-            log.info("Bild komprimerad (Pillow): %s (%.0f KB → %.0f KB)",
-                     src.name, orig_size / 1024, out.stat().st_size / 1024)
+            log.info("Bild optimerad: %s (%d → %d byte; original orört)",
+                     src.name, orig_size, out.stat().st_size)
             return out
 
         log.debug("Ingen komprimering gjordes av '%s' – behåller original.",
@@ -953,7 +956,10 @@ def _compress_attachments(
             src = Path(attach)
             if src.suffix.lower() in IMAGE_EXTENSIONS:
                 image_count += 1
-                out = _compress_single_image(src, tmp_path, cfg)
+                # Same-named files from different folders must never overwrite one another.
+                image_dir = tmp_path / str(image_count)
+                image_dir.mkdir()
+                out = _compress_single_image(src, image_dir, cfg)
                 if out is not None:
                     new_list.append(str(out))
                     compressed += 1

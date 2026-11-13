@@ -2897,3 +2897,10 @@ Användaren valde från redan-valda: tema-knapp (§34 #6) och tydligare
 - Logotyp med konturtext; plana färg- och svart/vita tryckoriginal i tryck/ direkt i releasearkivet.
 - Ingen separat grafiknedladdning. RGB-SVG; ingen CMYK/PDF-X-certifiering.
 - Version 1.0.0, bygg 2026102344.
+
+### V7.51 – startdiagnostik, avveckling och bildoptimering
+- Direkt .pyw-start: absolut script host, app-cwd, kontrollerad VBS och native felruta/startup.log före Qt-import.
+- Autostartens script host absolut; explicit collector-/fokusevent-avveckling. Native-krasch ej bevisat reproducerad/löst.
+- Bildkandidater i unika tempundermappar; Pillow först/enda bildoptimerare för metadata/animationsskydd.
+- PNG/WebP förlustfritt; JPEG minst 95 utan chroma subsampling, inte förlustfritt. Endast mindre filer används.
+- Version 1.0.0, bygg 2026102345.

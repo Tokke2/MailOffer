@@ -133,3 +133,12 @@ def collect_errors(base):
         collector = ErrorLogCollector(base)
     collector.collect(final=True)
     return collector.path
+
+
+def stop_background_collection():
+    """Stop the collector before Qt/native objects enter interpreter teardown."""
+    collector = _error_collector
+    if collector is not None:
+        collector.stop()
+        if collector._thread is not None and collector._thread.is_alive():
+            _logger.warning('Error collector still busy at shutdown; final collection deferred')

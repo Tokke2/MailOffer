@@ -329,7 +329,9 @@ class ErrorLogCollector:
     def stop(self):
         self._stop.set()
         if self._thread is not None:
-            self._thread.join(timeout=3)
+            self._thread.join(timeout=10)
+            if self._thread.is_alive():
+                return  # Do not concurrently collect during shutdown.
         try:
             self.collect(final=True)
         except Exception:

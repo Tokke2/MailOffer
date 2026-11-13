@@ -102,7 +102,12 @@ jobs:
           $env:QT_QPA_PLATFORM = 'offscreen'
           python tools/run_windows_tests.py test_template_recipients_ui.py
       - name: Testa sändningsdiagnostik utan nätverk
-        run: python tools/run_windows_tests.py test_send_diagnostics.py
+        run: |
+          python tools/run_windows_tests.py test_send_diagnostics.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python tools/run_windows_tests.py test_attachment_optimization.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python tools/run_windows_tests.py test_shutdown_collection.py
       - name: Testa tangentbordsnavigering utan mus
         run: |
           $env:QT_QPA_PLATFORM = 'offscreen'

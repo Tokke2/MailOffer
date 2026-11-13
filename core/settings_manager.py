@@ -1323,7 +1323,8 @@ class SettingsManager:
             vbs = self._vbs_launcher_path()
             try:
                 if vbs.is_file():
-                    return f'wscript.exe //B //nologo "{vbs}" {flag}'
+                    host = Path(os.environ.get('SystemRoot', r'C:\Windows')) / 'System32' / 'wscript.exe'
+                    return f'"{host}" //B //nologo "{vbs}" {flag}'
             except Exception:
                 pass
             raise FileNotFoundError("VBS-startfilen saknas; återställ hela appmappen.")
@@ -1339,7 +1340,7 @@ class SettingsManager:
             vbs = self._vbs_launcher_path()
             try:
                 if vbs.is_file():
-                    return ["wscript.exe", "//B", "//nologo", str(vbs), flag]
+                    return [str(Path(os.environ.get('SystemRoot', r'C:\Windows')) / 'System32' / 'wscript.exe'), "//B", "//nologo", str(vbs), flag]
             except Exception:
                 pass
             raise FileNotFoundError("VBS-startfilen saknas; återställ hela appmappen.")

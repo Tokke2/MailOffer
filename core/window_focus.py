@@ -26,7 +26,16 @@ def install_focus_handler(window):
     timer.timeout.connect(poll)
     timer.start(100)
     window._focus_signal_timer = timer
-    window.destroyed.connect(lambda: kernel.CloseHandle(handle))
+    closed = False
+    def cleanup(*_):
+        nonlocal closed
+        if closed:
+            return
+        closed = True
+        timer.stop()
+        kernel.CloseHandle(handle)
+    window._cleanup_focus_signal = cleanup
+    window.destroyed.connect(cleanup)
 
 
 def request_focus():

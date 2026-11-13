@@ -110,10 +110,31 @@ if str(BASE_DIR) not in sys.path:
 
 # Direct .pyw launches also go through the shared-runtime startup check.
 if __name__ == "__main__" and os.name == "nt" and os.environ.get("MAILOFFER_STARTUP_READY") != "1":
-    subprocess.Popen(
-        ["wscript.exe", str(BASE_DIR / "Starta EmailApp.vbs"), *sys.argv[1:]],
-        creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0x08000000),
-    )
+    try:
+        launcher = BASE_DIR / "Starta EmailApp.vbs"
+        if not launcher.is_file():
+            raise FileNotFoundError("Starta EmailApp.vbs saknas. Packa upp hela releasen.")
+        subprocess.Popen(
+            [str(Path(os.environ.get('SystemRoot', r'C:\Windows')) / 'System32' / 'wscript.exe'),
+             str(launcher), *sys.argv[1:]],
+            cwd=str(BASE_DIR),
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0x08000000),
+        )
+    except Exception as exc:
+        # No Qt imports required: pythonw otherwise swallows this failure.
+        import ctypes
+        message = "Direktstart misslyckades: " + str(exc)
+        try:
+            folder = BASE_DIR / 'logs'
+            folder.mkdir(exist_ok=True)
+            from datetime import datetime
+            with (folder / 'startup.log').open('a', encoding='utf-16') as stream:
+                stream.write(f"{datetime.now():%Y-%m-%d %H:%M:%S} | ERROR | {message}\n")
+        except OSError:
+            pass
+        ctypes.windll.user32.MessageBoxW(None, message, "E-postofferten", 0x10)
+        raise SystemExit(1)
+
     raise SystemExit(0)
 
 # Diagnostics must precede third-party imports, especially pythonw import failures.
@@ -709,6 +730,19 @@ def main() -> None:
                 save_window_geometry(settings, main_window, log)
             except Exception as exc:
                 log.debug("Geometri kunde inte sparas: %s", exc)
+
+        if main_window is not None:
+            cleanup_focus = getattr(main_window, '_cleanup_focus_signal', None)
+            if cleanup_focus is not None:
+                try:
+                    cleanup_focus()
+                except Exception:
+                    _diagnostics.exception('Could not close focus event')
+        try:
+            from core.diagnostics import stop_background_collection
+            stop_background_collection()
+        except Exception:
+            _diagnostics.exception('Could not stop background log collection')
 
         if tray is not None:
             try:

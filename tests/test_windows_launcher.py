@@ -34,7 +34,7 @@ class WindowsLauncherTests(unittest.TestCase):
         (settings.base_dir / 'MailOffer.exe').touch()
         (settings.base_dir / 'Starta EmailApp.vbs').touch()
         with mock.patch('core.settings_manager.IS_WINDOWS', True), mock.patch('core.settings_manager.sys.frozen', False, create=True):
-            self.assertEqual(settings._get_autostart_args()[0], 'wscript.exe')
+            self.assertEqual(Path(settings._get_autostart_args()[0]).name, 'wscript.exe')
             self.assertNotIn('MailOffer.exe', settings._get_autostart_command())
 
     def test_missing_exe_uses_script_host_never_direct_python(self):
@@ -42,7 +42,7 @@ class WindowsLauncherTests(unittest.TestCase):
         (settings.base_dir / 'Starta EmailApp.vbs').touch()
         with mock.patch('core.settings_manager.IS_WINDOWS', True), mock.patch('core.settings_manager.sys.frozen', False, create=True):
             args = settings._get_autostart_args()
-            self.assertEqual(args[0], 'wscript.exe')
+            self.assertEqual(Path(args[0]).name, 'wscript.exe')
             self.assertNotIn('main.pyw', ' '.join(args))
             self.assertNotIn('python', settings._get_autostart_command().lower())
 

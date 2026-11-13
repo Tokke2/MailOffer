@@ -950,3 +950,31 @@ PNG/ICO/ICNS och Thunderbird-tillägget. Vektorlogotypen har bokstäver som bano
 inte i ett separat grafikpaket: plan färg-SVG, svart/vit SVG och symbols-SVG.
 Se tryck/README.md för mått, färghantering och tryckeriets provtryck.
 SVG är RGB, inte CMYK/PDF-X. Ingen ny version: fortsatt 1.0.0.
+
+### Startgranskning och säkrare bildbilagor (bygg 2026102345)
+Loggen från användarens dator visade lyckad autostartregistrering och normal
+start av ny instans, men native access violation när gamla instansen avslutades.
+Det bevisar inte att Windows kör inloggningskommandot eller vilken native
+komponent som kraschar. Följande konkreta risker i koden har åtgärdats:
+- main.pyw startade WScript före felhantering/diagnostik. Misslyckande kunde
+  därför bli tyst under pythonw. Nu används absolut systemvärdsökväg, appmapp
+  som arbetsmapp, kontroll av VBS samt startup.log/Windows-felruta vid fel.
+- Run-registrering använder också absolut WScript-sökväg och repareras vid
+  nästa start. Windows-policy/StartupApproved kringgås fortfarande inte.
+- Insamlartråden stoppas/joinas explicit före native/Qt-avveckling i stället
+  för enbart vid atexit. Fokus-eventets timer/Windows-handle stängs explicit
+  och idempotent. Detta är riskreducering, inte verifierad lösning på den
+  rapporterade native-kraschen. Python ändras/installeras inte.
+
+Bildbilagor optimeras när bildkomprimering är aktiverad (standard på), vid
+sändning så att originalfilen och bilagelistan inte ersätts vid bifogandet.
+En upptäckt sökvägsbugg skrev kandidater utanför bildens tempmapp och kunde
+kollidera mellan likadant namngivna filer. Varje bild har nu egen tempmapp.
+Pillow används för att bevara orientering och ICC/EXIF; om bildoptimering
+misslyckas behålls originalet. Ingen Qt-reserv som kan platta ut animationer.
+PNG optimeras förlustfritt, WebP sparas förlustfritt, animerade bilder behålls.
+JPEG använder hög kvalitet (minst 95, utan kromasubsampling); det är **inte
+matematiskt förlustfritt**. Dimensionerna bevaras med standardinställningen
+preserve_image_dimensions=True. Endast mindre kandidater används. Redan
+optimerade/små bilder kan behållas oförändrade; viss storleksminskning kan
+inte garanteras för alla bilder. Originalfilerna ändras aldrig.
