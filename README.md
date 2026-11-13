@@ -942,3 +942,11 @@ VBS sätter appmappen som arbetsmapp redan före Python-kontrollen, även vid
 inloggning från Windows systemmapp. Ingen EXE, Pythoninstallation eller
 ändring av andra programs autostartposter görs. Faktisk inloggning på din
 dator kan inte verifieras av CI-tester.
+
+### Ny ikon/logotyp och inkluderade tryckoriginal (bygg 2026102344)
+Prism-profilen använder blå/lila, cyan och guld. Samma symbol används i appens
+PNG/ICO/ICNS och Thunderbird-tillägget. Vektorlogotypen har bokstäver som banor.
+**Tryckoriginalen ligger i mappen tryck/ direkt i appens vanliga release-ZIP**,
+inte i ett separat grafikpaket: plan färg-SVG, svart/vit SVG och symbols-SVG.
+Se tryck/README.md för mått, färghantering och tryckeriets provtryck.
+SVG är RGB, inte CMYK/PDF-X. Ingen ny version: fortsatt 1.0.0.

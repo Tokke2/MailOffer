@@ -2,10 +2,15 @@
 
 © 2026 Rickard Längkvist.
 
-Ny symbol: kuvert med turkos offertetikett och bock. Enkel geometri för små
-ikoner och tryck. Wordmarken använder produktnamnet E-postofferten.
+Prism-symbol: elektriskt blå/lila platta, cyan kuvert, gyllene offertetikett
+och bock. Vektorbyggda högdagrar och glimt ger en mer färgstark digital profil. Wordmarken använder produktnamnet E-postofferten.
 
 ## Leverans
+Tryckoriginal ligger i **tryck/** i den vanliga release-nedladdningen.
+Ingen separat nedladdning eller grafik-ZIP behövs.
+- `tryck/E-postofferten-farg.svg`: plan färglogotyp utan gradienter/transparens.
+- `tryck/E-postofferten-svart.svg`: svart/vit logotyp för ljust underlag.
+- `tryck/E-postofferten-symbol.svg`: symbol med vektorgradienter.
 - `icons/mailoffer-logo.svg`: horisontell färglogotyp, vektor, 180 × 45 mm.
 - `icons/mailoffer-logo-black.svg`: svart variant för ljust underlag.
 - `icons/app_icon.svg`: kvadratisk vektorsymbol, 128 × 128 mm.
@@ -21,7 +26,8 @@ installerade typsnitt behövs. Skala proportionerligt till önskat mått.
 DejaVu Sans Bold används som grund för bokstavsbanorna; dess licensnotiser
 medföljer i branding-font-license.txt. Inget separat typsnitt krävs för tryck.
 
-Färger: marinblå #123247, turkos #00A996, vit #FFFFFF.
+Grundfärger: indigo #182969, blå/lila #313CCB, cyan #51CDFA, guld #FFBD38, vit #FFFFFF.
+Digitala original har vektorgradienter; den plana färglogotypen är förenklad för tryck.
 SVG är RGB-original, inte en CMYK/PDF-X-certifierad tryckfil. Be tryckeriet
 konvertera enligt sin ICC-profil och kontrollera provtryck/färger och minsta
 läsbara storlek. Svartvarianten är avsedd för ljust underlag. Vitt i symbolen

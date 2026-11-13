@@ -7,7 +7,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 class VectorBrandingTests(unittest.TestCase):
     def test_print_masters_have_outlines_without_rasters_or_fonts(self):
-        for name in ('app_icon.svg', 'mailoffer-logo.svg', 'mailoffer-logo-black.svg'):
+        for name in ('app_icon.svg', 'mailoffer-logo.svg', 'mailoffer-logo-black.svg', '../tryck/E-postofferten-farg.svg', '../tryck/E-postofferten-svart.svg', '../tryck/E-postofferten-symbol.svg'):
             svg = ET.parse(ROOT / 'icons' / name).getroot()
             self.assertIn('viewBox', svg.attrib)
             self.assertTrue(svg.attrib['width'].endswith('mm'))
@@ -23,3 +23,12 @@ class VectorBrandingTests(unittest.TestCase):
         self.assertEqual((ROOT / 'E-postofferten-kontakter.xpi').read_bytes(), (ROOT / 'thunderbird/MailOffer.xpi').read_bytes())
         with ZipFile(ROOT / 'thunderbird/MailOffer.xpi') as archive:
             self.assertEqual(archive.read('icon.png'), (ROOT / 'thunderbird/icon.png').read_bytes())
+
+    def test_flat_print_master_is_self_contained_and_flat(self):
+        svg = ET.parse(ROOT / 'tryck/E-postofferten-farg.svg').getroot()
+        self.assertTrue((ROOT / 'tryck/README.md').is_file())
+        for node in svg.iter():
+            self.assertNotIn(node.tag.rsplit('}', 1)[-1], ('linearGradient', 'radialGradient', 'filter'))
+            self.assertNotIn('opacity', node.attrib)
+            self.assertNotIn('stroke-opacity', node.attrib)
+            self.assertNotIn('url(', str(node.attrib))

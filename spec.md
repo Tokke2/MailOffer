@@ -2891,3 +2891,9 @@ Användaren valde från redan-valda: tema-knapp (§34 #6) och tydligare
 - Bakgrundsstart av andra instansen visar inte befintligt fönster. Manuell andra start visar det.
 - VBS sätter arbetsmappen före hjälpskript. Autostartfel synliga i INFO/WARNING och statusrad.
 - Version 1.0.0, bygg 2026102343.
+
+### V7.50 – Prism-profil och tryckoriginal i release
+- Blå/lila/cyan/guld vektorsymbol, ny ikon i PNG/ICO/ICNS och Thunderbird.
+- Logotyp med konturtext; plana färg- och svart/vita tryckoriginal i tryck/ direkt i releasearkivet.
+- Ingen separat grafiknedladdning. RGB-SVG; ingen CMYK/PDF-X-certifiering.
+- Version 1.0.0, bygg 2026102344.

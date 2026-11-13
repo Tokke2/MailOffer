@@ -1,0 +1,20 @@
+<?xml version='1.0' encoding='utf-8'?>
+<svg xmlns="http://www.w3.org/2000/svg" width="128mm" height="128mm" viewBox="0 0 512 512" role="img"><title>E-postofferten – Prism-symbol</title><desc>Vektororiginal med konturer. © 2026 Rickard Längkvist. Inga externa typsnitt eller rasterbilder.</desc><defs>
+<linearGradient id="badge" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#165DFF" /><stop offset=".5" stop-color="#4935D4" /><stop offset="1" stop-color="#151B50" /></linearGradient>
+<linearGradient id="edge" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#75F8FF" /><stop offset=".5" stop-color="#427CFF" /><stop offset="1" stop-color="#A183FF" /></linearGradient>
+<linearGradient id="paper" x1="0" y1="0" x2="0" y2="1"><stop stop-color="#FFFFFF" /><stop offset="1" stop-color="#BFEFFF" /></linearGradient>
+<linearGradient id="tag" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#FFE58A" /><stop offset="1" stop-color="#FFA51F" /></linearGradient>
+</defs><g>
+<rect x="24" y="24" width="464" height="464" rx="120" fill="url(#badge)" />
+<rect x="30" y="30" width="452" height="452" rx="114" fill="none" stroke="url(#edge)" stroke-width="8" />
+<path d="M64 187V150Q64 64 150 64H328" fill="none" stroke="#FFFFFF" stroke-opacity=".22" stroke-width="9" stroke-linecap="round" />
+<path d="M92 193 256 104 420 193 256 320Z" fill="#43DBFF" />
+<path d="M96 201H416V361Q416 378 399 378H113Q96 378 96 361Z" fill="#111A59" opacity=".3" />
+<path d="M96 185H416V345Q416 362 399 362H113Q96 362 96 345Z" fill="url(#paper)" />
+<path d="M98 187 256 299 414 187" fill="none" stroke="#2443A1" stroke-width="17" stroke-linejoin="round" />
+<path d="m102 350 106-96m202 96-106-96" fill="none" stroke="#548ADE" stroke-width="10" />
+<path d="M294 294H405L464 353 405 412H294Q280 412 280 398V308Q280 294 294 294Z" fill="url(#tag)" stroke="#222467" stroke-width="12" stroke-linejoin="round" />
+<path d="m310 353 26 26 51-54" fill="none" stroke="#182969" stroke-width="18" stroke-linecap="round" stroke-linejoin="round" />
+<circle cx="423" cy="353" r="7" fill="#FFF3CF" />
+<path d="m407 71 8 23 23 8-23 8-8 23-8-23-23-8 23-8Z" fill="#A8FBFF" />
+</g></svg>
