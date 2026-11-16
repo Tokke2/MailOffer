@@ -5569,7 +5569,7 @@ class MainWindow(QMainWindow):
         from core.donate import DEFAULT_KOFI_URL, DEFAULT_PAYPAL_URL
         form.addRow('Ko-fi (låst)', QLabel(DEFAULT_KOFI_URL))
         form.addRow('PayPal (låst)', QLabel(DEFAULT_PAYPAL_URL))
-        hint = QLabel('Mottagarna är fasta och kan inte ändras via inställningar. Swish är inte aktiverat. Stöd är helt frivilligt.')
+        hint = QLabel('Mottagarna är fasta och kan inte ändras via inställningar. Swish visas endast som QR-kod och är förstahandsval. Stöd är helt frivilligt.')
         hint.setWordWrap(True)
         form.addRow(hint)
         row_widget = QWidget()

@@ -2931,3 +2931,8 @@ Användaren valde från redan-valda: tema-knapp (§34 #6) och tydligare
 - Förnyad stöddialog i Hjälp-menyn, beloppsval och fasta PayPal-/Ko-fi-mottagare. Gamla inställningar ignoreras.
 - Swish avaktiverat utan ägarnummer. Ingen webbsida; lås gäller UI/inställningar, ej modifierad källkod.
 - Version 1.0.0, bygg 2026102350.
+
+### V7.57 – fast Swish-mottagare, QR som förstahandsval
+- Ägarens angivna nummer låst i kod; visas enbart i lokalt genererad C-format-QR i appen, inte textfält/kopieringsknapp.
+- Belopp uppdaterar QR. Swish först, övriga tjänster alternativ. QR är inte kryptering av numret.
+- Version 1.0.0, bygg 2026102351.

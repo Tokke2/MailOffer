@@ -76,7 +76,7 @@ def swish_qr_pixmap(payload: str, size: int = 230) -> Optional[QPixmap]:
     try:
         import qrcode  # type: ignore
 
-        image = qrcode.make(payload, border=2, box_size=10)
+        image = qrcode.make(payload, border=4, box_size=10)
         buffer = io.BytesIO()
         image.save(buffer, format="PNG")
         pixmap = QPixmap()
@@ -85,7 +85,7 @@ def swish_qr_pixmap(payload: str, size: int = 230) -> Optional[QPixmap]:
         return pixmap.scaled(
             size, size,
             Qt.AspectRatioMode.KeepAspectRatio,
-            Qt.TransformationMode.SmoothTransformation,
+            Qt.TransformationMode.FastTransformation,
         )
     except Exception:
         log.debug("Kunde inte rita Swish-QR (qrcode saknas?)", exc_info=True)
@@ -181,10 +181,13 @@ class DonateDialog(QDialog):
             chips.addWidget(button)
         amount_layout.addLayout(chips)
         amount_layout.addWidget(self._amount)
-        hint = QLabel('Beloppet följer med till PayPal. På Ko-fi väljer du belopp där. Välj 0 för valfritt belopp hos betaltjänsten.')
+        hint = QLabel('Beloppet följer med i Swish-QR och till PayPal. På Ko-fi väljer du belopp där. Välj 0 för valfritt belopp hos betaltjänsten.')
         hint.setWordWrap(True)
         amount_layout.addWidget(hint)
+        layout.addWidget(self._swish_group())
         layout.addWidget(amounts)
+        self._amount.valueChanged.connect(self._refresh_swish_qr)
+        self._refresh_swish_qr()
         layout.addLayout(
             self._link_row(
                 tr("donate.paypal_btn"), self._paypal_url,
@@ -201,7 +204,6 @@ class DonateDialog(QDialog):
         monthly.setProperty("cssClass", "subtext")
         layout.addWidget(monthly)
 
-        layout.addWidget(self._swish_group())
         layout.addWidget(self._why_group())
         layout.addWidget(self._faq_group())
 
@@ -250,45 +252,28 @@ class DonateDialog(QDialog):
         return row
 
     def _swish_group(self) -> QGroupBox:
-        group = QGroupBox(tr("donate.swish_title"))
+        group = QGroupBox('💚 Swish – förstahandsval')
+        group.setObjectName('swishCard')
+        group.setStyleSheet('#swishCard { border:2px solid #159b70; border-radius:14px; margin-top:12px; padding:14px; }')
         layout = QVBoxLayout(group)
-        layout.setSpacing(8)
+        self._swish_qr_label = QLabel()
+        self._swish_qr_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._swish_qr_label.setWordWrap(True)
+        self._swish_qr_label.setStyleSheet('background:white; color:#17324d; padding:10px; border-radius:12px;')
+        layout.addWidget(self._swish_qr_label, alignment=Qt.AlignmentFlag.AlignCenter)
+        hint = _centered(QLabel('Skanna QR-koden med Swish-appen. Kontrollera mottagaren i Swish och bekräfta där. Beloppet kan ändras.'))
+        layout.addWidget(hint)
+        return group
 
-        if not self._swish_payload:
-            hint = _centered(QLabel(tr("donate.swish_not_configured")))
-            hint.setProperty("cssClass", "muted")
-            layout.addWidget(hint)
-            return group
-
+    def _refresh_swish_qr(self, *_):
+        value = self._amount.value()
+        self._swish_payload = build_swish_payload(DEFAULT_SWISH_NUMBER, amount=str(value) if value else '')
         self._qr_pixmap = swish_qr_pixmap(self._swish_payload)
         if self._qr_pixmap is not None and not self._qr_pixmap.isNull():
-            qr_label = QLabel()
-            qr_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            qr_label.setPixmap(self._qr_pixmap)
-            # Vit lugn yta bakom koden så den alltid går att skanna,
-            # även i mörkt tema.
-            qr_label.setStyleSheet(
-                "background: #FFFFFF; padding: 8px; border-radius: 8px;"
-            )
-            layout.addWidget(qr_label, alignment=Qt.AlignmentFlag.AlignCenter)
-            hint = _centered(QLabel(tr("donate.swish_scan_hint")))
-            hint.setProperty("cssClass", "subtext")
-            layout.addWidget(hint)
+            self._swish_qr_label.setPixmap(self._qr_pixmap)
         else:
-            hint = _centered(QLabel(tr("donate.swish_missing_lib")))
-            hint.setProperty("cssClass", "muted")
-            layout.addWidget(hint)
-
-        row = QHBoxLayout()
-        number_edit = QLineEdit(format_swish_number(self._swish_number))
-        number_edit.setReadOnly(True)
-        number_edit.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        row.addWidget(number_edit, stretch=1)
-        copy_btn = QPushButton(tr("donate.copy_btn"))
-        copy_btn.clicked.connect(self._copy_swish)
-        row.addWidget(copy_btn)
-        layout.addLayout(row)
-        return group
+            self._swish_qr_label.clear()
+            self._swish_qr_label.setText('QR-koden kunde inte skapas. Kontrollera tillägget qrcode. Inget Swish-nummer visas i klartext.')
 
     def _why_group(self) -> QWidget:
         widget = QWidget()
@@ -333,9 +318,6 @@ class DonateDialog(QDialog):
 
     def _copy_paypal(self) -> None:
         self._clipboard_set(self._paypal_url, "donate.copied")
-
-    def _copy_swish(self) -> None:
-        self._clipboard_set(self._swish_number, "donate.swish_number_copied")
 
     def _open_kofi(self) -> None:
         if not open_url_in_browser(self._kofi_url):

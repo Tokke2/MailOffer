@@ -6,7 +6,7 @@ from core.donate import resolve_donation_links, paypal_donation_url
 
 os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
 try:
-    from PyQt6.QtWidgets import QApplication
+    from PyQt6.QtWidgets import QApplication, QLabel, QLineEdit
     from ui.donate import DonateDialog
     QT = True
 except ImportError:
@@ -34,10 +34,14 @@ class DonationLockTests(unittest.TestCase):
         app = QApplication.instance() or QApplication([])
         dialog = DonateDialog(kofi_url='https://example.com/steal', paypal_url='other', swish_number='0701234567')
         try:
-            self.assertEqual(dialog._swish_number, '')
+            self.assertEqual(dialog._swish_number, '0721817177')
+            self.assertEqual(dialog._swish_payload, 'C0721817177;50;E-postofferten;6')
             self.assertEqual(dialog._kofi_url, 'https://ko-fi.com/tokke2')
+            for widget in dialog.findChildren(QLabel) + dialog.findChildren(QLineEdit):
+                self.assertNotIn('0721817177', widget.text())
             with mock.patch('ui.donate.open_url_in_browser', return_value=True) as opened:
                 dialog._amount.setValue(100)
+                self.assertEqual(dialog._swish_payload, 'C0721817177;100;E-postofferten;6')
                 dialog._open_paypal()
                 opened.assert_called_once_with('https://paypal.me/Rickard3dPrint/100SEK')
         finally:

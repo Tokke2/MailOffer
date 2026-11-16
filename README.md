@@ -185,7 +185,7 @@ utvecklingen finns en komplett **Stöd projektet**-sida i appen
 - ☕ **Ko-fi:** <https://ko-fi.com/tokke2>
 - 💳 **PayPal:** <https://paypal.me/Rickard3dPrint>
 - Mottagarna är fasta: PayPal Rickard3dPrint och Ko-fi tokke2. Inställningar kan inte byta dem.
-- Swish är inaktiverat tills utvecklaren har angett ett nummer. Inget nummer hittas på.
+- Swish är förstahandsval och visas endast som QR-kod. Mottagaren är fast i projektkoden.
 
 Mottagarlänkarna är låsta i appen och ignorerar äldre inställningar.
 `.github/FUNDING.yml` ger Sponsor-knappen här på GitHub.
@@ -1055,3 +1055,16 @@ donation_swish eller dialogargument kan inte styra betalningen till andra
 mottagare. Swish är inaktiverat eftersom ägarnummer saknas. Det är ett
 gränssnitts-/inställningslås, inte ett skydd mot ändrad källkod eller
 manipulerad dator. Ingen separat stödsida på webben skapas.
+
+### Swish som förstahandsval, endast QR (bygg 2026102351)
+Stödmenyn visar Swish-QR först. Ägarens angivna mottagare är fast; gamla
+inställningar eller dialogargument kan inte byta den. Nummerfält och
+kopiera-nummerknapp har tagits bort. QR genereras lokalt med Swish C-payload
+(C<mottagare>;<belopp>;E-postofferten;6), mottagare låst och belopp/meddelande
+redigerbara hos betalaren. Beloppsknappar och eget belopp uppdaterar QR;
+0 lämnar beloppet tomt. PayPal/Ko-fi finns kvar som alternativ.
+Inga externa QR-tjänster anropas. Numret visas inte som text men kan läsas
+ur QR-koden eller källkoden; det är inte hemligt/krypterat. Skannaren visar
+mottagaren före bekräftelse. Saknat QR-tillägg ger feltext, aldrig ett
+nummerfält som reserv. Verklig skanning/betalning behöver testas i Swish.
+Detta avsnitt ersätter äldre uppgifter om att Swish inte är aktiverat.

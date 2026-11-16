@@ -132,7 +132,7 @@ class TestDonateDialogUi(unittest.TestCase):
         empty = DonateDialog(None, donation_url="")
         self.assertEqual(empty._url, "https://ko-fi.com/tokke2")
         self.assertEqual(empty._paypal_url, "https://paypal.me/Rickard3dPrint")
-        self.assertEqual(empty._swish_payload, "")  # inget nummer inställt
+        self.assertEqual(empty._swish_payload, "C0721817177;50;E-postofferten;6")
         empty.close()
 
     def test_dialog_paypal_and_swish(self) -> None:
@@ -142,9 +142,8 @@ class TestDonateDialogUi(unittest.TestCase):
             None, paypal_url="mittnamn", swish_number="070-123 45 67"
         )
         self.assertEqual(dialog._paypal_url, "https://paypal.me/Rickard3dPrint")
-        self.assertEqual(dialog._swish_payload, "")
-        self.assertEqual(dialog._swish_number, "")
-        self.assertIsNone(dialog._qr_pixmap)
+        self.assertEqual(dialog._swish_payload, "C0721817177;50;E-postofferten;6")
+        self.assertEqual(dialog._swish_number, "0721817177")
         dialog.close()
 
 

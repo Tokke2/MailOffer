@@ -100,8 +100,8 @@ def resolve_donation_links(
     return DEFAULT_KOFI_URL, DEFAULT_PAYPAL_URL
 
 
-# No owner-provided Swish number yet. Never consume an end-user override.
-DEFAULT_SWISH_NUMBER = ""
+# Owner-provided fixed recipient. Never consume an end-user override.
+DEFAULT_SWISH_NUMBER = "0721817177"
 
 
 def paypal_donation_url(amount=0):
