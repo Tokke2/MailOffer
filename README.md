@@ -1013,3 +1013,11 @@ arkivering lämnar felen öppna. Samma sjudagars arkivpolicy gäller.
 Databasens historik/fingeravtryck behålls; nya förekomster öppnar felet igen.
 Källloggarnas dagens poster ändras inte av åtgärdsmarkeringen. Inga fel
 markeras automatiskt lösta bara för att de är gamla eller appen uppdaterats.
+
+### Dropdown och skickade mejl (bygg 2026102348)
+Platshållarnas dropdowns, inklusive Glastyp/ruta, öppnas även med vänsterklick
+i textdelen. Pil, tangentbordsnavigering och egen text finns kvar. Övriga
+redigerbara adress-/sökfält ändras inte.
+Skickade mejl: fliken Historik (Historik över skickade mail), med knappen
+Öppna historikfil för .data/sent_history.json. Teknisk sändningslogg finns
+i Loggar/logs/app.log. SMTP-acceptans bevisar inte inkorgsleverans.

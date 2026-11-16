@@ -2915,3 +2915,7 @@ Användaren valde från redan-valda: tema-knapp (§34 #6) och tydligare
 - Valda bekräftat lösta fel ZIP-arkiveras och verifieras innan de stängs och tas bort ur errors.log.
 - Backupfel bevarar öppna poster; återkommande fel öppnas på nytt; sju dagars arkivpolicy.
 - Version 1.0.0, bygg 2026102347.
+
+### V7.54 – klickbar dropdowntext
+- Redigerbara platshållar-dropdowns öppnas även via textfältet; egen text och tangentbord kvarstår.
+- Version 1.0.0, bygg 2026102348.

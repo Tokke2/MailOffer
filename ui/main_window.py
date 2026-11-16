@@ -3076,7 +3076,8 @@ class MainWindow(QMainWindow):
 
             default = str(saved.get(key, saved.get(key_l, "")) or "")
             if key_l in PLACEHOLDER_DROPDOWNS:
-                field = QComboBox()
+                from ui.clickable_combo import ClickableComboBox
+                field = ClickableComboBox()
                 field.addItems(PLACEHOLDER_DROPDOWNS[key_l])
                 field.setEditable(True)
                 if default:
