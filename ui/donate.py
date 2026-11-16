@@ -9,7 +9,7 @@ ritas direkt från numret i inställningarna, "varför din hjälp betyder
 allt" och FAQ. All text via ``core.i18n.tr`` (sv/en).
 
 Länkarna löses upp av ``core.donate.resolve_donation_links``:
-sparade inställningar vinner, annars projektets standardlänkar.
+projektets fasta mottagare används; sparade överstyrningar ignoreras.
 
 Swish-QR kräver paketet ``qrcode`` (OPTIONAL i core/dep_check –
 installeras automatiskt vid start). Saknas det visas numret ändå
@@ -41,6 +41,7 @@ from PyQt6.QtWidgets import (
     QLineEdit,
     QPushButton,
     QScrollArea,
+    QSpinBox,
     QVBoxLayout,
     QWidget,
 )
@@ -51,6 +52,8 @@ from core.donate import (
     is_valid_swish_number,
     normalize_swish_number,
     resolve_donation_links,
+    DEFAULT_SWISH_NUMBER,
+    paypal_donation_url,
 )
 from core.i18n import tr
 
@@ -112,7 +115,7 @@ class DonateDialog(QDialog):
             kofi_url or donation_url or "", paypal_url
         )
         self._url = self._kofi_url  # bakåtkompat (äldre anrop/tester)
-        self._swish_number = normalize_swish_number(swish_number)
+        self._swish_number = DEFAULT_SWISH_NUMBER
         self._swish_payload = ""
         if is_valid_swish_number(self._swish_number):
             try:
@@ -122,9 +125,11 @@ class DonateDialog(QDialog):
         self._qr_pixmap: Optional[QPixmap] = None
 
         self.setWindowTitle(tr("donate.title"))
-        self.setMinimumSize(540, 620)
+        self.setMinimumSize(320, 360)
         self.resize(580, 760)
         self._build_ui()
+        from ui.screen_fit import fit_window
+        fit_window(self)
 
     # ────────────────────────────────────────────────────────────────
     # UI
@@ -147,19 +152,39 @@ class DonateDialog(QDialog):
         layout.setContentsMargins(22, 18, 22, 18)
         layout.setSpacing(10)
 
-        layout.addWidget(self._header_icon())
-        heading = _centered(QLabel(tr("donate.heading")))
-        heading.setStyleSheet("font-size: 16pt; font-weight: bold;")
-        layout.addWidget(heading)
-        badges = _centered(QLabel(f"<b>{tr('donate.badges')}</b>"))
-        layout.addWidget(badges)
-        secure = _centered(QLabel(tr("donate.secure_line")))
-        secure.setProperty("cssClass", "subtext")
-        layout.addWidget(secure)
-
-        intro = _centered(QLabel(tr("donate.intro")))
-        layout.addWidget(intro)
-
+        hero = QWidget()
+        hero.setObjectName('donationHero')
+        hero.setStyleSheet('#donationHero { background: qlineargradient(x1:0,y1:0,x2:1,y2:1, stop:0 #2448cf, stop:0.55 #5830a0, stop:1 #127e75); border-radius:22px; } #donationHero QLabel { color:white; background:transparent; }')
+        hero_layout = QVBoxLayout(hero)
+        hero_layout.setContentsMargins(24, 24, 24, 24)
+        hero_layout.addWidget(self._header_icon())
+        eyebrow = _centered(QLabel('FRIVILLIGT STÖD • GRATIS ANVÄNDNING'))
+        eyebrow.setStyleSheet('font-size:9pt; font-weight:700; letter-spacing:1px;')
+        hero_layout.addWidget(eyebrow)
+        heading = _centered(QLabel('Gillar du E-postofferten? 💚'))
+        heading.setStyleSheet('font-size:21pt; font-weight:800;')
+        hero_layout.addWidget(heading)
+        hero_layout.addWidget(_centered(QLabel('Hjälp till med fortsatt utveckling, underhåll och förbättringar.\nGratis att använda privat och kommersiellt – donation låser inte upp något.')))
+        layout.addWidget(hero)
+        layout.addWidget(_centered(QLabel('🔒 Fasta mottagarlänkar · Rickard Längkvist\nBetalning bekräftas hos betaltjänsten, aldrig i appen.')))
+        amounts = QGroupBox('Valfritt belopp – inga nivåer eller krav')
+        amount_layout = QVBoxLayout(amounts)
+        chips = QHBoxLayout()
+        self._amount = QSpinBox()
+        self._amount.setRange(0, 99999)
+        self._amount.setSpecialValueText('Välj hos betaltjänsten')
+        self._amount.setSuffix(' kr')
+        self._amount.setValue(50)
+        for value in (25, 50, 100, 200):
+            button = QPushButton(f'{value} kr')
+            button.clicked.connect(lambda checked=False, n=value: self._amount.setValue(n))
+            chips.addWidget(button)
+        amount_layout.addLayout(chips)
+        amount_layout.addWidget(self._amount)
+        hint = QLabel('Beloppet följer med till PayPal. På Ko-fi väljer du belopp där. Välj 0 för valfritt belopp hos betaltjänsten.')
+        hint.setWordWrap(True)
+        amount_layout.addWidget(hint)
+        layout.addWidget(amounts)
         layout.addLayout(
             self._link_row(
                 tr("donate.paypal_btn"), self._paypal_url,
@@ -214,7 +239,9 @@ class DonateDialog(QDialog):
         row = QHBoxLayout()
         button = QPushButton(caption)
         button.setProperty("cssClass", css_class)
-        button.setMinimumHeight(40)
+        button.setMinimumHeight(48)
+        color = '#0070ba' if 'PayPal' in caption else '#ce465c'
+        button.setStyleSheet(f'QPushButton {{ background:{color}; color:white; border:0; border-radius:12px; padding:12px; font-weight:700; }} QPushButton:hover {{ background:#285b80; }}')
         button.clicked.connect(on_open)
         row.addWidget(button, stretch=1)
         copy_btn = QPushButton(tr("donate.copy_btn"))
@@ -315,7 +342,7 @@ class DonateDialog(QDialog):
             self._status.setText(tr("donate.invalid_url"))
 
     def _open_paypal(self) -> None:
-        if not open_url_in_browser(self._paypal_url):
+        if not open_url_in_browser(paypal_donation_url(self._amount.value())):
             self._status.setText(tr("donate.invalid_url"))
 
 

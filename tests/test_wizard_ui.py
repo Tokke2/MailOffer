@@ -121,11 +121,11 @@ class TestDonateDialogUi(unittest.TestCase):
         from ui.donate import DonateDialog
 
         dialog = DonateDialog(None, donation_url="ko-fi.com/exempel")
-        self.assertEqual(dialog._url, "https://ko-fi.com/exempel")
+        self.assertEqual(dialog._url, "https://ko-fi.com/tokke2")
         dialog._copy_url()
         clipboard = QApplication.clipboard()
         if clipboard is not None:
-            self.assertEqual(clipboard.text(), "https://ko-fi.com/exempel")
+            self.assertEqual(clipboard.text(), "https://ko-fi.com/tokke2")
         dialog.close()
 
         # Tomma inställningar -> inbyggda standardlänkar (ägarens riktiga)
@@ -141,19 +141,10 @@ class TestDonateDialogUi(unittest.TestCase):
         dialog = DonateDialog(
             None, paypal_url="mittnamn", swish_number="070-123 45 67"
         )
-        self.assertEqual(dialog._paypal_url, "https://paypal.me/mittnamn")
-        self.assertEqual(dialog._swish_payload, "C0701234567;;E-postofferten;6")
-        dialog._copy_swish()
-        clipboard = QApplication.clipboard()
-        if clipboard is not None:
-            self.assertEqual(clipboard.text(), "0701234567")
-        try:
-            import qrcode  # noqa: F401
-
-            self.assertIsNotNone(dialog._qr_pixmap)
-            self.assertFalse(dialog._qr_pixmap.isNull())
-        except ImportError:
-            self.assertIsNone(dialog._qr_pixmap)  # fail-soft utan QR-paket
+        self.assertEqual(dialog._paypal_url, "https://paypal.me/Rickard3dPrint")
+        self.assertEqual(dialog._swish_payload, "")
+        self.assertEqual(dialog._swish_number, "")
+        self.assertIsNone(dialog._qr_pixmap)
         dialog.close()
 
 

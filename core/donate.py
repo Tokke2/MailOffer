@@ -8,8 +8,8 @@ bor i ``ui/donate.py``.
 
 Standardslänkarna nedan är projektets egna (angivna av ägaren).
 Inställningarna ``donation_url`` (Ko-fi), ``donation_paypal_url`` och
-``donation_swish`` kan skriva över dem i *Inställningar → ❤️ Stöd & om*;
-tom inställning = använd standardlänken.
+``donation_swish`` ignoreras som mottagaröverstyrningar. Mottagarna är
+fasta i projektkoden och kan inte ändras via inställningarna.
 
 Swish-QR använder C-formatet::
 
@@ -96,19 +96,20 @@ def configured_donation_url(raw: object) -> Optional[str]:
 def resolve_donation_links(
     kofi_setting: object = "", paypal_setting: object = ""
 ) -> Tuple[str, str]:
-    """(Ko-fi-URL, PayPal-URL) med projektets standarder som fallback.
+    """Fixed project recipients; legacy settings are intentionally ignored."""
+    return DEFAULT_KOFI_URL, DEFAULT_PAYPAL_URL
 
-    Sparat (giltigt) värde i inställningarna vinner; annars används
-    ``DEFAULT_KOFI_URL`` / ``DEFAULT_PAYPAL_URL`` så att appen alltid
-    har fungerande donationsknappar.
-    """
-    kofi = normalize_donation_url(kofi_setting, "ko-fi")
-    if not is_valid_donation_url(kofi, "ko-fi"):
-        kofi = DEFAULT_KOFI_URL
-    paypal = normalize_donation_url(paypal_setting, "paypal")
-    if not is_valid_donation_url(paypal, "paypal"):
-        paypal = DEFAULT_PAYPAL_URL
-    return kofi, paypal
+
+# No owner-provided Swish number yet. Never consume an end-user override.
+DEFAULT_SWISH_NUMBER = ""
+
+
+def paypal_donation_url(amount=0):
+    """Optional whole-SEK amount; payment is always confirmed at PayPal."""
+    if isinstance(amount, bool) or not isinstance(amount, int) or not 0 <= amount <= 99999:
+        raise ValueError('Belopp måste vara 0–99999 hela kronor')
+    return DEFAULT_PAYPAL_URL + (f'/{amount}SEK' if amount else '')
+
 
 
 # ───────────────────────────────────────────────────────────────────────

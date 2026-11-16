@@ -184,8 +184,8 @@ utvecklingen finns en komplett **Stöd projektet**-sida i appen
 
 - ☕ **Ko-fi:** <https://ko-fi.com/tokke2>
 - 💳 **PayPal:** <https://paypal.me/Rickard3dPrint>
-- 📱 **Swish** med QR-kod – numret fylls i under
-  *Inställningar → ❤️ Stöd & om* (QR-koden ritas automatiskt)
+- Mottagarna är fasta: PayPal Rickard3dPrint och Ko-fi tokke2. Inställningar kan inte byta dem.
+- Swish är inaktiverat tills utvecklaren har angett ett nummer. Inget nummer hittas på.
 
 Länkarna kan bytas i samma inställningsgrupp; `.github/FUNDING.yml`
 ger Sponsor-knappen här på GitHub.
@@ -1037,3 +1037,21 @@ Säkerhetskontrollen stoppar felaktig Till-header och alla kopiefält; gammal
 batchstorlek har ingen effekt. Bekräftelsedialogen beskriver det nya beteendet.
 Individuell adressering är inte en spam-/inkorgsgaranti. SMTP-leverantörens
 kvoter gäller och ett stort utskick tar längre tid än ett gemensamt mejl.
+
+### Användningslicens och låst stödmeny (bygg 2026102350)
+LICENSE i roten ger kostnadsfri användning privat och kommersiellt, inklusive
+företag. Donation är frivillig. Licensen ger inte i sig generella rättigheter
+att ändra, sälja eller vidarefördela appen; detta är inte en open-source-
+licens. Tredjepartsmaterial behåller sina egna licenser. Licensen kan läsas
+även under Hjälp → Licens – privat och kommersiell användning.
+
+Hjälp → Stöd projektet öppnar en förnyad stöddialog med gradientrubrik,
+appikon, beloppsknappar, eget heltalsbelopp och PayPal/Ko-fi. PayPal får
+valt SEK-belopp; på Ko-fi väljs belopp hos tjänsten. Inga betalningar görs
+i appen: användaren granskar och bekräftar hos betaltjänsten. Inga nivåer,
+statistik-/fördelningspåståenden, betalfunktioner eller supportlöften.
+Mottagare är fasta i projektkoden. Gamla donation_url/donation_paypal_url/
+donation_swish eller dialogargument kan inte styra betalningen till andra
+mottagare. Swish är inaktiverat eftersom ägarnummer saknas. Det är ett
+gränssnitts-/inställningslås, inte ett skydd mot ändrad källkod eller
+manipulerad dator. Ingen separat stödsida på webben skapas.

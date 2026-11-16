@@ -1308,6 +1308,7 @@ class MainWindow(QMainWindow):
             lambda: self._check_updates(manual=True)
         )
         help_menu.addAction(tr("menu.donate")).triggered.connect(self._open_donate)
+        help_menu.addAction("Licens – privat och kommersiell användning").triggered.connect(self._open_usage_license)
         help_menu.addSeparator()
         help_menu.addAction(tr("menu.about")).triggered.connect(self._show_about)
 
@@ -2264,6 +2265,24 @@ class MainWindow(QMainWindow):
             return self.settings.get_donation_url()
         return str(self.settings.get("donation_url", "") or "")
 
+    def _open_usage_license(self):
+        dialog = QDialog(self)
+        dialog.setWindowTitle('Licens – E-postofferten')
+        layout = QVBoxLayout(dialog)
+        text = QTextBrowser()
+        try:
+            text.setPlainText((Path(__file__).resolve().parents[1] / 'LICENSE').read_text(encoding='utf-8'))
+        except OSError:
+            text.setPlainText('Licensfilen saknas. Hämta hela releasen från GitHub.')
+        layout.addWidget(text)
+        buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
+        buttons.rejected.connect(dialog.reject)
+        layout.addWidget(buttons)
+        dialog.resize(700, 560)
+        from ui.screen_fit import fit_window
+        fit_window(dialog)
+        dialog.exec()
+
     def _open_donate(self) -> None:
         """❤️ Stöd projektet-sidan (Ko-fi, PayPal, Swish-QR)."""
         try:
@@ -2279,21 +2298,8 @@ class MainWindow(QMainWindow):
         ).exec()
 
     def _open_donation_page(self) -> None:
-        """Öppna Ko-fi-sidan direkt – fältets aktuella text vinner."""
-        raw = self._donation_url_setting()
-        widget = self._settings_widgets.get("donation_url")
-        if isinstance(widget, QLineEdit) and widget.text().strip():
-            raw = widget.text()
-        try:
-            from core.donate import resolve_donation_links
-
-            url = resolve_donation_links(raw, "")[0]
-        except Exception:
-            url = ""
-        if url:
-            self._open_url(url)
-        else:
-            self._open_donate()
+        """Open the fixed, in-app support dialog, never a settings override."""
+        self._open_donate()
 
     def _set_ui_language(self, language: str) -> None:
         """Byt UI-språk (sv/en), spara och erbjud omstart."""
@@ -5560,25 +5566,12 @@ class MainWindow(QMainWindow):
         group = QGroupBox(tr("donate.group"))
         form = QFormLayout(group)
 
-        donation_line = self._make_settings_line("donation_url", "donation_url")
-        donation_line.setPlaceholderText(tr("donate.url_placeholder"))
-        form.addRow(tr("donate.url_label"), donation_line)
-
-        paypal_line = self._make_settings_line(
-            "donation_paypal_url", "donation_paypal_url"
-        )
-        paypal_line.setPlaceholderText(tr("donate.paypal_placeholder"))
-        form.addRow(tr("donate.paypal_label"), paypal_line)
-
-        swish_line = self._make_settings_line("donation_swish", "donation_swish")
-        swish_line.setPlaceholderText(tr("donate.swish_placeholder"))
-        form.addRow(tr("donate.swish_label"), swish_line)
-
-        defaults_hint = QLabel(tr("donate.defaults_hint"))
-        defaults_hint.setProperty("cssClass", "muted")
-        defaults_hint.setWordWrap(True)
-        form.addRow("", defaults_hint)
-
+        from core.donate import DEFAULT_KOFI_URL, DEFAULT_PAYPAL_URL
+        form.addRow('Ko-fi (låst)', QLabel(DEFAULT_KOFI_URL))
+        form.addRow('PayPal (låst)', QLabel(DEFAULT_PAYPAL_URL))
+        hint = QLabel('Mottagarna är fasta och kan inte ändras via inställningar. Swish är inte aktiverat. Stöd är helt frivilligt.')
+        hint.setWordWrap(True)
+        form.addRow(hint)
         row_widget = QWidget()
         row = QHBoxLayout(row_widget)
         row.setContentsMargins(0, 0, 0, 0)

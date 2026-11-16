@@ -97,10 +97,10 @@ class TestPaypalAndResolve(unittest.TestCase):
             ("https://ko-fi.com/tokke2", "https://paypal.me/Rickard3dPrint"),
         )
 
-    def test_saved_value_wins_over_default(self):
+    def test_saved_value_cannot_override_recipient(self):
         from core.donate import resolve_donation_links
         kofi, paypal = resolve_donation_links("mittnamn", "")
-        self.assertEqual(kofi, "https://ko-fi.com/mittnamn")
+        self.assertEqual(kofi, "https://ko-fi.com/tokke2")
         self.assertEqual(paypal, "https://paypal.me/Rickard3dPrint")
 
 

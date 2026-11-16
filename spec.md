@@ -2925,3 +2925,9 @@ Användaren valde från redan-valda: tema-knapp (§34 #6) och tydligare
 - Gemensam mottagarvy; gamla Cc/Bcc-val dolda, gamla data migreras utan adressförlust.
 - Tydlig information i mottagarvy och bekräftelse; säkerhetskontroll mot fel Till/kopiefält.
 - Version 1.0.0, bygg 2026102349.
+
+### V7.56 – användningslicens och fasta donationsmottagare
+- LICENSE: gratis privat/kommersiell användning; ingen generell ändrings-/vidaredistributionsrätt; tredjepartslicenser kvar.
+- Förnyad stöddialog i Hjälp-menyn, beloppsval och fasta PayPal-/Ko-fi-mottagare. Gamla inställningar ignoreras.
+- Swish avaktiverat utan ägarnummer. Ingen webbsida; lås gäller UI/inställningar, ej modifierad källkod.
+- Version 1.0.0, bygg 2026102350.
