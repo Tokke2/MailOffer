@@ -127,7 +127,7 @@ class TemplateRecipientsUiTests(unittest.TestCase):
         obj._to_list.addItem('A@EXAMPLE.COM [sv]')
         obj._to_list.addItem('visible@example.com [sv]')
         obj._sync_template_bcc()
-        self.assertIn('A@EXAMPLE.COM', obj._list_items(obj._to_list))
+        self.assertIn('a@example.com', obj._list_items(obj._to_list))
         self.assertIn('visible@example.com', obj._list_items(obj._to_list))
 
     def test_removing_saved_link_removes_owned_row_not_manual(self):
