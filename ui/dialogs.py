@@ -246,8 +246,8 @@ class SendConfirmDialog(QDialog):
             "Testläge: bara testadressen får mailet – vanliga "
             "mottagare, standard-Bcc och arkivkopia används inte."
             if self._test_mode
-            else "Kontrollera To/Bcc, ämne, bilagor och fritext. "
-            "E-post skickas bara när du bekräftar."
+            else "Varje mottagare får ett eget mejl med endast sin egen adress i Till. "
+            "Ingen ser de andra mottagarna. Sändning sker först när du bekräftar."
         )
         subtitle.setStyleSheet(
             "color: #FFFFFF; font-weight: bold; background: transparent;"
@@ -286,7 +286,8 @@ class SendConfirmDialog(QDialog):
             f"{len(self._to)} st – {_preview(self._to)}",
             colors.get("error", "") if not self._to else "",
         )
-        row("🙈 Bcc:", f"{len(self._bcc)} st – {_preview(self._bcc, 2)}")
+        if self._bcc:
+            row("Ytterligare individuella mottagare:", f"{len(self._bcc)} st – {_preview(self._bcc, 2)}")
         # (v4.8) Språkfördelning: SV får svensk, EN får engelsk
         def _en_count(emails: List[str], lang_map: Dict[str, Any]) -> int:
             return sum(
@@ -309,7 +310,7 @@ class SendConfirmDialog(QDialog):
             # till EN-mottagare (To eller Bcc)
         if self._def_bcc:
             row(
-                "📌 Standard-Bcc:",
+                "📌 Standardmottagare:",
                 f"{len(self._def_bcc)} st: " + ", ".join(self._def_bcc),
                 colors.get("accent", ""),
             )
@@ -683,7 +684,7 @@ class SettingsDialog(QDialog):
         header_layout.addWidget(title)
         subtitle = QLabel(
             "SMTP, sändning, utseende och avancerade val. "
-            "Ingen CC – endast To/Bcc."
+            "Varje mottagare får ett eget mejl. Ingen ser de andra mottagarna."
         )
         subtitle.setStyleSheet(
             "color: #FFFFFF; font-weight: bold; background: transparent;"
@@ -770,7 +771,7 @@ class SettingsDialog(QDialog):
         numeric_fields = [
             ("max_retries", "Max återförsök:", 2),
             ("smtp_timeout", "Timeout (sekunder):", 30),
-            ("bcc_batch_size", "Bcc-batchstorlek (0=alla):", 0),
+
             ("delay_between_batches", "Fördröjning (sek):", 0.5),
             ("image_jpeg_quality", "JPEG-kvalitet:", 92),
             ("image_png_compress_level", "PNG compress level:", 6),
@@ -822,11 +823,11 @@ class SettingsDialog(QDialog):
         default_to_layout.addWidget(self._default_to)
         layout.addWidget(default_to_group)
 
-        default_group = QGroupBox("📌 Standardmottagare Bcc")
+        default_group = QGroupBox("📌 Standardmottagare")
         default_layout = QVBoxLayout(default_group)
-        default_layout.addWidget(QLabel("<b>Bcc-adresser, kommaseparerade:</b>"))
+        default_layout.addWidget(QLabel("<b>Mottagaradresser, kommaseparerade:</b>"))
         info = QLabel(
-            "Dessa adresser läggs automatiskt till som Bcc vid varje sändning."
+            "Dessa adresser får varsitt individuellt mejl vid sändning."
         )
         info.setProperty("cssClass", "muted")
         info.setWordWrap(True)

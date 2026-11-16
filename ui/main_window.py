@@ -813,9 +813,7 @@ class SendWorker(QThread):
     def _resolve_default_bcc(self) -> List[str]:
         """Standard-Bcc + arkivkopia (deduplicerat, v4.7)."""
         default_bcc = list(
-            self.p.get("default_bcc")
-            or self.s.get("default_bcc", [])
-            or []
+            self.p.get("default_bcc", self.s.get("default_bcc", [])) or []
         )
         archive = str(
             self._profile_value("archive_copy_email", "") or ""
@@ -1460,7 +1458,7 @@ class MainWindow(QMainWindow):
             ("Ctrl+M", lambda: self._focus_send_field("_tpl_combo")),
             ("Ctrl+Shift+T", self._send_test_mail),
             ("Ctrl+Shift+R", lambda: self._focus_send_field("_to_input")),
-            ("Ctrl+Shift+B", lambda: self._focus_send_field("_bcc_input")),
+            ("Ctrl+Shift+B", lambda: self._focus_send_field("_to_input")),
             ("Ctrl+Shift+A", self._add_att),
             ("Ctrl+Shift+O", self._open_address_book),
             ("Ctrl+Shift+M", self._edit_template_recipients),
@@ -2518,7 +2516,7 @@ class MainWindow(QMainWindow):
         recipient_row.addWidget(QLabel('Mallens mottagare:'))
         self._template_recipient_combo = QComboBox()
         recipient_row.addWidget(self._template_recipient_combo, 1)
-        self._template_recipient_add = QPushButton('Lägg till i Bcc')
+        self._template_recipient_add = QPushButton('Lägg till mottagare')
         self._template_recipient_add.clicked.connect(self._add_template_recipient)
         recipient_row.addWidget(self._template_recipient_add)
         link_recipients = QPushButton('Koppla adresser…')
@@ -2676,15 +2674,18 @@ class MainWindow(QMainWindow):
 
         grid = QGridLayout()
         grid.setSpacing(12)
-        grid.addWidget(self._build_recipient_box("📨 Till", "to"), 0, 0)
-        grid.addWidget(self._build_recipient_box("🙈 Bcc", "bcc"), 0, 1)
+        grid.addWidget(self._build_recipient_box("📨 Mottagare – individuella mejl", "to"), 0, 0)
+        # Retained only to read older drafts/settings without losing addresses.
+        legacy_box = self._build_recipient_box("Äldre mottagare", "bcc")
+        legacy_box.setParent(card)
+        legacy_box.hide()
         grid.setColumnStretch(0, 1)
         grid.setColumnStretch(1, 1)
         outer.addLayout(grid)
 
         info = QLabel(
-            "Tips: Standard-Bcc fylls i automatiskt från inställningar. "
-            "CC används inte."
+            "Varje mottagare får ett eget mejl med endast sin egen adress i Till. "
+            "Ingen ser de andra mottagarna. Inga Cc- eller Bcc-fält används."
         )
         info.setProperty("cssClass", "subtext")
         info.setWordWrap(True)
@@ -3564,7 +3565,7 @@ class MainWindow(QMainWindow):
 
         layout = QVBoxLayout(dialog)
         info = QLabel(
-            "Markera kontakter och välj om de ska läggas i To eller Bcc. "
+            "Markera kontakter och lägg till dem som mottagare för individuella mejl. "
             "Dialogen stannar öppen."
         )
         info.setProperty("cssClass", "subtext")
@@ -3594,7 +3595,7 @@ class MainWindow(QMainWindow):
         layout.addWidget(tree, stretch=1)
 
         feedback = QLabel(
-            "Välj kontakter och klicka på Lägg till som To/Bcc."
+            "Välj kontakter och klicka på Lägg till mottagare."
         )
         feedback.setProperty("cssClass", "subtext")
         feedback.setWordWrap(True)
@@ -3611,21 +3612,23 @@ class MainWindow(QMainWindow):
 
         buttons.addStretch()
 
-        btn_to = QPushButton("➕ Lägg i To")
+        btn_to = QPushButton("➕ Lägg till mottagare")
         btn_to.setProperty("cssClass", "accent")
         buttons.addWidget(btn_to)
 
         btn_bcc = QPushButton("➕ Lägg i Bcc")
+        btn_bcc.hide()
         btn_bcc.setProperty("cssClass", "purple")
         buttons.addWidget(btn_bcc)
 
         # (v5.5) Lägg till ALLA visade kontakter direkt i To/Bcc
-        btn_all_to = QPushButton("➕ Alla visade → To")
+        btn_all_to = QPushButton("➕ Lägg till alla visade")
         btn_all_to.setProperty("cssClass", "accent")
         btn_all_to.clicked.connect(lambda: add_all("to"))
         buttons.addWidget(btn_all_to)
 
         btn_all_bcc = QPushButton("➕ Alla visade → Bcc")
+        btn_all_bcc.hide()
         btn_all_bcc.setProperty("cssClass", "purple")
         btn_all_bcc.clicked.connect(lambda: add_all("bcc"))
         buttons.addWidget(btn_all_bcc)
@@ -3715,7 +3718,8 @@ class MainWindow(QMainWindow):
         show_warning: bool = True,
         lang: Optional[str] = None,
     ) -> int:
-        line = self._to_input if target == "to" else self._bcc_input
+        target = "to"  # Unified individual-recipient list, including legacy imports.
+        line = self._to_input
         list_widget = self._to_list if target == "to" else self._bcc_list
 
         value = (email if email is not None else line.text()).strip()
@@ -4237,7 +4241,7 @@ class MainWindow(QMainWindow):
         except Exception:
             profile_text = ""
         self._send_summary.setText(
-            f"Till: {to_n} · Bcc: {bcc_n} · Bilagor: {len(self._attachments)} "
+            f"Individuella mottagare: {to_n + bcc_n} · Bilagor: {len(self._attachments)} "
             f"({img_n} bilder, {file_n} övriga filer){lang_text} · "
             f"Ämne: {subject_text}{profile_text}"
         )
@@ -4527,7 +4531,7 @@ class MainWindow(QMainWindow):
 
         self._history_table = QTableWidget(0, 7)
         self._history_table.setHorizontalHeaderLabels(
-            ["Tid", "Ämne", "Mall", "To", "Bcc", "Bilagor", "Status"]
+            ["Tid", "Ämne", "Mall", "Mottagare", "Äldre mottagare", "Bilagor", "Status"]
         )
         self._history_table.setEditTriggers(
             QTableWidget.EditTrigger.NoEditTriggers
@@ -4538,6 +4542,7 @@ class MainWindow(QMainWindow):
         self._history_table.setSelectionMode(
             QAbstractItemView.SelectionMode.SingleSelection
         )
+        self._history_table.setColumnHidden(4, True)
         self._history_table.setAlternatingRowColors(True)
         self._history_table.setToolTip(
             "Dubbelklicka en rad för att öppna mailet i Skicka-fliken."
@@ -4757,7 +4762,7 @@ class MainWindow(QMainWindow):
             f"To ({len(to_list)}):\n"
             + ("\n".join(to_list) if to_list else "(inga)")
             + "\n\n"
-            f"Bcc ({len(bcc_list)}):\n"
+            f"Äldre mottagarlista ({len(bcc_list)}):\n"
             + ("\n".join(bcc_list) if bcc_list else "(inga)")
             + "\n\n"
             f"Totalt: {total} mottagare"
@@ -5296,8 +5301,8 @@ class MainWindow(QMainWindow):
             self._make_settings_line("default_to", "default_to"),
         )
         form.addRow(
-            "Standard-Bcc (kommaseparerat)",
-            self._make_settings_line("default_bcc", "default_bcc"),
+            "Ytterligare standardmottagare (kommaseparerat)",
+            self._make_settings_line("default_bcc", "Standardmottagare för individuella mejl"),
         )
         btn_backup = QPushButton("📦 Säkerhetskopiera adresslistor…")
         btn_backup.setProperty("cssClass", "accent")
@@ -5408,7 +5413,7 @@ class MainWindow(QMainWindow):
         form.addRow("Clear form after send", self._make_settings_checkbox("clear_form_after_send", "Rensa formulär efter skickat"))
         form.addRow("Save last recipients", self._make_settings_checkbox("save_last_recipients", "Spara senaste mottagare"))
         form.addRow("Översätt placeholders", self._make_settings_checkbox("translate_placeholders", "Översätt placeholder-värden"))
-        form.addRow("BCC batch size", self._make_settings_line("bcc_batch_size", "BCC batch size"))
+        form.addRow(QLabel("Alla mottagare får separata mejl; en mottagare per sändning."))
         form.addRow("Delay between batches", self._make_settings_line("delay_between_batches", "Delay between batches"))
         form.addRow("Max retries", self._make_settings_line("max_retries", "Max retries"))
         form.addRow("SMTP timeout", self._make_settings_line("smtp_timeout", "SMTP timeout"))
@@ -6577,10 +6582,10 @@ class MainWindow(QMainWindow):
         selected = self._template_recipient_combo.currentData()
         if selected:
             emails = [email for email in emails if email == selected]
-        count = sum(self._add_recipient('bcc', email=email, show_warning=False,
+        count = sum(self._add_recipient('to', email=email, show_warning=False,
             lang=self._contact_lang(email)) for email in emails)
         self._refresh_preview()
-        self._status(f'{count} nya mottagare tillagda i Bcc', 'success' if count else 'info')
+        self._status(f'{count} nya mottagare tillagda', 'success' if count else 'info')
 
     def _edit_template_recipients(self):
         from core.template_recipients import normalize_template_recipients, linked_bcc
@@ -6630,23 +6635,17 @@ class MainWindow(QMainWindow):
                                 self.settings.get('template_bcc_rules', {}))
             wanted = {email.casefold() for email in emails}
             role = int(Qt.ItemDataRole.UserRole) + 1
-            for row in range(self._bcc_list.count() - 1, -1, -1):
-                item = self._bcc_list.item(row)
-                addresses = extract_email_addresses(item.text())
-                if item.data(role) == 'template-bcc' and (not addresses or addresses[0].casefold() not in wanted):
-                    self._bcc_list.takeItem(row)
-            # A linked recipient must not also be exposed in the To header.
             for row in range(self._to_list.count() - 1, -1, -1):
                 item = self._to_list.item(row)
-                email = extract_email_addresses(item.text())
-                if email and email[0].casefold() in wanted:
+                addresses = extract_email_addresses(item.text())
+                if item.data(role) == 'template-bcc' and (not addresses or addresses[0].casefold() not in wanted):
                     self._to_list.takeItem(row)
-            existing = {email.casefold() for email in self._list_items(self._bcc_list)}
+            existing = {email.casefold() for email in self._list_items(self._to_list)}
             for email in emails:
                 if email.casefold() in existing:
                     continue
-                if self._add_recipient('bcc', email=email, show_warning=False, lang=self._contact_lang(email)):
-                    self._bcc_list.item(self._bcc_list.count() - 1).setData(role, 'template-bcc')
+                if self._add_recipient('to', email=email, show_warning=False, lang=self._contact_lang(email)):
+                    self._to_list.item(self._to_list.count() - 1).setData(role, 'template-bcc')
         finally:
             self._syncing_template_bcc = False
 
@@ -6891,7 +6890,6 @@ class MainWindow(QMainWindow):
         from core.template_recipients import linked_bcc
         default_bcc = list(self.settings.get("default_bcc", []) or [])
         name = self._last_tpl.name if self._last_tpl else ""
-        default_bcc.extend(linked_bcc(name, self.settings.get("template_recipient_rules", {}), self.settings.get("template_bcc_rules", {})))
         archive_source = (
             profile.get("archive_copy_email")
             if profile is not None
@@ -6906,8 +6904,8 @@ class MainWindow(QMainWindow):
 
     def _gather_send_params(self) -> Dict[str, Any]:
         self._sync_template_bcc()
-        recipients_to = _dedupe(self._list_items(self._to_list))
-        recipients_bcc = _dedupe(self._list_items(self._bcc_list))
+        recipients_to = _dedupe(self._list_items(self._to_list) + self._list_items(self._bcc_list))
+        recipients_bcc = []
         replacements = self._get_ph()
         subject_text = self._ensure_subject_contains_model_and_reg(
             update_field=True
@@ -6915,8 +6913,8 @@ class MainWindow(QMainWindow):
 
         # (v5.4) Engelska skickas ALLTID automatiskt om någon mottagare
         # (To ELLER Bcc) är märkt EN – ingen global knapp längre
-        to_lang = self._list_langs(self._to_list)
-        bcc_lang = self._list_langs(self._bcc_list)
+        to_lang = {**self._list_langs(self._bcc_list), **self._list_langs(self._to_list)}
+        bcc_lang = {}
         has_en_recipient = (
             any(value == "en" for value in to_lang.values())
             or any(value == "en" for value in bcc_lang.values())
@@ -6956,7 +6954,8 @@ class MainWindow(QMainWindow):
             "sender_email": str(sender_profile.get("sender_email") or ""),
             "sender_name": str(sender_profile.get("sender_name") or ""),
             "own_email": str(sender_profile.get("own_email") or ""),
-            "default_bcc": self._default_bcc_with_archive(sender_profile),
+            "default_bcc": [email for email in self._default_bcc_with_archive(sender_profile)
+                            if email.casefold() not in {x.casefold() for x in recipients_to}],
             "test_mode": False,
             "test_recipient": "",
             # v5.0 – standardvärde för kvittocheckboxen i sänddialogen
@@ -6994,6 +6993,7 @@ class MainWindow(QMainWindow):
             report.blockers.append(("profile_template", {}))
         fingerprint = content_fingerprint(params)
         params["content_fingerprint"] = fingerprint
+        report.warnings = [issue for issue in report.warnings if issue[0] != "bcc_no_batch"]
         params["delivered_recipients"] = report.to_final + report.bcc_final
         history = self._load_history()
         matches = registration_history_matches(params, history)
@@ -7271,7 +7271,7 @@ class MainWindow(QMainWindow):
             duplicates = duplicate_recipients({"Till": self._list_items(self._to_list),
                 "Hemlig kopia": self._list_items(self._bcc_list),
                 "Standard/arkiv-Bcc": [email for email in params.get("default_bcc", [])
-                    if email.casefold() not in {value.casefold() for value in self._list_items(self._bcc_list)}]})
+                    if email.casefold() not in {value.casefold() for value in self._list_items(self._bcc_list) + self._list_items(self._to_list)}]})
             if duplicates:
                 details = "\n".join(f"{email}: {', '.join(labels)}" for email, labels in duplicates.items())
                 QMessageBox.warning(self, "Dubbla mottagare",
@@ -7402,8 +7402,8 @@ class MainWindow(QMainWindow):
             "📤 Bekräfta sändning",
             f"Skicka e-post nu?\n\n"
             f"Till: {len(params['recipients_to'])}\n"
-            f"Bcc: {len(params['recipients_bcc'])}\n"
-            f"Standard-Bcc: {', '.join(params.get('default_bcc', [])) or '–'}\n"
+            "Varje mottagare får ett eget mejl, utan kopiefält.\n"
+            f"Standardmottagare: {', '.join(params.get('default_bcc', [])) or '–'}\n"
             f"Totalt: {total}\n\n"
             f"Ämne: {params['subject'] or '(tomt)'}\n"
             f"Mall: {params['template_name']}\n"

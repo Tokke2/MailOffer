@@ -27,13 +27,24 @@ class PrivateBccTests(unittest.TestCase):
             ids = []
             for call in calls:
                 msg = message_from_string(call['message_str'])
-                self.assertEqual(msg['To'], 'sender@example.com')
+                self.assertEqual(msg['To'], call['rcpt_to'][0])
                 self.assertIsNone(msg['Cc'])
                 self.assertIsNone(msg['Bcc'])
                 ids.append(msg['Message-ID'])
-                self.assertNotIn('one@example.com', call['message_str'])
-                self.assertNotIn('two@example.com', call['message_str'])
+                other = 'two@example.com' if call['rcpt_to'][0] == 'one@example.com' else 'one@example.com'
+                self.assertNotIn(other, call['message_str'])
             self.assertEqual(len(set(ids)), 2)
+
+    def test_personal_header_guard_rejects_copies_and_other_to(self):
+        msg = message_from_string('From: sender@example.com\nTo: customer@example.com\n\nBody')
+        audit_message(msg, personal_recipient='customer@example.com')
+        msg['Cc'] = 'other@example.com'
+        with self.assertRaises(ValueError):
+            audit_message(msg, personal_recipient='customer@example.com')
+        del msg['Cc']
+        msg.replace_header('To', 'sender@example.com')
+        with self.assertRaises(ValueError):
+            audit_message(msg, personal_recipient='customer@example.com')
 
     def test_overlap_not_silently_promoted_to_to(self):
         with self.assertRaises(ValueError):

@@ -1385,8 +1385,6 @@ def send_email(
             result.images_compressed = _n_compressed
 
     # ── Slå ihop mottagare (own_email först i TO + default_bcc) ───
-    from core.send_diagnostics import check_hidden_overlap
-    check_hidden_overlap(recipients_to, recipients_bcc, default_bcc or [], own_email, sender_email)
     recipients_to, recipients_bcc = merge_recipients(
         manual_to=recipients_to,
         manual_bcc=recipients_bcc,
@@ -1548,9 +1546,9 @@ def send_email(
     batches: List[Tuple[str, str, List[str]]] = []
     if split_active:
         if sv_to:
-            batches.append(("to_sv", "sv", list(sv_to)))
+            batches.extend(("to_sv", "sv", [email]) for email in sv_to)
         if en_to:
-            batches.append(("to_en", "en", list(en_to)))
+            batches.extend(("to_en", "en", [email]) for email in en_to)
         for batch_kind, batch_lang, group in (
             ("bcc_sv", "sv", sv_bcc),
             ("bcc_en", "en", en_bcc),
@@ -1564,7 +1562,7 @@ def send_email(
         # alla mottagare är EN-markerade (då finns ingen SV-grupp)
         batch_lang = "en" if (en_to or en_bcc) else "sv"
         if recipients_to:
-            batches.append(("to", batch_lang, list(recipients_to)))
+            batches.extend(("to", batch_lang, [email]) for email in recipients_to)
         if recipients_bcc:
             for recipient in recipients_bcc:
                 batches.append(("bcc", batch_lang, [recipient]))
@@ -1601,14 +1599,9 @@ def send_email(
 
     def _to_header_for(kind: str, lang: str, rcpts: List[str]) -> str:
         """To-header för en batch (synliga To-mottagare i rätt språk)."""
-        if kind.startswith("bcc"):
-            return sender_email
-
-        return (
-            ", ".join(rcpts)
-            if rcpts
-            else "Undisclosed recipients:;"
-        )
+        if len(rcpts) != 1:
+            raise EmailSendConfigError('Individuellt utskick kräver exakt en mottagare per mejl.')
+        return rcpts[0]
 
     # ── DRY RUN ────────────────────────────────────────────────────
     if dry_run:
@@ -1629,8 +1622,7 @@ def send_email(
             from core.send_diagnostics import audit_message
             audit_message(msg_obj, signature_text=signature_text,
                           signature_contact=signature_contact, signature_logo=signature_logo,
-                          bcc_batch=kind.startswith('bcc'),
-                          hidden_recipients=recipients_bcc)
+                          personal_recipient=rcpts[0])
             log.debug("[DRY RUN] Batch %s recipients=%d; message content omitted", kind, len(rcpts))
         log.info(
             "[DRY RUN] Skulle skickat till %d mottagare "
@@ -1683,8 +1675,7 @@ def send_email(
             from core.send_diagnostics import audit_message
             audit_message(msg_obj, signature_text=signature_text,
                           signature_contact=signature_contact, signature_logo=signature_logo,
-                          bcc_batch=kind.startswith('bcc'),
-                          hidden_recipients=recipients_bcc)
+                          personal_recipient=rcpts[0])
             message_str = msg_obj.as_string()
 
             server = send_with_retry(

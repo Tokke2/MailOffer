@@ -2919,3 +2919,9 @@ Användaren valde från redan-valda: tema-knapp (§34 #6) och tydligare
 ### V7.54 – klickbar dropdowntext
 - Redigerbara platshållar-dropdowns öppnas även via textfältet; egen text och tangentbord kvarstår.
 - Version 1.0.0, bygg 2026102348.
+
+### V7.55 – individuella Till-mejl för samtliga mottagare
+- Samtliga språk-/legacy-mottagargrupper delas i en-mottagarmejl; aktuell person i Till och SMTP-kuvert.
+- Gemensam mottagarvy; gamla Cc/Bcc-val dolda, gamla data migreras utan adressförlust.
+- Tydlig information i mottagarvy och bekräftelse; säkerhetskontroll mot fel Till/kopiefält.
+- Version 1.0.0, bygg 2026102349.

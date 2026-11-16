@@ -77,7 +77,7 @@ class TemplateRecipientsUiTests(unittest.TestCase):
         obj._add_recipient.assert_not_called()
         obj._add_template_recipient()
         self.assertEqual([c.kwargs['email'] for c in obj._add_recipient.call_args_list], ['a@example.com', 'b@example.com'])
-        self.assertTrue(all(c.args == ('bcc',) for c in obj._add_recipient.call_args_list))
+        self.assertTrue(all(c.args == ('to',) for c in obj._add_recipient.call_args_list))
 
     def sync_harness(self):
         from PyQt6.QtCore import Qt
@@ -99,7 +99,7 @@ class TemplateRecipientsUiTests(unittest.TestCase):
         def add(target, email, show_warning=False, lang='sv'):
             item = QListWidgetItem(email + ' [' + lang + ']')
             item.setData(Qt.ItemDataRole.UserRole, lang)
-            obj._bcc_list.addItem(item)
+            obj._to_list.addItem(item)
             obj._sync_template_bcc()  # real add refreshes preview: verify recursion guard
             return 1
         obj._add_recipient = add
@@ -108,33 +108,33 @@ class TemplateRecipientsUiTests(unittest.TestCase):
     def test_automatic_bcc_switch_preserves_manual_rows_and_language(self):
         from PyQt6.QtCore import Qt
         obj = self.sync_harness()
-        obj._bcc_list.addItem('manual@example.com [sv]')
+        obj._to_list.addItem('manual@example.com [sv]')
         obj._sync_template_bcc()
-        self.assertEqual(obj._list_items(obj._bcc_list), ['manual@example.com', 'a@example.com', 'legacy@example.com'])
-        obj._bcc_list.item(1).setData(Qt.ItemDataRole.UserRole, 'en')
+        self.assertEqual(obj._list_items(obj._to_list), ['manual@example.com', 'a@example.com', 'legacy@example.com'])
+        obj._to_list.item(1).setData(Qt.ItemDataRole.UserRole, 'en')
         obj._sync_template_bcc()
-        self.assertEqual(obj._bcc_list.count(), 3)
-        self.assertEqual(obj._bcc_list.item(1).data(Qt.ItemDataRole.UserRole), 'en')
+        self.assertEqual(obj._to_list.count(), 3)
+        self.assertEqual(obj._to_list.item(1).data(Qt.ItemDataRole.UserRole), 'en')
         obj._last_tpl = Path('B.txt')
         obj._sync_template_bcc()
-        self.assertEqual(obj._list_items(obj._bcc_list), ['manual@example.com', 'b@example.com'])
+        self.assertEqual(obj._list_items(obj._to_list), ['manual@example.com', 'b@example.com'])
         obj._last_tpl = None
         obj._sync_template_bcc()
-        self.assertEqual(obj._list_items(obj._bcc_list), ['manual@example.com'])
+        self.assertEqual(obj._list_items(obj._to_list), ['manual@example.com'])
 
     def test_linked_addresses_moved_out_of_visible_to(self):
         obj = self.sync_harness()
         obj._to_list.addItem('A@EXAMPLE.COM [sv]')
         obj._to_list.addItem('visible@example.com [sv]')
         obj._sync_template_bcc()
-        self.assertEqual(obj._list_items(obj._to_list), ['visible@example.com'])
-        self.assertIn('a@example.com', obj._list_items(obj._bcc_list))
+        self.assertIn('A@EXAMPLE.COM', obj._list_items(obj._to_list))
+        self.assertIn('visible@example.com', obj._list_items(obj._to_list))
 
     def test_removing_saved_link_removes_owned_row_not_manual(self):
         obj = self.sync_harness()
-        obj._bcc_list.addItem('a@example.com [sv]')
+        obj._to_list.addItem('a@example.com [sv]')
         obj._sync_template_bcc()
         obj.settings['template_recipient_rules'] = {}
         obj.settings['template_bcc_rules'] = {}
         obj._sync_template_bcc()
-        self.assertEqual(obj._list_items(obj._bcc_list), ['a@example.com'])
+        self.assertEqual(obj._list_items(obj._to_list), ['a@example.com'])

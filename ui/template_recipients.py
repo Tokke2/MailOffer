@@ -13,7 +13,7 @@ class TemplateRecipientsDialog(QDialog):
         self.resize(560, 440)
         self.contacts = contacts
         layout = QVBoxLayout(self)
-        info = QLabel('Spara alla mottagare för denna mall. De visas automatiskt i Bcc-listan när mallen väljs och skickas som hemliga kopior. Ta bort en sparad koppling här för att utesluta den.')
+        info = QLabel('Spara alla mottagare för denna mall. De visas automatiskt i mottagarlistan. Varje person får ett eget mejl med endast sin egen adress i Till. Ingen ser de andra mottagarna. Ta bort en sparad koppling här för att utesluta den.')
         info.setWordWrap(True)
         layout.addWidget(info)
         row = QHBoxLayout()

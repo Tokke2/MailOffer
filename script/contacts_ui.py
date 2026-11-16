@@ -6,7 +6,7 @@ script/contacts_ui.py – Kontakter & Grupper för EmailApp (PyQt6)
 Version: 4.6 – LÄGG TILL ALLA VISADE KONTAKTER I TO/BCC
 
 ÄNDRINGAR mot v4.5:
-- ✅ Knappar "➕ Alla visade → To" / "➕ Alla visade → Bcc" i
+- ✅ Knappar "➕ Lägg till alla visade" / "➕ Alla visade → Bcc" i
     kontaktfliken – lägger till ALLA kontakter som för närvarande
     visas (sök + kategori + språkfilter gäller) med ett klick
 - ✅ refresh_list() sparar self._last_visible (filtrerade kontakter)
@@ -1006,7 +1006,7 @@ class ContactsTab(QWidget):
     - naturlig sortering ("Kund 2" före "Kund 10"), svensk å/ä/ö-ordning
     - språkfilter (Alla / SV / EN) + kategori-filter + sök
     - reload med mtime-cache när fliken visas
-    - högerklicksmeny för snabb CRUD och Lägg i To/Bcc
+    - högerklicksmeny för snabb CRUD och Lägg till mottagare/Bcc
     """
 
     # (v4.5) Kolumn → dropdown-lägen för header-klick-sortering
@@ -1230,22 +1230,24 @@ class ContactsTab(QWidget):
         push_row = QHBoxLayout()
         push_row.addWidget(QLabel("Markerade kontakter:"))
 
-        btn_to = QPushButton("📬 Lägg i To")
+        btn_to = QPushButton("📬 Lägg till mottagare")
         btn_to.setProperty("cssClass", "accent")
         btn_to.clicked.connect(lambda: self._push_selected("to"))
         push_row.addWidget(btn_to)
 
-        btn_bcc = QPushButton("🔒 Lägg i Bcc")
+        btn_bcc = QPushButton("Äldre mottagarknapp")
+        btn_bcc.hide()
         btn_bcc.clicked.connect(lambda: self._push_selected("bcc"))
         push_row.addWidget(btn_bcc)
 
         # (v4.6) Lägg till ALLA visade kontakter (sök/filter gäller)
-        btn_all_to = QPushButton("➕ Alla visade → To")
+        btn_all_to = QPushButton("➕ Lägg till alla visade")
         btn_all_to.setProperty("cssClass", "accent")
         btn_all_to.clicked.connect(lambda: self._push_all("to"))
         push_row.addWidget(btn_all_to)
 
-        btn_all_bcc = QPushButton("➕ Alla visade → Bcc")
+        btn_all_bcc = QPushButton("Äldre mottagarknapp")
+        btn_all_bcc.hide()
         btn_all_bcc.setProperty("cssClass", "purple")
         btn_all_bcc.clicked.connect(lambda: self._push_all("bcc"))
         push_row.addWidget(btn_all_bcc)
@@ -1521,8 +1523,9 @@ class ContactsTab(QWidget):
             item.setSelected(True)
 
         menu = QMenu(self)
-        act_to = QAction("📬 Lägg i To", self)
-        act_bcc = QAction("🔒 Lägg i Bcc", self)
+        act_to = QAction("📬 Lägg till mottagare", self)
+        act_bcc = QAction("Äldre mottagarval", self)
+        act_bcc.setVisible(False)
         act_edit = QAction("✏️ Redigera", self)
         act_delete = QAction("🗑️ Ta bort", self)
         act_copy = QAction("📋 Kopiera e-post", self)

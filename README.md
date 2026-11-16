@@ -1021,3 +1021,19 @@ redigerbara adress-/sökfält ändras inte.
 Skickade mejl: fliken Historik (Historik över skickade mail), med knappen
 Öppna historikfil för .data/sent_history.json. Teknisk sändningslogg finns
 i Loggar/logs/app.log. SMTP-acceptans bevisar inte inkorgsleverans.
+
+### Individuellt mejl till varje mottagare (bygg 2026102349)
+**Varje mottagare får ett eget mejl med endast sin egen adress i Till.
+Ingen ser de andra mottagarna. Inga Cc- eller Bcc-fält används.**
+Detta ersätter föregående hemliga sändningsläge: även äldre sparade Bcc-/
+standard-/mall-/arkivadresser får nu individuellt adresserade Till-mejl.
+Appen har en gemensam mottagarlista; mallkopplingar visas där automatiskt.
+Cc/Bcc-val visas inte i mottagarvyn/adressboken. Äldre interna inställnings-
+nycklar behålls för kompatibilitet med sparade profiler, historik och utkast.
+Varje mejl får eget Message-ID och endast aktuell mottagare i SMTP-kuvertet.
+Språk per mottagare och fördröjning mellan sändningar behålls. Även eventuella
+egen-/arkivadresser får separata mejl, inte kopior av varje kundmejl.
+Säkerhetskontrollen stoppar felaktig Till-header och alla kopiefält; gammal
+batchstorlek har ingen effekt. Bekräftelsedialogen beskriver det nya beteendet.
+Individuell adressering är inte en spam-/inkorgsgaranti. SMTP-leverantörens
+kvoter gäller och ett stort utskick tar längre tid än ett gemensamt mejl.

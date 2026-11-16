@@ -7,7 +7,7 @@ log = logging.getLogger(__name__)
 
 
 def audit_message(message, *, signature_text='', signature_contact='', signature_logo='',
-                  bcc_batch=False, hidden_recipients=()):
+                  bcc_batch=False, hidden_recipients=(), personal_recipient=None):
     """Inspect the final MIME without writing recipients, body or signature to logs."""
     plain = []
     html = []
@@ -52,6 +52,13 @@ def audit_message(message, *, signature_text='', signature_contact='', signature
     if message.get_all('Bcc') is not None or message.get_all('Resent-Bcc') is not None:
         raise ValueError('Bcc-header får inte finnas i utgående MIME')
     visible = {email.casefold() for _, email in getaddresses(message.get_all('To', []) + message.get_all('Cc', []))}
+    if personal_recipient is not None:
+        to = getaddresses(message.get_all('To', []))
+        if (len(to) != 1 or len(message.get_all('To', [])) != 1 or
+                to[0][1].casefold() != str(personal_recipient).casefold() or
+                message.get_all('Cc') is not None or message.get_all('Resent-To') is not None or
+                message.get_all('Resent-Cc') is not None):
+            raise ValueError('Individuellt mejl måste ha endast aktuell mottagare i Till, utan kopiefält')
     if bcc_batch:
         sender_addresses = getaddresses(message.get_all('From', []))
         to_addresses = getaddresses(message.get_all('To', []))
