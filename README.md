@@ -1068,3 +1068,12 @@ ur QR-koden eller källkoden; det är inte hemligt/krypterat. Skannaren visar
 mottagaren före bekräftelse. Saknat QR-tillägg ger feltext, aldrig ett
 nummerfält som reserv. Verklig skanning/betalning behöver testas i Swish.
 Detta avsnitt ersätter äldre uppgifter om att Swish inte är aktiverat.
+
+### Endast Swish i QR-dialogen (bygg 2026102352)
+Swish är standard i menyn/verktygsraden. Dialogen visar enbart fast
+Swish-QR, beloppsval och kort hjälptext; PayPal/Ko-fi-kort, FAQ och
+månadsgivartext har tagits bort därifrån. I Inställningar → Stöd & om
+finns PayPal och Ko-fi endast som direktknappar till respektive fast
+betaltjänstlänk. Inga egna sidor/dialoger för dem och inga redigerbara
+mottagarfält. Numret visas endast i QR, inte som text eller kopieringsknapp.
+Detta ersätter tidigare beskrivning av betalalternativ i QR-dialogen.

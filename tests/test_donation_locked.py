@@ -6,7 +6,7 @@ from core.donate import resolve_donation_links, paypal_donation_url
 
 os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
 try:
-    from PyQt6.QtWidgets import QApplication, QLabel, QLineEdit
+    from PyQt6.QtWidgets import QApplication, QLabel, QLineEdit, QPushButton
     from ui.donate import DonateDialog
     QT = True
 except ImportError:
@@ -39,10 +39,23 @@ class DonationLockTests(unittest.TestCase):
             self.assertEqual(dialog._kofi_url, 'https://ko-fi.com/tokke2')
             for widget in dialog.findChildren(QLabel) + dialog.findChildren(QLineEdit):
                 self.assertNotIn('0721817177', widget.text())
-            with mock.patch('ui.donate.open_url_in_browser', return_value=True) as opened:
-                dialog._amount.setValue(100)
-                self.assertEqual(dialog._swish_payload, 'C0721817177;100;E-postofferten;6')
-                dialog._open_paypal()
-                opened.assert_called_once_with('https://paypal.me/Rickard3dPrint/100SEK')
+            dialog._amount.setValue(100)
+            self.assertEqual(dialog._swish_payload, 'C0721817177;100;E-postofferten;6')
+            for widget in dialog.findChildren(QLabel) + dialog.findChildren(QPushButton):
+                self.assertNotIn('PayPal', widget.text())
+                self.assertNotIn('Ko-fi', widget.text())
+            dialog._amount.setValue(0)
+            self.assertEqual(dialog._swish_payload, 'C0721817177;;E-postofferten;6')
         finally:
             dialog.close()
+
+    @unittest.skipUnless(QT, 'Qt unavailable')
+    def test_alternative_buttons_open_fixed_urls_directly(self):
+        from ui.main_window import MainWindow
+        receiver = mock.Mock()
+        MainWindow._open_paypal_donation(receiver)
+        receiver._open_url.assert_called_once_with('https://paypal.me/Rickard3dPrint')
+        receiver._open_url.reset_mock()
+        MainWindow._open_kofi_donation(receiver)
+        receiver._open_url.assert_called_once_with('https://ko-fi.com/tokke2')
+        receiver._open_donate.assert_not_called()

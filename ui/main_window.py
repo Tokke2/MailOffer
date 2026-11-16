@@ -2284,18 +2284,21 @@ class MainWindow(QMainWindow):
         dialog.exec()
 
     def _open_donate(self) -> None:
-        """❤️ Stöd projektet-sidan (Ko-fi, PayPal, Swish-QR)."""
+        """Open only the fixed-recipient Swish QR dialog."""
         try:
             from ui.donate import DonateDialog
         except Exception:
             log.warning("Donationsdialogen kunde inte laddas", exc_info=True)
             return
-        DonateDialog(
-            self,
-            kofi_url=self._donation_url_setting(),
-            paypal_url=str(self.settings.get("donation_paypal_url", "") or ""),
-            swish_number=str(self.settings.get("donation_swish", "") or ""),
-        ).exec()
+        DonateDialog(self).exec()
+
+    def _open_paypal_donation(self) -> None:
+        from core.donate import DEFAULT_PAYPAL_URL
+        self._open_url(DEFAULT_PAYPAL_URL)
+
+    def _open_kofi_donation(self) -> None:
+        from core.donate import DEFAULT_KOFI_URL
+        self._open_url(DEFAULT_KOFI_URL)
 
     def _open_donation_page(self) -> None:
         """Open the fixed, in-app support dialog, never a settings override."""
@@ -5566,18 +5569,21 @@ class MainWindow(QMainWindow):
         group = QGroupBox(tr("donate.group"))
         form = QFormLayout(group)
 
-        from core.donate import DEFAULT_KOFI_URL, DEFAULT_PAYPAL_URL
-        form.addRow('Ko-fi (låst)', QLabel(DEFAULT_KOFI_URL))
-        form.addRow('PayPal (låst)', QLabel(DEFAULT_PAYPAL_URL))
         hint = QLabel('Mottagarna är fasta och kan inte ändras via inställningar. Swish visas endast som QR-kod och är förstahandsval. Stöd är helt frivilligt.')
         hint.setWordWrap(True)
         form.addRow(hint)
         row_widget = QWidget()
         row = QHBoxLayout(row_widget)
         row.setContentsMargins(0, 0, 0, 0)
-        btn_donate = QPushButton(tr("donate.open_settings_btn"))
+        btn_donate = QPushButton("Swish – QR-kod")
         btn_donate.clicked.connect(self._open_donation_page)
         row.addWidget(btn_donate)
+        btn_paypal = QPushButton('PayPal ↗')
+        btn_paypal.clicked.connect(self._open_paypal_donation)
+        row.addWidget(btn_paypal)
+        btn_kofi = QPushButton('Ko-fi ↗')
+        btn_kofi.clicked.connect(self._open_kofi_donation)
+        row.addWidget(btn_kofi)
         btn_github = QPushButton(tr("donate.github_btn"))
         btn_github.clicked.connect(lambda: self._open_url(GITHUB_REPO_URL))
         row.addWidget(btn_github)

@@ -2936,3 +2936,8 @@ Användaren valde från redan-valda: tema-knapp (§34 #6) och tydligare
 - Ägarens angivna nummer låst i kod; visas enbart i lokalt genererad C-format-QR i appen, inte textfält/kopieringsknapp.
 - Belopp uppdaterar QR. Swish först, övriga tjänster alternativ. QR är inte kryptering av numret.
 - Version 1.0.0, bygg 2026102351.
+
+### V7.58 – ren Swish-dialog, alternativa tjänster endast direktknappar
+- Swish är standard; QR-dialogen saknar PayPal/Ko-fi och tidigare FAQ-/månadsgivarinnehåll.
+- PayPal och Ko-fi endast fasta direktknappar i appens stödinställningar, inga egna sidor.
+- Version 1.0.0, bygg 2026102352.

@@ -124,7 +124,7 @@ class DonateDialog(QDialog):
                 self._swish_payload = ""
         self._qr_pixmap: Optional[QPixmap] = None
 
-        self.setWindowTitle(tr("donate.title"))
+        self.setWindowTitle("Swish – QR-kod")
         self.setMinimumSize(320, 360)
         self.resize(580, 760)
         self._build_ui()
@@ -166,7 +166,7 @@ class DonateDialog(QDialog):
         hero_layout.addWidget(heading)
         hero_layout.addWidget(_centered(QLabel('Hjälp till med fortsatt utveckling, underhåll och förbättringar.\nGratis att använda privat och kommersiellt – donation låser inte upp något.')))
         layout.addWidget(hero)
-        layout.addWidget(_centered(QLabel('🔒 Fasta mottagarlänkar · Rickard Längkvist\nBetalning bekräftas hos betaltjänsten, aldrig i appen.')))
+        layout.addWidget(_centered(QLabel('🔒 Fast Swish-mottagare · Rickard Längkvist\nBetalning bekräftas i Swish, aldrig i appen.')))
         amounts = QGroupBox('Valfritt belopp – inga nivåer eller krav')
         amount_layout = QVBoxLayout(amounts)
         chips = QHBoxLayout()
@@ -181,32 +181,13 @@ class DonateDialog(QDialog):
             chips.addWidget(button)
         amount_layout.addLayout(chips)
         amount_layout.addWidget(self._amount)
-        hint = QLabel('Beloppet följer med i Swish-QR och till PayPal. På Ko-fi väljer du belopp där. Välj 0 för valfritt belopp hos betaltjänsten.')
+        hint = QLabel('Beloppet följer med i Swish-QR. Välj 0 för att ange belopp i Swish-appen.')
         hint.setWordWrap(True)
         amount_layout.addWidget(hint)
         layout.addWidget(self._swish_group())
         layout.addWidget(amounts)
         self._amount.valueChanged.connect(self._refresh_swish_qr)
         self._refresh_swish_qr()
-        layout.addLayout(
-            self._link_row(
-                tr("donate.paypal_btn"), self._paypal_url,
-                self._open_paypal, self._copy_paypal, "success",
-            )
-        )
-        layout.addLayout(
-            self._link_row(
-                tr("donate.kofi_btn"), self._kofi_url,
-                self._open_kofi, self._copy_url, "accent",
-            )
-        )
-        monthly = _centered(QLabel(tr("donate.monthly_hint")))
-        monthly.setProperty("cssClass", "subtext")
-        layout.addWidget(monthly)
-
-        layout.addWidget(self._why_group())
-        layout.addWidget(self._faq_group())
-
         footer = _centered(QLabel(tr("donate.footer")))
         footer.setProperty("cssClass", "muted")
         layout.addWidget(footer)
