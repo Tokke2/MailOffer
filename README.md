@@ -178,17 +178,17 @@ Så publicerar du en ny version:
 
 ## ❤️ Donera
 
-Appen är gratis och alltid öppen för alla. Vill du stödja
+Appen får användas gratis privat och kommersiellt enligt LICENSE. Vill du stödja
 utvecklingen finns en komplett **Stöd projektet**-sida i appen
-(*❤️ Stöd projektet* i sidofältet) med:
+(*Hjälp → Stöd projektet* i menyn) med:
 
 - ☕ **Ko-fi:** <https://ko-fi.com/tokke2>
 - 💳 **PayPal:** <https://paypal.me/Rickard3dPrint>
 - Mottagarna är fasta: PayPal Rickard3dPrint och Ko-fi tokke2. Inställningar kan inte byta dem.
 - Swish är inaktiverat tills utvecklaren har angett ett nummer. Inget nummer hittas på.
 
-Länkarna kan bytas i samma inställningsgrupp; `.github/FUNDING.yml`
-ger Sponsor-knappen här på GitHub.
+Mottagarlänkarna är låsta i appen och ignorerar äldre inställningar.
+`.github/FUNDING.yml` ger Sponsor-knappen här på GitHub.
 
 ## 🧪 Tester
 
