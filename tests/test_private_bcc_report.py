@@ -21,9 +21,9 @@ class PrivateBccTests(unittest.TestCase):
                 send_email(smtp_server='example.com', smtp_port=465,
                     sender_email='sender@example.com', sender_name='Sender', username='user', password='secret',
                     word_file_path=str(template), replacements={}, include_english=False,
-                    recipients_to=[], recipients_bcc=['one@example.com', 'two@example.com'], attachments=[],
+                    recipients_to=['visible@example.com', 'other@example.com'], recipients_bcc=['one@example.com', 'two@example.com'], attachments=[],
                     delay_between_batches=0, translate_placeholders=False, bcc_batch_size=100)
-            self.assertEqual([x['rcpt_to'] for x in calls], [['one@example.com'], ['two@example.com']])
+            self.assertEqual([x['rcpt_to'] for x in calls], [['visible@example.com'], ['other@example.com'], ['one@example.com'], ['two@example.com']])
             ids = []
             for call in calls:
                 msg = message_from_string(call['message_str'])
@@ -31,9 +31,10 @@ class PrivateBccTests(unittest.TestCase):
                 self.assertIsNone(msg['Cc'])
                 self.assertIsNone(msg['Bcc'])
                 ids.append(msg['Message-ID'])
-                other = 'two@example.com' if call['rcpt_to'][0] == 'one@example.com' else 'one@example.com'
-                self.assertNotIn(other, call['message_str'])
-            self.assertEqual(len(set(ids)), 2)
+                for other in ('visible@example.com', 'other@example.com', 'one@example.com', 'two@example.com'):
+                    if other != call['rcpt_to'][0]:
+                        self.assertNotIn(other, call['message_str'])
+            self.assertEqual(len(set(ids)), 4)
 
     def test_personal_header_guard_rejects_copies_and_other_to(self):
         msg = message_from_string('From: sender@example.com\nTo: customer@example.com\n\nBody')
