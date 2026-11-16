@@ -147,7 +147,21 @@ def resolve_issues(directory, keys):
     try:
         with db:
             db.execute('BEGIN IMMEDIATE')
-            db.executemany('UPDATE issues SET resolved=1 WHERE id=?', [(key,) for key in keys])
+            # Archive exact selected open rows while holding the write transaction.
+            # If backup creation/verification fails, no issue is closed.
+            rows = []
+            for key in dict.fromkeys(keys):
+                row = db.execute('SELECT id, source, message, first_seen, last_seen, count FROM issues WHERE id=? AND resolved=0', (key,)).fetchone()
+                if row:
+                    rows.append(row)
+            if rows:
+                from core.log_archive import snapshot
+                now = datetime.now()
+                text = 'RESOLVED ERRORS — explicitly marked resolved at ' + now.isoformat(timespec='seconds') + '\n'
+                for key, source, message, first, last, count in rows:
+                    text += f'\n=== ID {key} | source={source} | first={first} | last={last} | count={count} ===\n{message.rstrip()}\n'
+                snapshot(directory, 'resolved-errors.log', now.date(), text.encode('utf-8'))
+            db.executemany('UPDATE issues SET resolved=1 WHERE id=?', [(row[0],) for row in rows])
             _render(db, directory)
     finally:
         db.close()

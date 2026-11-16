@@ -1003,3 +1003,13 @@ Byggnumret för exporterande app och tillgängliga körande byggnummer visas
 separat. Saknade markörer redovisas. Samtidiga instanser kan ge blandade
 loggrader, och exporten är en begränsad sammanfattning, inte full kraschdump.
 Granska rapporten före delning. Avbryt i spara-dialogen skapar ingen fil.
+
+### Arkivera lösta fel (bygg 2026102347)
+Loggar → Öppna fel / markera åtgärdade → markera bekräftat lösta poster →
+Arkivera valda som lösta. Efter bekräftelse skapas först en verifierad ZIP
+med valda poster i logs/archive/<dag>/resolved-errors.log-<hash>.zip. Först
+därefter stängs posterna och försvinner från aktiva errors.log. Misslyckad
+arkivering lämnar felen öppna. Samma sjudagars arkivpolicy gäller.
+Databasens historik/fingeravtryck behålls; nya förekomster öppnar felet igen.
+Källloggarnas dagens poster ändras inte av åtgärdsmarkeringen. Inga fel
+markeras automatiskt lösta bara för att de är gamla eller appen uppdaterats.

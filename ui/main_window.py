@@ -4981,7 +4981,7 @@ class MainWindow(QMainWindow):
         dialog.setWindowTitle("Öppna fel")
         layout = QVBoxLayout(dialog)
         info = QLabel("Fel ligger kvar tills du själv markerar dem som åtgärdade. "
-                      "Kontrollera att orsaken är löst först. Återkommer felet öppnas det igen.")
+                      "Bekräfta att orsaken är löst först. Valda fel säkerhetskopieras till verifierat arkiv och tas sedan bort ur errors.log. Återkommer felet öppnas det igen.")
         info.setWordWrap(True)
         layout.addWidget(info)
         choices = QListWidget()
@@ -5000,7 +5000,7 @@ class MainWindow(QMainWindow):
                         if choices.item(i).checkState() == Qt.CheckState.Checked]
             if not selected:
                 return
-            if QMessageBox.question(dialog, "Markera åtgärdade", f"Markera {len(selected)} fel som åtgärdade?",
+            if QMessageBox.question(dialog, "Markera åtgärdade", f"Arkivera och ta bort {len(selected)} bekräftat lösta fel från den aktiva felloggen?",
                     QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
                     QMessageBox.StandardButton.No) != QMessageBox.StandardButton.Yes:
                 return
@@ -5013,7 +5013,7 @@ class MainWindow(QMainWindow):
         open_file = QPushButton("Öppna hela felloggen")
         open_file.clicked.connect(lambda: self._explorer(directory / "errors.log"))
         layout.addWidget(open_file)
-        button = QPushButton("Markera valda som åtgärdade")
+        button = QPushButton("Arkivera valda som lösta")
         button.clicked.connect(resolve)
         layout.addWidget(button)
         close = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)

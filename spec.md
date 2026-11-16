@@ -2910,3 +2910,8 @@ Användaren valde från redan-valda: tema-knapp (§34 #6) och tydligare
 - Överlapp stoppas före dedup; MIME kontrolleras mot alla hemliga mottagare, Bcc/Resent-Bcc förbjuds.
 - Loggar-flik: exportera senaste felsökningsrapport via strikt status-allowlist, ingen rålogg/mejltext/lösenord/adress/sökväg.
 - Version 1.0.0, bygg 2026102346.
+
+### V7.53 – arkivering före åtgärdsmarkering
+- Valda bekräftat lösta fel ZIP-arkiveras och verifieras innan de stängs och tas bort ur errors.log.
+- Backupfel bevarar öppna poster; återkommande fel öppnas på nytt; sju dagars arkivpolicy.
+- Version 1.0.0, bygg 2026102347.
