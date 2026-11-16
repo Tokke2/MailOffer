@@ -1077,3 +1077,13 @@ finns PayPal och Ko-fi endast som direktknappar till respektive fast
 betaltjänstlänk. Inga egna sidor/dialoger för dem och inga redigerbara
 mottagarfält. Numret visas endast i QR, inte som text eller kopieringsknapp.
 Detta ersätter tidigare beskrivning av betalalternativ i QR-dialogen.
+
+### Samlad donationsdialog under Hjälp (bygg 2026102353)
+Hjälp → Donera – stöd projektet öppnar en egen appdialog med en kort
+förklaring av frivilligt stöd till utveckling, felsökning och underhåll.
+Gratis privat/kommersiell användning påverkas inte av donation.
+Swish är förstahandsval med enbart QR (inget utskrivet nummer), följt
+av beloppsval och Ko-fi-/PayPal-knappar. Fasta mottagare kan inte ändras
+via inställningarna. Knapparna öppnar respektive betaltjänst direkt;
+appen behandlar inga betaluppgifter. Inga egna webbsidor skapas.
+Detta ersätter tidigare begränsning till en Swish-dialog utan alternativ.

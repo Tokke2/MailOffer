@@ -2941,3 +2941,8 @@ Användaren valde från redan-valda: tema-knapp (§34 #6) och tydligare
 - Swish är standard; QR-dialogen saknar PayPal/Ko-fi och tidigare FAQ-/månadsgivarinnehåll.
 - PayPal och Ko-fi endast fasta direktknappar i appens stödinställningar, inga egna sidor.
 - Version 1.0.0, bygg 2026102352.
+
+### V7.59 – samlad donationsdialog under Hjälp
+- Hjälp → Donera öppnar egen dialog med frivillig stödtext, Swish-QR som förstahandsval och fasta Ko-fi-/PayPal-knappar.
+- Swish-nummer fortsatt enbart som QR; belopp följer med till Swish och PayPal, väljs hos Ko-fi. Inga egna webbsidor.
+- Version 1.0.0, bygg 2026102353.

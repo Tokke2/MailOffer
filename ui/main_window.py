@@ -2284,7 +2284,7 @@ class MainWindow(QMainWindow):
         dialog.exec()
 
     def _open_donate(self) -> None:
-        """Open only the fixed-recipient Swish QR dialog."""
+        """Open the shared donation dialog with fixed recipients."""
         try:
             from ui.donate import DonateDialog
         except Exception:
@@ -5575,7 +5575,7 @@ class MainWindow(QMainWindow):
         row_widget = QWidget()
         row = QHBoxLayout(row_widget)
         row.setContentsMargins(0, 0, 0, 0)
-        btn_donate = QPushButton("Swish – QR-kod")
+        btn_donate = QPushButton(tr("menu.donate"))
         btn_donate.clicked.connect(self._open_donation_page)
         row.addWidget(btn_donate)
         btn_paypal = QPushButton('PayPal ↗')

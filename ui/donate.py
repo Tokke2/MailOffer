@@ -124,7 +124,7 @@ class DonateDialog(QDialog):
                 self._swish_payload = ""
         self._qr_pixmap: Optional[QPixmap] = None
 
-        self.setWindowTitle("Swish – QR-kod")
+        self.setWindowTitle(tr("donate.title"))
         self.setMinimumSize(320, 360)
         self.resize(580, 760)
         self._build_ui()
@@ -164,9 +164,9 @@ class DonateDialog(QDialog):
         heading = _centered(QLabel('Gillar du E-postofferten? 💚'))
         heading.setStyleSheet('font-size:21pt; font-weight:800;')
         hero_layout.addWidget(heading)
-        hero_layout.addWidget(_centered(QLabel('Hjälp till med fortsatt utveckling, underhåll och förbättringar.\nGratis att använda privat och kommersiellt – donation låser inte upp något.')))
+        hero_layout.addWidget(_centered(QLabel('Har E-postofferten sparat tid i din vardag?\nDitt stöd hjälper till med fortsatt utveckling, felsökning och underhåll.\nAppen är gratis att använda privat och kommersiellt. Donationer är helt frivilliga – inga funktioner eller förmåner kräver betalning.\nTack för att du hjälper projektet vidare!')))
         layout.addWidget(hero)
-        layout.addWidget(_centered(QLabel('🔒 Fast Swish-mottagare · Rickard Längkvist\nBetalning bekräftas i Swish, aldrig i appen.')))
+        layout.addWidget(_centered(QLabel('🔒 Fasta mottagare · Rickard Längkvist\nVälj Swish, Ko-fi eller PayPal. Granska och bekräfta alltid betalningen hos betaltjänsten.')))
         amounts = QGroupBox('Valfritt belopp – inga nivåer eller krav')
         amount_layout = QVBoxLayout(amounts)
         chips = QHBoxLayout()
@@ -181,13 +181,28 @@ class DonateDialog(QDialog):
             chips.addWidget(button)
         amount_layout.addLayout(chips)
         amount_layout.addWidget(self._amount)
-        hint = QLabel('Beloppet följer med i Swish-QR. Välj 0 för att ange belopp i Swish-appen.')
+        hint = QLabel('Beloppet följer med i Swish-QR och till PayPal. På Ko-fi väljer du belopp hos tjänsten. Välj 0 för att ange belopp hos betaltjänsten.')
         hint.setWordWrap(True)
         amount_layout.addWidget(hint)
         layout.addWidget(self._swish_group())
         layout.addWidget(amounts)
         self._amount.valueChanged.connect(self._refresh_swish_qr)
         self._refresh_swish_qr()
+        alternatives = QGroupBox('Fler sätt att stödja projektet')
+        alternative_layout = QVBoxLayout(alternatives)
+        for label, name, action in (
+            ('☕ Stöd via Ko-fi ↗', 'donationKofiButton', self._open_kofi),
+            ('💙 Stöd via PayPal ↗', 'donationPaypalButton', self._open_paypal),
+        ):
+            button = QPushButton(label)
+            button.setObjectName(name)
+            button.setMinimumHeight(44)
+            button.clicked.connect(action)
+            alternative_layout.addWidget(button)
+        note = QLabel('Knapparna öppnar respektive betaltjänst i webbläsaren. Appen tar inte emot kort- eller bankuppgifter. Mottagarna kan inte ändras via inställningarna.')
+        note.setWordWrap(True)
+        alternative_layout.addWidget(note)
+        layout.addWidget(alternatives)
         footer = _centered(QLabel(tr("donate.footer")))
         footer.setProperty("cssClass", "muted")
         layout.addWidget(footer)

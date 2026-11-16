@@ -41,9 +41,16 @@ class DonationLockTests(unittest.TestCase):
                 self.assertNotIn('0721817177', widget.text())
             dialog._amount.setValue(100)
             self.assertEqual(dialog._swish_payload, 'C0721817177;100;E-postofferten;6')
-            for widget in dialog.findChildren(QLabel) + dialog.findChildren(QPushButton):
-                self.assertNotIn('PayPal', widget.text())
-                self.assertNotIn('Ko-fi', widget.text())
+            paypal = dialog.findChild(QPushButton, 'donationPaypalButton')
+            kofi = dialog.findChild(QPushButton, 'donationKofiButton')
+            self.assertIsNotNone(paypal)
+            self.assertIsNotNone(kofi)
+            with mock.patch('ui.donate.open_url_in_browser', return_value=True) as opened:
+                paypal.click()
+                opened.assert_called_once_with('https://paypal.me/Rickard3dPrint/100SEK')
+                opened.reset_mock()
+                kofi.click()
+                opened.assert_called_once_with('https://ko-fi.com/tokke2')
             dialog._amount.setValue(0)
             self.assertEqual(dialog._swish_payload, 'C0721817177;;E-postofferten;6')
         finally:
