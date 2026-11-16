@@ -1655,7 +1655,7 @@ def send_email(
                         idx,
                         len(batches),
                         f"Skickar batch {idx}/{len(batches)} "
-                        f"({label}, {len(rcpts)} mottagare)…",
+                        f"(individuellt mejl, {len(rcpts)} mottagare)…",
                     )
                 except Exception:
                     pass
