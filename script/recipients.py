@@ -1189,14 +1189,7 @@ class AddressBookDialog(QDialog):
         self._group_actions_label.setStyleSheet("font-weight: bold;")
         group_row.addWidget(self._group_actions_label, stretch=1)
 
-        self._btn_all_bcc = QPushButton("➕ Alla → Bcc")
-        self._btn_all_bcc.setMinimumHeight(34)
-        self._btn_all_bcc.clicked.connect(
-            lambda: self._emit_add_all("bcc")
-        )
-        group_row.addWidget(self._btn_all_bcc)
-
-        self._btn_all_to = QPushButton("➕ Alla → To")
+        self._btn_all_to = QPushButton("➕ Lägg till alla")
         self._btn_all_to.setProperty("cssClass", "accent")
         self._btn_all_to.setMinimumHeight(34)
         self._btn_all_to.clicked.connect(
@@ -1207,7 +1200,7 @@ class AddressBookDialog(QDialog):
         layout.addLayout(group_row)
 
         self._feedback_lbl = QLabel(
-            "Välj kontakter och klicka på Lägg till som To/Bcc. "
+            "Välj kontakter och klicka på Lägg till markerade. Varje mottagare får ett eget mejl. Ingen ser de andra mottagarna. "
             "Dialogen stannar öppen."
         )
         self._feedback_lbl.setWordWrap(True)
@@ -1232,12 +1225,7 @@ class AddressBookDialog(QDialog):
 
         button_bar.addStretch()
 
-        btn_bcc = QPushButton("➕ Lägg till som Bcc")
-        btn_bcc.setMinimumHeight(38)
-        btn_bcc.clicked.connect(self._on_add_bcc)
-        button_bar.addWidget(btn_bcc)
-
-        btn_to = QPushButton("➕ Lägg till som To")
+        btn_to = QPushButton("➕ Lägg till markerade")
         btn_to.setProperty("cssClass", "accent")
         btn_to.setMinimumHeight(38)
         btn_to.setDefault(True)
@@ -1313,9 +1301,7 @@ class AddressBookDialog(QDialog):
             f"📚 {name}: {count} mottagare"
         )
         self._btn_all_to.setEnabled(count > 0)
-        self._btn_all_bcc.setEnabled(count > 0)
-        self._btn_all_to.setText(f"➕ Alla ({count}) → To")
-        self._btn_all_bcc.setText(f"➕ Alla ({count}) → Bcc")
+        self._btn_all_to.setText(f"➕ Lägg till alla ({count})")
 
     def _emit_add_all(self, target: str) -> None:
         """Lägg till HELA den valda gruppen i To/Bcc (dialogen stannar)."""
@@ -1340,12 +1326,10 @@ class AddressBookDialog(QDialog):
         self._cat_list.setCurrentItem(item)
 
         menu = QMenu(self)
+        act_to = None
         if emails:
             act_to = menu.addAction(
-                f"➕ Lägg till alla ({len(emails)}) som To"
-            )
-            act_bcc = menu.addAction(
-                f"➕ Lägg till alla ({len(emails)}) som Bcc"
+                f"➕ Lägg till alla ({len(emails)})"
             )
             menu.addSeparator()
         act_alpha = menu.addAction("↕ Sortera A-Ö")
@@ -1354,9 +1338,9 @@ class AddressBookDialog(QDialog):
         chosen = menu.exec(self._cat_list.viewport().mapToGlobal(pos))
         if chosen is None:
             return
-        if chosen in (act_to, act_bcc):
+        if chosen == act_to:
             self._current_category = category
-            self._emit_add(emails, "to" if chosen == act_to else "bcc")
+            self._emit_add(emails, "to")
         elif chosen == act_alpha:
             self._categories_sort = "alpha"
             self._populate_categories()
@@ -1608,8 +1592,7 @@ class AddressBookDialog(QDialog):
         emails = self._get_selected_emails()
 
         menu = QMenu(self)
-        act_to = menu.addAction("➕ Lägg till som To")
-        act_bcc = menu.addAction("➕ Lägg till som Bcc")
+        act_to = menu.addAction("➕ Lägg till markerade")
         menu.addSeparator()
         act_copy = menu.addAction("📋 Kopiera e-post")
         act_copy_all = menu.addAction("📋 Kopiera namn + e-post")
@@ -1621,8 +1604,6 @@ class AddressBookDialog(QDialog):
 
         if chosen == act_to:
             self._emit_add(emails, "to")
-        elif chosen == act_bcc:
-            self._emit_add(emails, "bcc")
         elif chosen == act_copy:
             if emails:
                 QApplication.clipboard().setText(
@@ -1647,6 +1628,8 @@ class AddressBookDialog(QDialog):
             self._delete_selected()
 
     def _emit_add(self, emails: List[str], target: str) -> None:
+        # Compatibility arguments never restore copy-recipient choices.
+        target = "to"
         if not emails:
             QMessageBox.warning(
                 self, "Ingen markerad", "Välj minst en kontakt."
@@ -1675,8 +1658,7 @@ class AddressBookDialog(QDialog):
                 )
                 return
             self._set_feedback(
-                f"✅ {len(deduped)} adress(er) lades till i "
-                f"{target.upper()}."
+                f"✅ {len(deduped)} mottagare lades till. Varje mottagare får ett eget mejl."
             )
             return
 
@@ -1691,7 +1673,7 @@ class AddressBookDialog(QDialog):
                 existing.add(email.lower())
                 added += 1
         self._set_feedback(
-            f"✅ {added} adress(er) markerades för {target.upper()}."
+            f"✅ {added} mottagare markerades. Varje mottagare får ett eget mejl."
         )
 
     def _on_add_to(self) -> None:

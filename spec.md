@@ -2946,3 +2946,8 @@ Användaren valde från redan-valda: tema-knapp (§34 #6) och tydligare
 - Hjälp → Donera öppnar egen dialog med frivillig stödtext, Swish-QR som förstahandsval och fasta Ko-fi-/PayPal-knappar.
 - Swish-nummer fortsatt enbart som QR; belopp följer med till Swish och PayPal, väljs hos Ko-fi. Inga egna webbsidor.
 - Version 1.0.0, bygg 2026102353.
+
+### V7.60 – adressboksdialog utan CC/BCC-val
+- Verkliga AddressBookDialog i script/recipients.py: endast lägg till markerade/alla, även i högerklicksmenyer.
+- Äldre målargument normaliseras till gemensam lista, varje mottagare får eget mejl.
+- Version 1.0.0, bygg 2026102354.

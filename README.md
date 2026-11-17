@@ -1087,3 +1087,11 @@ av beloppsval och Ko-fi-/PayPal-knappar. Fasta mottagare kan inte ändras
 via inställningarna. Knapparna öppnar respektive betaltjänst direkt;
 appen behandlar inga betaluppgifter. Inga egna webbsidor skapas.
 Detta ersätter tidigare begränsning till en Swish-dialog utan alternativ.
+
+### Adressboken utan kopiemottagarval (bygg 2026102354)
+Adressboksdialogen som öppnas från Mottagare har nu endast Lägg till
+markerade och Lägg till alla. Bcc-val har tagits bort även från kontakt-
+och kategorihögerklicksmenyer. Ingen CC/BCC-väljare visas. Dialogen
+förklarar att varje mottagare får eget mejl och inte ser övriga mottagare.
+Äldre anrop med bcc som mål normaliseras till den gemensamma mottagarlistan.
+Adressuppgifter och kategorier bevaras; den befintliga separata sändningen ändras inte.

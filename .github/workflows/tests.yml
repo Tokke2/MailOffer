@@ -101,6 +101,7 @@ jobs:
         run: |
           $env:QT_QPA_PLATFORM = 'offscreen'
           python tools/run_windows_tests.py test_template_recipients_ui.py
+          python tools/run_windows_tests.py test_addressbook_individual_ui.py
       - name: Testa sändningsdiagnostik utan nätverk
         run: |
           python tools/run_windows_tests.py test_private_bcc_report.py
