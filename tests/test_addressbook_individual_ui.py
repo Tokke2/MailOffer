@@ -29,7 +29,8 @@ class AddressBookIndividualTests(unittest.TestCase):
             def capture(menu, *_):
                 menus.append([a.text().casefold() for a in menu.actions()])
                 return None
-            with mock.patch('script.recipients.QMenu.exec', capture), mock.patch.object(dialog, '_category_emails', return_value=['a@example.com']):
+            dialog._contact_list.addItem('Testkontakt')
+            with mock.patch('script.recipients.QMenu.exec', capture), mock.patch.object(dialog, '_category_emails', return_value=['a@example.com']), mock.patch.object(dialog, '_get_selected_emails', return_value=['a@example.com']):
                 dialog._cat_list.setCurrentRow(0)
                 rect = dialog._cat_list.visualItemRect(dialog._cat_list.item(0))
                 dialog._show_category_context_menu(rect.center())
