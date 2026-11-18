@@ -63,7 +63,7 @@ shell.CurrentDirectory = scriptDir
 If pythonw <> "" Then
     LogStage "Interpreter=" & pythonw
     On Error Resume Next
-    exitCode = shell.Run("""" & pythonw & """ """ & scriptDir & "\main.pyw""" & args, 1, True)
+    exitCode = shell.Run("""" & pythonw & """ """ & scriptDir & "\main.pyw""" & args, 0, True)
     launchError = Err.Description
     If Err.Number <> 0 Then
         LogStage "Launch error=" & launchError

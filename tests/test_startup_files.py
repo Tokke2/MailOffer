@@ -76,7 +76,7 @@ class TestStartVbs(unittest.TestCase):
     def test_starts_main_pyw_hidden_with_args(self):
         self.assertIn("main.pyw", self.src)
         self.assertIn("WScript.Arguments", self.src)
-        self.assertIn(", 1, True)", self.src)
+        self.assertIn("args, 0, True)", self.src)
         self.assertNotIn(", 0, False", self.src)
 
     def test_shared_runtime_selected_after_check_on_every_launch(self):

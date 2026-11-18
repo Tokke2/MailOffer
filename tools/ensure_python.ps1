@@ -79,7 +79,9 @@ try {
         $previousPreference = $ErrorActionPreference
         try {
             $ErrorActionPreference = 'Continue'
-            $launcherLines = @(& $launcher.Source -0p 2>$null)
+            $launcherCheck = Invoke-HiddenNative $launcher.Source '-0p'
+            $launcherLines = @()
+            if ($launcherCheck.Code -eq 0) { $launcherLines = @($launcherCheck.Text -split "`r?`n") }
         } catch { $launcherLines = @() }
         finally { $ErrorActionPreference = $previousPreference }
         foreach ($line in $launcherLines) {

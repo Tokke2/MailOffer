@@ -85,3 +85,28 @@ class QuietProcessesTests(unittest.TestCase):
         with mock.patch("core.dep_check.needed_packages", return_value=[{"spec": "example-package==1.0"}]), mock.patch("core.dep_check.ensure_pip", return_value=False), mock.patch("core.dep_check.install_spec") as install:
             self.assertEqual(install_needed()["failed"], ["example-package==1.0"])
             install.assert_not_called()
+
+    def test_startup_scans_do_not_invoke_native_tools_via_visible_shell(self):
+        root = Path(__file__).resolve().parents[1]
+        helper = (root / 'tools/python_runtime_checks.ps1').read_text()
+        for setting in ('UseShellExecute = $false', 'CreateNoWindow = $true',
+                        'ProcessWindowStyle]::Hidden', 'ReadToEndAsync()', 'StandardInput.Close()'):
+            self.assertIn(setting, helper)
+        self.assertNotIn('@(& $Exe', helper)
+        discovery = (root / 'tools/ensure_python.ps1').read_text()
+        self.assertIn("Invoke-HiddenNative $launcher.Source '-0p'", discovery)
+        self.assertNotIn('@(& $launcher.Source', discovery)
+        launcher = (root / 'Starta EmailApp.vbs').read_text()
+        gui_launch = next(line for line in launcher.splitlines() if 'exitCode = shell.Run' in line and 'main.pyw' in line)
+        self.assertIn('args, 0, True)', gui_launch)
+
+    def test_startupinfo_hides_windows_helpers(self):
+        startup = mock.Mock(dwFlags=0, wShowWindow=1)
+        with mock.patch('core.process_utils.os.name', 'nt'), \
+             mock.patch.object(subprocess, 'STARTUPINFO', return_value=startup, create=True), \
+             mock.patch.object(subprocess, 'STARTF_USESHOWWINDOW', 1, create=True), \
+             mock.patch.object(subprocess, 'SW_HIDE', 0, create=True):
+            options = quiet_process_options()
+            self.assertIs(options['startupinfo'], startup)
+            self.assertEqual(startup.dwFlags, 1)
+            self.assertEqual(startup.wShowWindow, 0)

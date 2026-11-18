@@ -11,6 +11,12 @@ try {
     $bad = Invoke-PythonCheck $realPython $badScript
     if ($bad.Code -ne 7 -or $bad.Text -notmatch 'expected probe failure') { throw 'Native stderr must not terminate fallback' }
 
+    # Enough output on both streams to catch sequential pipe deadlocks.
+    $largeScript = Join-Path $temporary 'large output probe.py'
+    [IO.File]::WriteAllText($largeScript, "import sys`nsys.stdout.write('o' * 100000)`nsys.stderr.write('e' * 100000)`n")
+    $large = Invoke-PythonCheck $realPython $largeScript
+    if ($large.Code -ne 0 -or $large.Text.Length -lt 200000) { throw 'Hidden process lost output or failed' }
+
     $runtimes = @()
     foreach ($version in @('3.14','3.13','3.15')) {
         $folder = Join-Path $temporary $version

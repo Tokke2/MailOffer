@@ -7,10 +7,16 @@ import subprocess
 import sys
 
 
-def quiet_process_options() -> dict[str, int]:
+def quiet_process_options() -> dict:
     if os.name != "nt":
         return {}
-    return {"creationflags": getattr(subprocess, "CREATE_NO_WINDOW", 0x08000000)}
+    options = {"creationflags": getattr(subprocess, "CREATE_NO_WINDOW", 0x08000000)}
+    if hasattr(subprocess, 'STARTUPINFO'):
+        startup = subprocess.STARTUPINFO()
+        startup.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+        startup.wShowWindow = subprocess.SW_HIDE
+        options['startupinfo'] = startup
+    return options
 
 
 def python_cli_executable() -> str:

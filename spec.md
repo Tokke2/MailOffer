@@ -2956,3 +2956,8 @@ Användaren valde från redan-valda: tema-knapp (§34 #6) och tydligare
 - Grön/varm hero, markerade beloppsknappar/valt belopp, färgade fasta betalknappar och ärlig stöd-/tacktext anpassad till appen.
 - Swish C-format lokalt: fyra modulers marginal, heltalspixlar per modul utan omskalning. Ingen ny webbsida.
 - Version 1.0.0, bygg 2026102355.
+
+### V7.62 – inga konsolfönster vid startens skanning
+- PowerShell-nativeprover och py.exe-upptäckt körs med explicit CreateNoWindow/Hidden och strömomdirigering.
+- VBS startar pythonw dolt; Pythonhjälpare använder CREATE_NO_WINDOW + STARTUPINFO/SW_HIDE.
+- Minimerad/dold startpolicy bevaras, även gamla start_minimized=false. Version 1.0.0, bygg 2026102356.

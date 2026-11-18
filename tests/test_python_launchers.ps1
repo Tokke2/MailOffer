@@ -29,6 +29,12 @@ try {
         if ($Name -ne 'py.exe') { throw 'Unexpected command lookup' }
         $script:fakeLaunchers
     }
+    # Discovery uses the shared no-window runner in production. Fake PS1
+    # launchers stand in for native executables only in this isolated test.
+    function Invoke-HiddenNative($Exe, [string]$Arguments) {
+        $text = @(& $Exe $Arguments) -join "`n"
+        return [pscustomobject]@{Code=0; Text=$text}
+    }
     foreach ($count in 0..3) {
         $script:fakeLaunchers = @($all | Select-Object -First $count)
         $candidates = @()

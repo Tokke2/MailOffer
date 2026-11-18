@@ -1,13 +1,38 @@
-# Native stderr must not terminate discovery under Windows PowerShell 5.1.
-function Invoke-PythonCheck($Exe, $Script) {
-    $ErrorActionPreference = 'Continue'
+# Discovery and startup scans must never allocate a console of their own.
+function Invoke-HiddenNative($Exe, [string]$Arguments) {
+    $process = New-Object System.Diagnostics.Process
+    $info = New-Object System.Diagnostics.ProcessStartInfo
+    $info.FileName = $Exe
+    $info.Arguments = $Arguments
+    $info.UseShellExecute = $false
+    $info.CreateNoWindow = $true
+    $info.WindowStyle = [System.Diagnostics.ProcessWindowStyle]::Hidden
+    $info.RedirectStandardInput = $true
+    $info.RedirectStandardOutput = $true
+    $info.RedirectStandardError = $true
+    $process.StartInfo = $info
     try {
-        $lines = @(& $Exe -I $Script 2>&1)
-        $code = $LASTEXITCODE
-        return [pscustomobject]@{Code=$code; Text=($lines | ForEach-Object { "$_" }) -join "`n"}
+        if (-not $process.Start()) { throw 'Could not start background check' }
+        $process.StandardInput.Close()
+        # Drain both streams concurrently: pip/import errors must not deadlock.
+        $output = $process.StandardOutput.ReadToEndAsync()
+        $errors = $process.StandardError.ReadToEndAsync()
+        if (-not $process.WaitForExit(1200000)) {
+            $process.Kill()
+            $process.WaitForExit()
+            return [pscustomobject]@{Code=1; Text='Background check timed out'}
+        }
+        return [pscustomobject]@{Code=$process.ExitCode; Text=($output.Result + "`n" + $errors.Result).Trim()}
     } catch {
         return [pscustomobject]@{Code=1; Text=$_.Exception.Message}
+    } finally {
+        $process.Dispose()
     }
+}
+
+function Invoke-PythonCheck($Exe, $Script) {
+    # Windows file names cannot contain quotes; quote the script path for spaces.
+    return Invoke-HiddenNative $Exe ('-I "' + $Script + '"')
 }
 
 function Get-PreferredRuntimes($Runtimes) {

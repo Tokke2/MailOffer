@@ -1107,3 +1107,19 @@ i QR (inte hemligt/krypterat). QR skapas lokalt i Swish C-format med
 fyra modulers vit marginal och heltalspixlar per modul utan omskalning.
 Skanna och kontrollera mottagaren i Swish före bekräftelse. Ingen automatisk
 Swish-start på mobilen eller faktisk betalning utlovas av skrivbordsappen.
+
+### Tysta start-/Python-skanningar (bygg 2026102356)
+Windows startkontroll kör nu både Python-/tilläggsprover och py.exe-
+upptäckt via ProcessStartInfo med UseShellExecute=false, CreateNoWindow=true,
+Hidden samt omdirigerade standardströmmar. Utdata/felkoder går tillbaka
+till befintlig startlogg. Båda utdataströmmarna läses samtidigt för att
+undvika låsning. VBS startar även pythonw med dolt fönsterläge; Python-
+hjälpprocesser har både CREATE_NO_WINDOW och STARTUPINFO/SW_HIDE.
+Appen startar fortsatt dold i systembrickan oavsett tidigare inställning;
+om brickan saknas används minimerat aktivitetsfält, aldrig normalt fönster.
+Manuell öppning av en redan körande app visar den som tidigare.
+Starta med Starta EmailApp.vbs: en terminal som du själv öppnat för en
+bat-/python-start kan appen inte lova att förhindra från att först visas.
+Ingen Python installeras/uppgraderas, ingen separat miljö skapas.
+Visuell verifiering på användarens Windows behövs för att bekräfta att
+inget fönster blinkar till; skanning avser här startens system-/tilläggsprover.
