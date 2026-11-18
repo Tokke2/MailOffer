@@ -70,3 +70,27 @@ class DonationLockTests(unittest.TestCase):
         MainWindow._open_kofi_donation(receiver)
         receiver._open_url.assert_called_once_with('https://ko-fi.com/tokke2')
         receiver._open_donate.assert_not_called()
+
+    @unittest.skipUnless(QT, 'Qt unavailable')
+    def test_swish_qr_has_whole_pixel_modules_and_white_margin(self):
+        try:
+            import qrcode
+        except ImportError:
+            self.skipTest('qrcode unavailable')
+        from ui.donate import swish_qr_pixmap
+        app = QApplication.instance() or QApplication([])
+        payload = 'C0721817177;50;E-postofferten;6'
+        qr = qrcode.QRCode(border=4, box_size=1, error_correction=qrcode.constants.ERROR_CORRECT_M)
+        qr.add_data(payload)
+        qr.make(fit=True)
+        modules = qr.modules_count + 8
+        pixmap = swish_qr_pixmap(payload)
+        self.assertIsNotNone(pixmap)
+        self.assertFalse(pixmap.isNull())
+        self.assertEqual(pixmap.width() % modules, 0)
+        self.assertEqual(pixmap.width(), pixmap.height())
+        image = pixmap.toImage()
+        margin = 4 * (pixmap.width() // modules)
+        for y in range(margin):
+            for x in range(image.width()):
+                self.assertEqual(image.pixelColor(x, y).name(), '#ffffff')
