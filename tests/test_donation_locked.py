@@ -39,7 +39,10 @@ class DonationLockTests(unittest.TestCase):
             self.assertEqual(dialog._kofi_url, 'https://ko-fi.com/tokke2')
             for widget in dialog.findChildren(QLabel) + dialog.findChildren(QLineEdit):
                 self.assertNotIn('0721817177', widget.text())
-            dialog._amount.setValue(100)
+            dialog._amount_buttons[100].click()
+            self.assertTrue(dialog._amount_buttons[100].isChecked())
+            self.assertFalse(dialog._amount_buttons[50].isChecked())
+            self.assertIn('100 kr', dialog._amount_info.text())
             self.assertEqual(dialog._swish_payload, 'C0721817177;100;E-postofferten;6')
             paypal = dialog.findChild(QPushButton, 'donationPaypalButton')
             kofi = dialog.findChild(QPushButton, 'donationKofiButton')
@@ -52,6 +55,7 @@ class DonationLockTests(unittest.TestCase):
                 kofi.click()
                 opened.assert_called_once_with('https://ko-fi.com/tokke2')
             dialog._amount.setValue(0)
+            self.assertFalse(any(b.isChecked() for b in dialog._amount_buttons.values()))
             self.assertEqual(dialog._swish_payload, 'C0721817177;;E-postofferten;6')
         finally:
             dialog.close()

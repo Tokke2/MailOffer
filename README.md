@@ -1095,3 +1095,15 @@ och kategorihögerklicksmenyer. Ingen CC/BCC-väljare visas. Dialogen
 förklarar att varje mottagare får eget mejl och inte ser övriga mottagare.
 Äldre anrop med bcc som mål normaliseras till den gemensamma mottagarlistan.
 Adressuppgifter och kategorier bevaras; den befintliga separata sändningen ändras inte.
+
+### Donationsdialog inspirerad av stödexemplet (bygg 2026102355)
+Hjälp → Donera – stöd projektet visar en separat Qt-dialog, inte en
+webbsida. Grön/varm gradient, appikon, Swish-QR först, markerat valt
+belopp, eget belopp och färgade Ko-fi-/PayPal-knappar. Tackkort beskriver
+underhåll och utveckling samt hur man hjälper utan pengar. Inga recept,
+fördelningsprocent, donationsnivåer, statistik eller open-source-påståenden
+från referenssidan kopieras. Mottagarna är fasta; Swish-numret visas endast
+i QR (inte hemligt/krypterat). QR skapas lokalt i Swish C-format med
+fyra modulers vit marginal och heltalspixlar per modul utan omskalning.
+Skanna och kontrollera mottagaren i Swish före bekräftelse. Ingen automatisk
+Swish-start på mobilen eller faktisk betalning utlovas av skrivbordsappen.

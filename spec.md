@@ -2951,3 +2951,8 @@ Användaren valde från redan-valda: tema-knapp (§34 #6) och tydligare
 - Verkliga AddressBookDialog i script/recipients.py: endast lägg till markerade/alla, även i högerklicksmenyer.
 - Äldre målargument normaliseras till gemensam lista, varje mottagare får eget mejl.
 - Version 1.0.0, bygg 2026102354.
+
+### V7.61 – donationsdialog med stödexemplets formspråk
+- Grön/varm hero, markerade beloppsknappar/valt belopp, färgade fasta betalknappar och ärlig stöd-/tacktext anpassad till appen.
+- Swish C-format lokalt: fyra modulers marginal, heltalspixlar per modul utan omskalning. Ingen ny webbsida.
+- Version 1.0.0, bygg 2026102355.

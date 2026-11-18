@@ -76,17 +76,19 @@ def swish_qr_pixmap(payload: str, size: int = 230) -> Optional[QPixmap]:
     try:
         import qrcode  # type: ignore
 
-        image = qrcode.make(payload, border=4, box_size=10)
+        # Whole-pixel modules and a four-module quiet zone: no interpolation.
+        qr = qrcode.QRCode(border=4, box_size=1, error_correction=qrcode.constants.ERROR_CORRECT_M)
+        qr.add_data(payload)
+        qr.make(fit=True)
+        modules = qr.modules_count + 8
+        qr.box_size = max(1, size // modules)
+        image = qr.make_image(fill_color='black', back_color='white')
         buffer = io.BytesIO()
         image.save(buffer, format="PNG")
         pixmap = QPixmap()
         if not pixmap.loadFromData(buffer.getvalue()):
             return None
-        return pixmap.scaled(
-            size, size,
-            Qt.AspectRatioMode.KeepAspectRatio,
-            Qt.TransformationMode.FastTransformation,
-        )
+        return pixmap
     except Exception:
         log.debug("Kunde inte rita Swish-QR (qrcode saknas?)", exc_info=True)
         return None
@@ -154,7 +156,7 @@ class DonateDialog(QDialog):
 
         hero = QWidget()
         hero.setObjectName('donationHero')
-        hero.setStyleSheet('#donationHero { background: qlineargradient(x1:0,y1:0,x2:1,y2:1, stop:0 #2448cf, stop:0.55 #5830a0, stop:1 #127e75); border-radius:22px; } #donationHero QLabel { color:white; background:transparent; }')
+        hero.setStyleSheet('#donationHero { background: qlineargradient(x1:0,y1:0,x2:1,y2:1, stop:0 #168555, stop:0.5 #20794e, stop:0.85 #b75d18, stop:1 #ac7b16); border-radius:22px; } #donationHero QLabel { color:white; background:transparent; }')
         hero_layout = QVBoxLayout(hero)
         hero_layout.setContentsMargins(24, 24, 24, 24)
         hero_layout.addWidget(self._header_icon())
@@ -175,8 +177,14 @@ class DonateDialog(QDialog):
         self._amount.setSpecialValueText('Välj hos betaltjänsten')
         self._amount.setSuffix(' kr')
         self._amount.setValue(50)
+        self._amount_buttons = {}
         for value in (25, 50, 100, 200):
             button = QPushButton(f'{value} kr')
+            button.setCheckable(True)
+            button.setAccessibleName(f'Donationsbelopp {value} kronor')
+            button.setMinimumHeight(40)
+            button.setStyleSheet('QPushButton { border:1px solid #779486; border-radius:16px; padding:6px; } QPushButton:checked { background:#19754d; color:white; border:2px solid #19754d; font-weight:700; }')
+            self._amount_buttons[value] = button
             button.clicked.connect(lambda checked=False, n=value: self._amount.setValue(n))
             chips.addWidget(button)
         amount_layout.addLayout(chips)
@@ -184,6 +192,10 @@ class DonateDialog(QDialog):
         hint = QLabel('Beloppet följer med i Swish-QR och till PayPal. På Ko-fi väljer du belopp hos tjänsten. Välj 0 för att ange belopp hos betaltjänsten.')
         hint.setWordWrap(True)
         amount_layout.addWidget(hint)
+        self._amount_info = QLabel()
+        self._amount_info.setObjectName('donationAmountInfo')
+        self._amount_info.setWordWrap(True)
+        amount_layout.addWidget(self._amount_info)
         layout.addWidget(self._swish_group())
         layout.addWidget(amounts)
         self._amount.valueChanged.connect(self._refresh_swish_qr)
@@ -196,14 +208,31 @@ class DonateDialog(QDialog):
         ):
             button = QPushButton(label)
             button.setObjectName(name)
-            button.setMinimumHeight(44)
+            button.setMinimumHeight(48)
+            base, hover = ('#be3e43', '#a93136') if name == 'donationKofiButton' else ('#086ca8', '#055789')
+            button.setStyleSheet(f'QPushButton {{ background:{base}; color:white; border:0; border-radius:13px; padding:12px; font-weight:700; }} QPushButton:hover {{ background:{hover}; }} QPushButton:focus {{ border:2px solid #c49b30; }}')
             button.clicked.connect(action)
             alternative_layout.addWidget(button)
         note = QLabel('Knapparna öppnar respektive betaltjänst i webbläsaren. Appen tar inte emot kort- eller bankuppgifter. Mottagarna kan inte ändras via inställningarna.')
         note.setWordWrap(True)
         alternative_layout.addWidget(note)
         layout.addWidget(alternatives)
-        footer = _centered(QLabel(tr("donate.footer")))
+        thanks = QGroupBox('💚 Tack för att du stödjer E-postofferten')
+        thanks_layout = QVBoxLayout(thanks)
+        for title, body in (
+            ('🔧 Underhåll & felsökning', 'Ditt frivilliga stöd bidrar till arbetet med att hitta problem och förbättra appen.'),
+            ('💡 Fortsatt utveckling', 'Enklare arbetsflöden, tydligare mallar och bättre användbarhet – utan donationsnivåer eller betalvägg.'),
+            ('⭐ Hjälp även utan pengar', 'Rapportera ett fel, föreslå en förbättring eller tipsa någon som kan ha nytta av appen. Det uppskattas också!'),
+        ):
+            title_label = QLabel(title)
+            title_label.setWordWrap(True)
+            title_label.setStyleSheet('font-weight:700;')
+            thanks_layout.addWidget(title_label)
+            body_label = QLabel(body)
+            body_label.setWordWrap(True)
+            thanks_layout.addWidget(body_label)
+        layout.addWidget(thanks)
+        footer = _centered(QLabel('© 2026 Rickard Längkvist • Kostnadsfri privat och kommersiell användning'))
         footer.setProperty("cssClass", "muted")
         layout.addWidget(footer)
 
@@ -263,6 +292,9 @@ class DonateDialog(QDialog):
 
     def _refresh_swish_qr(self, *_):
         value = self._amount.value()
+        for amount, button in self._amount_buttons.items():
+            button.setChecked(amount == value)
+        self._amount_info.setText(f'Valt: {value} kr – tack! 💚' if value else 'Valfritt belopp – välj hos betaltjänsten. Tack! 💚')
         self._swish_payload = build_swish_payload(DEFAULT_SWISH_NUMBER, amount=str(value) if value else '')
         self._qr_pixmap = swish_qr_pixmap(self._swish_payload)
         if self._qr_pixmap is not None and not self._qr_pixmap.isNull():
