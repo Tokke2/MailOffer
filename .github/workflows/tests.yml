@@ -115,6 +115,7 @@ jobs:
         run: |
           $env:QT_QPA_PLATFORM = 'offscreen'
           python tools/run_windows_tests.py test_donation_locked.py
+          python tools/run_windows_tests.py test_design_system_ui.py
       - name: Testa klickbar dropdowntext
         run: |
           $env:QT_QPA_PLATFORM = 'offscreen'

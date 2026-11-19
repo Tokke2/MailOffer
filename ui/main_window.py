@@ -1168,7 +1168,7 @@ class MainWindow(QMainWindow):
 
     def _build_ui(self) -> None:
         self.setWindowTitle(tr("app.window_title"))
-        self.setMinimumSize(1080, 760)
+        self.setMinimumSize(760, 540)
 
         central = QWidget()
         central.setProperty("cssClass", "appRoot")
@@ -1199,7 +1199,8 @@ class MainWindow(QMainWindow):
     def _build_toolbar(self, parent: QVBoxLayout) -> None:
         toolbar_frame = QFrame()
         toolbar_frame.setProperty("cssClass", "hero")
-        toolbar = QHBoxLayout(toolbar_frame)
+        from ui.responsive import WrapLayout
+        toolbar = WrapLayout(toolbar_frame)
         toolbar.setContentsMargins(16, 12, 16, 12)
         toolbar.setSpacing(10)
 
@@ -1214,7 +1215,8 @@ class MainWindow(QMainWindow):
         subtitle.setStyleSheet(
             "background: transparent; color: #FFFFFF; font-weight: bold;"
         )
-        toolbar.addWidget(subtitle, stretch=1)
+        subtitle.setWordWrap(True)
+        toolbar.addWidget(subtitle)
 
         self.btn_send = QPushButton(tr("toolbar.send"))
         self.btn_send.setProperty("cssClass", "send")
@@ -1362,6 +1364,28 @@ class MainWindow(QMainWindow):
         self.tabs.addTab(self._build_log_tab(), tr("tab.logs"))
         self.tabs.addTab(self._build_settings_tab(), tr("tab.settings"))
 
+        from PyQt6.QtCore import QSize, Qt
+        from PyQt6.QtWidgets import QStyle
+        self.tabs.setIconSize(QSize(18, 18))
+        self.tabs.setUsesScrollButtons(True)
+        self.tabs.tabBar().setExpanding(False)
+        self.tabs.setElideMode(Qt.TextElideMode.ElideNone)
+        for index, icon in enumerate((
+            QStyle.StandardPixmap.SP_ArrowForward,
+            QStyle.StandardPixmap.SP_DirHomeIcon,
+            QStyle.StandardPixmap.SP_FileIcon,
+            QStyle.StandardPixmap.SP_FileDialogContentsView,
+            QStyle.StandardPixmap.SP_FileDialogDetailedView,
+            QStyle.StandardPixmap.SP_MessageBoxInformation,
+            QStyle.StandardPixmap.SP_FileDialogListView,
+        )):
+            self.tabs.setTabIcon(index, self.style().standardIcon(icon))
+            # Replace inconsistent platform emoji with one consistent icon set.
+            text = self.tabs.tabText(index)
+            while text and not text[0].isalnum():
+                text = text[1:]
+            self.tabs.setTabText(index, text.strip())
+            self.tabs.setTabToolTip(index, text.strip())
         self._build_view_menu()
 
     def _build_view_menu(self) -> None:
@@ -7646,7 +7670,12 @@ class MainWindow(QMainWindow):
                     "Kunde inte återställa geometri: %s",
                     geometry, exc_info=True,
                 )
-        self.resize(1200, 820)
+        screen = self.screen()
+        area = screen.availableGeometry() if screen is not None else None
+        if area is not None:
+            self.resize(min(1440, int(area.width() * 0.92)), min(960, int(area.height() * 0.88)))
+        else:
+            self.resize(1200, 820)
 
     def _explorer(self, path: Any) -> None:
         resolved = str(Path(path).resolve())

@@ -1123,3 +1123,17 @@ bat-/python-start kan appen inte lova att förhindra från att först visas.
 Ingen Python installeras/uppgraderas, ingen separat miljö skapas.
 Visuell verifiering på användarens Windows behövs för att bekräfta att
 inget fönster blinkar till; skanning avser här startens system-/tilläggsprover.
+
+### Gemensam designuppdatering (bygg 2026102357)
+Hela appens gemensamma tema har fått en lugnare ljus bakgrund, enhetligare
+menyer/tabellrubriker/verktygstips och synlig tangentbordsfokus. Qt-paletten
+följer ljust/mörkt tema även i kontroller som inte ritas av stylesheet.
+En installerad systemfont väljs (Segoe UI Variable/Segoe UI på Windows,
+SF Pro/Helvetica på macOS, Noto/DejaVu på Linux), med 10,5 pt basfont.
+Inga nya fonter eller paket laddas ned. Huvudflikarna har Qt-ikoner i
+stället för blandade emojiglyfer och behåller fullständiga fliknamn med
+rullknappar. Verktygsraden radbryts efter tillgänglig bredd. Första
+fönsterstorleken anpassas till skärmen (max 1440×960 logiska pixlar);
+sparad geometri och befintligt skärm-/DPI-skydd finns kvar. Start är
+fortsatt minimerad/dold. Detta är en gemensam designgrund, inte en
+omskrivning av varje enskild specialdialogs lokala färger och ikoner.

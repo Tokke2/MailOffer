@@ -2961,3 +2961,9 @@ Användaren valde från redan-valda: tema-knapp (§34 #6) och tydligare
 - PowerShell-nativeprover och py.exe-upptäckt körs med explicit CreateNoWindow/Hidden och strömomdirigering.
 - VBS startar pythonw dolt; Pythonhjälpare använder CREATE_NO_WINDOW + STARTUPINFO/SW_HIDE.
 - Minimerad/dold startpolicy bevaras, även gamla start_minimized=false. Version 1.0.0, bygg 2026102356.
+
+### V7.63 – gemensam typografi, tema, ikoner och skärmbredd
+- Installerad plattformsfont, 10,5 pt basfont, synkroniserad Qt-palett och QSS för ljust/mörkt.
+- Lugnare bakgrund, tabellrubriker, menyer och verktygstips. Huvudflikar med Qt-ikoner och hela namn.
+- Radbrytande verktygsrad, 760×540 minsta önskad storlek, skärmanpassad första geometri och fortsatt globalt DPI/skärmskydd.
+- Minimerad start oförändrad. Version 1.0.0, bygg 2026102357.

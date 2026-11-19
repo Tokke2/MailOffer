@@ -45,6 +45,7 @@ from typing import Any, Dict, Literal, Optional, cast
 
 # third-party
 from PyQt6.QtWidgets import QApplication
+from PyQt6.QtGui import QFont, QFontDatabase, QPalette, QColor
 
 # optional third-party
 try:
@@ -166,16 +167,16 @@ DARK_COLORS: Dict[str, str] = {
 
 LIGHT_COLORS: Dict[str, str] = {
     # Bas
-    "background": "#F6F8FF",
+    "background": "#F4F6FA",
     "surface": "#FFFFFF",
-    "surface_alt": "#EEF4FF",
-    "bg_secondary": "#EDF2FF",
-    "panel_bg": "#E6EEFF",
+    "surface_alt": "#EDF1F7",
+    "bg_secondary": "#EDF1F7",
+    "panel_bg": "#E7ECF4",
     "card_bg": "#FFFFFF",
     "card_hover": "#F0F7FF",
     "input_bg": "#FFFFFF",
     # Alias
-    "bg": "#F6F8FF",
+    "bg": "#F4F6FA",
     "fg": "#101827",
     "entry_bg": "#FFFFFF",
     "entry_fg": "#101827",
@@ -263,14 +264,40 @@ _qss_cache: Dict[str, str] = {}
 # QSS-GENERERING
 # ═══════════════════════════════════════════════════════════════════════════
 
+def preferred_ui_font() -> str:
+    """Use an installed, readable UI family without downloading fonts."""
+    candidates = {
+        'win32': ('Segoe UI Variable', 'Segoe UI', 'Arial'),
+        'darwin': ('SF Pro Text', '.AppleSystemUIFont', 'Helvetica Neue'),
+    }.get(sys.platform, ('Noto Sans', 'DejaVu Sans', 'Liberation Sans'))
+    if QApplication.instance() is not None:
+        installed = set(QFontDatabase.families())
+        return next((family for family in candidates if family in installed), QApplication.font().family())
+    return candidates[0]
+
+
+def apply_ui_palette(app, colors):
+    """Keep native popups, disabled controls and selection in the same theme."""
+    palette = QPalette()
+    roles = {
+        'Window': 'background', 'WindowText': 'text', 'Base': 'input_bg',
+        'AlternateBase': 'surface_alt', 'Text': 'text', 'Button': 'surface',
+        'ButtonText': 'text', 'Highlight': 'accent', 'HighlightedText': 'inverse_text',
+        'ToolTipBase': 'surface', 'ToolTipText': 'text', 'Link': 'accent',
+    }
+    for role, key in roles.items():
+        palette.setColor(getattr(QPalette.ColorRole, role), QColor(colors[key]))
+    for role in (QPalette.ColorRole.Text, QPalette.ColorRole.WindowText, QPalette.ColorRole.ButtonText):
+        palette.setColor(QPalette.ColorGroup.Disabled, role, QColor(colors['disabled_fg']))
+    app.setPalette(palette)
+    font = QFont(preferred_ui_font())
+    font.setPointSizeF(10.5)
+    app.setFont(font)
+
+
 def build_qss(c: Dict[str, str]) -> str:
     """Bygg komplett QSS stylesheet från färgpalett."""
-    if sys.platform == "win32":
-        font = "Segoe UI"
-    elif sys.platform == "darwin":
-        font = "SF Pro Text"
-    else:
-        font = "Helvetica"
+    font = preferred_ui_font()
 
     return f"""
     /* ══════════════════════════════════════════════
@@ -280,7 +307,7 @@ def build_qss(c: Dict[str, str]) -> str:
         background-color: {c['background']};
         color: {c['text']};
         font-family: "{font}", "Segoe UI", sans-serif;
-        font-size: 10pt;
+        font-size: 10.5pt;
     }}
 
     QWidget[cssClass="appRoot"] {{
@@ -1050,6 +1077,16 @@ def build_qss(c: Dict[str, str]) -> str:
         border-radius: 4px;
     }}
 
+    /* Shared visual rhythm and accessible keyboard focus. */
+    QLabel {{ background-color: transparent; }}
+    QMenu {{ padding: 6px; border: 1px solid {c['border']}; }}
+    QMenu::item {{ padding: 8px 24px; border-radius: 6px; }}
+    QMenu::item:selected {{ background: {c['accent']}; color: {c['inverse_text']}; }}
+    QHeaderView::section {{ background: {c['surface_alt']}; color: {c['text_secondary']}; padding: 10px 8px; border: none; border-bottom: 1px solid {c['border']}; }}
+    QTableView, QTreeView, QListView {{ alternate-background-color: {c['surface_alt']}; selection-background-color: {c['accent']}; selection-color: {c['inverse_text']}; }}
+    QToolTip {{ background: {c['surface']}; color: {c['text']}; border: 1px solid {c['border']}; padding: 8px; }}
+    QPushButton:focus, QLineEdit:focus, QComboBox:focus, QTextEdit:focus {{ border: 2px solid {c['accent']}; }}
+
     /* ══════════════════════════════════════════════
        SCROLL AREA
     ══════════════════════════════════════════════ */
@@ -1107,6 +1144,7 @@ class StyleEngine:
         if qapp is None:
             log.warning("apply(): ingen QApplication.")
             return
+        apply_ui_palette(cast(QApplication, qapp), self.get_colors())
         qss = get_cached_qss(self._mode)
         cast(QApplication, qapp).setStyleSheet(qss)
         log.debug("QSS applicerat (läge=%s).", self._mode)
