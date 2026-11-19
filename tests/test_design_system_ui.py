@@ -29,7 +29,11 @@ class DesignSystemTests(unittest.TestCase):
                 self.assertEqual(self.app.palette().color(QPalette.ColorRole.Window).name(), colors['background'].lower())
                 self.assertEqual(self.app.palette().color(QPalette.ColorRole.Text).name(), colors['text'].lower())
                 self.assertEqual(self.app.font().pointSizeF(), 10.5)
-                self.assertIn(preferred_ui_font(), QFontDatabase.families())
+                installed = QFontDatabase.families()
+                if installed:
+                    self.assertIn(preferred_ui_font(), installed)
+                else:
+                    self.assertEqual(preferred_ui_font(), self.app.font().family())
                 self.assertIn('QToolTip', self.app.styleSheet())
         finally:
             self.app.setPalette(old_palette)
