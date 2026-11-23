@@ -252,7 +252,8 @@ class DonateDialog(QDialog):
             from core.app_icon import get_app_icon
 
             icon = get_app_icon()
-            pixmap = icon.pixmap(84, 84) if icon is not None else QPixmap()
+            from PyQt6.QtCore import QSize
+            pixmap = icon.pixmap(QSize(84, 84), self.devicePixelRatioF()) if icon is not None else QPixmap()
             if not pixmap.isNull():
                 label.setPixmap(pixmap)
                 return label

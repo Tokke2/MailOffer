@@ -144,7 +144,7 @@ _diagnostics.info("STAGE: importing Qt")
 
 # Qt runtime-env måste sättas före QApplication skapas.
 os.environ.setdefault("QT_ENABLE_HIGHDPI_SCALING", "1")
-os.environ.setdefault("QT_AUTO_SCREEN_SCALE_FACTOR", "1")
+os.environ.setdefault("QT_SCALE_FACTOR_ROUNDING_POLICY", "PassThrough")
 
 # third-party
 from PyQt6.QtCore import QTimer
@@ -178,8 +178,13 @@ def setup_qt_runtime() -> None:
     SetProcessDpiAwarenessContext/SetProcessDpiAwareness/SetProcessDPIAware,
     eftersom de kan ge 'Åtkomst nekad' om DPI-context redan är satt.
     """
-    # Medvetet tom förutom env ovan. Behålls som krok för framtida Qt-runtime.
-    return
+    # Qt renders directly at the monitor scale (125/150/175%), no forced 96-DPI
+    # or Windows bitmap stretching. Preserve explicitly configured overrides.
+    if QApplication.instance() is None:
+        from PyQt6.QtCore import Qt
+        from PyQt6.QtGui import QGuiApplication
+        if os.environ.get('QT_SCALE_FACTOR_ROUNDING_POLICY') == 'PassThrough':
+            QGuiApplication.setHighDpiScaleFactorRoundingPolicy(Qt.HighDpiScaleFactorRoundingPolicy.PassThrough)
 
 
 def _find_pythonw() -> Optional[str]:

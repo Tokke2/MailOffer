@@ -55,3 +55,14 @@ class DesignSystemTests(unittest.TestCase):
             receiver._send.assert_called_once()
         finally:
             host.close()
+
+    def test_app_icon_renders_for_high_density_without_fixed_raster_scaling(self):
+        from PyQt6.QtCore import QSize
+        from core.app_icon import get_app_icon, clear_icon_cache
+        clear_icon_cache()
+        icon = get_app_icon()
+        for ratio in (1.0, 1.25, 1.5, 2.0):
+            pixmap = icon.pixmap(QSize(32, 32), ratio)
+            self.assertFalse(pixmap.isNull())
+            self.assertGreaterEqual(pixmap.width(), int(32 * ratio))
+            self.assertGreaterEqual(pixmap.devicePixelRatio(), ratio)

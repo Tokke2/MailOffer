@@ -83,9 +83,20 @@ def get_app_icon() -> object:
 
     icon: Optional[object] = None
 
-    # 1. PNG
+    # Vector source stays sharp at fractional DPI and on different monitors.
+    svg = project_root() / 'icons' / 'app_icon.svg'
+    if svg.is_file():
+        try:
+            from PyQt6.QtGui import QIcon
+            candidate = QIcon(str(svg))
+            if not candidate.isNull():
+                icon = candidate
+        except Exception:
+            log.debug('SVG icon unavailable; using raster fallback', exc_info=True)
+
+    # 1. PNG fallback
     png = icon_path()
-    if png is not None:
+    if icon is None and png is not None:
         try:
             from PyQt6.QtGui import QIcon
 

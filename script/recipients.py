@@ -1063,11 +1063,12 @@ class AddressBookDialog(QDialog):
         return get_colors("dark")
 
     def _build_ui(self) -> None:
+        from ui.responsive import WrapLayout
         layout = QVBoxLayout(self)
         layout.setSpacing(8)
         layout.setContentsMargins(12, 12, 12, 12)
 
-        top = QHBoxLayout()
+        top = WrapLayout()
         search_label = QLabel("🔍")
         search_label.setStyleSheet("font-size: 14pt;")
         top.addWidget(search_label)
@@ -1078,7 +1079,7 @@ class AddressBookDialog(QDialog):
         )
         self._search.setMinimumHeight(34)
         self._search.textChanged.connect(self._populate_contacts)
-        top.addWidget(self._search, stretch=1)
+        top.addWidget(self._search)
 
         top.addWidget(QLabel("Sortera:"))
         self._sort_cb = QComboBox()
@@ -1158,11 +1159,11 @@ class AddressBookDialog(QDialog):
         splitter.addWidget(self._right_stack)
         splitter.setStretchFactor(0, 0)
         splitter.setStretchFactor(1, 1)
-        layout.addWidget(splitter, stretch=1)
+        layout.addWidget(splitter)
 
-        info_row = QHBoxLayout()
+        info_row = WrapLayout()
         self._info_lbl = QLabel("")
-        info_row.addWidget(self._info_lbl, stretch=1)
+        info_row.addWidget(self._info_lbl)
 
         btn_all = QPushButton("☑ Markera alla")
         btn_all.clicked.connect(self._select_all)
@@ -1184,10 +1185,10 @@ class AddressBookDialog(QDialog):
         layout.addLayout(info_row)
 
         # (v5.5) Lägg till HELA kategorin/adressboken direkt i To/Bcc
-        group_row = QHBoxLayout()
+        group_row = WrapLayout()
         self._group_actions_label = QLabel("")
         self._group_actions_label.setStyleSheet("font-weight: bold;")
-        group_row.addWidget(self._group_actions_label, stretch=1)
+        group_row.addWidget(self._group_actions_label)
 
         self._btn_all_to = QPushButton("➕ Lägg till alla")
         self._btn_all_to.setProperty("cssClass", "accent")
@@ -1211,7 +1212,7 @@ class AddressBookDialog(QDialog):
         separator.setFrameShape(QFrame.Shape.HLine)
         layout.addWidget(separator)
 
-        button_bar = QHBoxLayout()
+        button_bar = WrapLayout()
         btn_cancel = QPushButton("❌ Avbryt")
         btn_cancel.setProperty("cssClass", "danger")
         btn_cancel.setMinimumHeight(38)

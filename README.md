@@ -1137,3 +1137,20 @@ fönsterstorleken anpassas till skärmen (max 1440×960 logiska pixlar);
 sparad geometri och befintligt skärm-/DPI-skydd finns kvar. Start är
 fortsatt minimerad/dold. Detta är en gemensam designgrund, inte en
 omskrivning av varje enskild specialdialogs lokala färger och ikoner.
+
+### Skärmanpassning och skärpa (bygg 2026102358)
+- SVG-originalet prioriteras som appikon (PNG/ICO/ritad ikon som reserv).
+  Donationsdialogens appikon begärs med skärmens devicePixelRatio.
+- Qt6 använder PassThrough för fraktionell DPI (125/150/175 %), utan
+  äldre automatisk skalningsflagga eller egna Windows-DPI-hack. Egna
+  miljööverstyrningar respekteras; Windows kompatibilitetsskalning kan
+  fortfarande göra programmet suddigt och ändras inte av appen.
+- Gemensamt skärmskydd reagerar även på font-/temabyte och ändrad DPI.
+  Formulärrader kan lägga etiketter ovanför fält när bredden inte räcker.
+- Adressbokens sök-, åtgärds- och knapprader radbryts; fullständiga texter
+  och mottagarflödet bevaras. Befintlig scrollreserv finns för stora dialoger.
+- 25 produktidéer finns i docs/25-produktforslag.md: inte implementerade,
+  inte påstått verifierade konkurrensluckor eller användarönskemål. Varje
+  idé har nytta, prioritetshypotes och konkret valideringssteg.
+Ingen mjukvaruändring kan lova skarp text om skärmens upplösning eller
+Windows externa bitmapskalning är fel. Visuell flerskärmskontroll återstår.

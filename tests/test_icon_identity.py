@@ -16,3 +16,10 @@ class IconIdentityTests(unittest.TestCase):
             self.assertTrue(set_windows_app_id())
         native.shell32.SetCurrentProcessExplicitAppUserModelID.assert_called_once_with(WINDOWS_APP_ID)
         self.assertNotIn('1.0.0', WINDOWS_APP_ID)
+
+    def test_qt_uses_fractional_monitor_scaling_not_legacy_auto_scaling(self):
+        from pathlib import Path
+        text = (Path(__file__).resolve().parents[1] / 'main.pyw').read_text(encoding='utf-8')
+        self.assertIn('HighDpiScaleFactorRoundingPolicy.PassThrough', text)
+        self.assertNotIn('setdefault("QT_AUTO_SCREEN_SCALE_FACTOR"', text)
+        self.assertNotIn('SetProcessDPIAware(', text)

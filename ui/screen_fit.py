@@ -5,7 +5,7 @@ from PyQt6.QtCore import QObject, QEvent, QTimer, QRect
 from PyQt6.QtGui import QGuiApplication, QCursor
 from PyQt6.QtWidgets import (
     QWidget, QDialog, QMainWindow, QWizard, QMessageBox,
-    QScrollArea, QVBoxLayout, QLayout,
+    QScrollArea, QVBoxLayout, QLayout, QFormLayout, QLabel,
 )
 
 
@@ -41,9 +41,24 @@ def _scroll_layout(widget):
     widget._screen_scroll = scroll
 
 
+def adapt_form_rows(window):
+    """Labels go above fields when necessary instead of forcing window width."""
+    for form in window.findChildren(QFormLayout):
+        if form.property("mailofferAdaptive"):
+            continue
+        form.setProperty("mailofferAdaptive", True)
+        form.setRowWrapPolicy(QFormLayout.RowWrapPolicy.WrapLongRows)
+        form.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.AllNonFixedFieldsGrow)
+        for row in range(form.rowCount()):
+            item = form.itemAt(row, QFormLayout.ItemRole.LabelRole)
+            if item is not None and isinstance(item.widget(), QLabel):
+                item.widget().setWordWrap(True)
+
+
 def fit_window(window, available=None):
     if not isinstance(window, (QDialog, QMainWindow)) or not window.isWindow():
         return
+    adapt_form_rows(window)
     if window.isMinimized() or window.isMaximized() or window.isFullScreen():
         return
     if available is None:
@@ -101,6 +116,7 @@ class ScreenFitController(QObject):
 
     def _screen_added(self, screen):
         screen.availableGeometryChanged.connect(lambda rect: self.refit_all())
+        screen.logicalDotsPerInchChanged.connect(lambda dpi: self.refit_all())
         self.refit_all()
 
     def refit_all(self):
@@ -127,7 +143,7 @@ class ScreenFitController(QObject):
         QTimer.singleShot(0, run)
 
     def eventFilter(self, watched, event):
-        if event.type() in (QEvent.Type.Show, QEvent.Type.Resize):
+        if event.type() in (QEvent.Type.Show, QEvent.Type.Resize, QEvent.Type.FontChange, QEvent.Type.StyleChange):
             self.schedule(watched)
         return False
 

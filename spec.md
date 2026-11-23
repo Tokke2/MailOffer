@@ -2967,3 +2967,9 @@ Användaren valde från redan-valda: tema-knapp (§34 #6) och tydligare
 - Lugnare bakgrund, tabellrubriker, menyer och verktygstips. Huvudflikar med Qt-ikoner och hela namn.
 - Radbrytande verktygsrad, 760×540 minsta önskad storlek, skärmanpassad första geometri och fortsatt globalt DPI/skärmskydd.
 - Minimerad start oförändrad. Version 1.0.0, bygg 2026102357.
+
+### V7.64 – adaptiva formulär, vektorikon och fraktionell DPI
+- SVG prioriteras för appikon, DPR-medveten donationsikon; PassThrough-DPI utan äldre automatisk skalningsflagga.
+- Formuläretiketter radbryts vid platsbrist; global skärmkontroll vid font-/tema-/DPI-byte. Adressbokens handlingsrader radbryts.
+- 25 dokumenterade produktförslag med validering, ej verifierade konkurrens-/efterfrågepåståenden och ej implementerade.
+- Version 1.0.0, bygg 2026102358.

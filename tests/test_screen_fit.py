@@ -81,3 +81,21 @@ class ScreenFitTests(unittest.TestCase):
     def test_install_idempotent(self):
         from ui.screen_fit import install_screen_fit
         self.assertIs(install_screen_fit(self.app), install_screen_fit(self.app))
+
+    def test_forms_reflow_labels_and_keep_fields(self):
+        from PyQt6.QtWidgets import QFormLayout, QLineEdit
+        from ui.screen_fit import adapt_form_rows
+        dialog = QDialog()
+        form = QFormLayout(dialog)
+        label = QLabel('A long descriptive label that needs room')
+        field = QLineEdit('Keep this value')
+        form.addRow(label, field)
+        try:
+            adapt_form_rows(dialog)
+            adapt_form_rows(dialog)
+            self.assertEqual(form.rowWrapPolicy(), QFormLayout.RowWrapPolicy.WrapLongRows)
+            self.assertTrue(label.wordWrap())
+            self.assertEqual(field.text(), 'Keep this value')
+            self.assertEqual(form.rowCount(), 1)
+        finally:
+            dialog.close()
