@@ -187,7 +187,11 @@ class NoVinCheckboxUiTests(unittest.TestCase):
         rec = RecoveryManager(bus)
 
         win = MainWindow(settings, bus, rec)
-        self.addCleanup(win.close)
+        def _cleanup_win() -> None:
+            win.close()
+            win.deleteLater()
+            self.app.processEvents()
+        self.addCleanup(_cleanup_win)
 
         win._scan_tpls()
         idx = win._tpl_combo.findText("en_test.docx")

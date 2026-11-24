@@ -14,6 +14,11 @@ except ImportError:
 
 
 class DonationLockTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        if QT:
+            cls.app = QApplication.instance() or QApplication([])
+
     def test_settings_cannot_redirect_funds(self):
         self.assertEqual(resolve_donation_links('https://example.com/steal', 'other'),
                          ('https://ko-fi.com/tokke2', 'https://paypal.me/Rickard3dPrint'))
@@ -31,7 +36,6 @@ class DonationLockTests(unittest.TestCase):
 
     @unittest.skipUnless(QT, 'Qt unavailable')
     def test_dialog_fixed_recipients_and_chosen_amount(self):
-        app = QApplication.instance() or QApplication([])
         dialog = DonateDialog(kofi_url='https://example.com/steal', paypal_url='other', swish_number='0701234567')
         try:
             self.assertEqual(dialog._swish_number, '0721817177')
@@ -59,6 +63,8 @@ class DonationLockTests(unittest.TestCase):
             self.assertEqual(dialog._swish_payload, 'C0721817177;;E-postofferten;6')
         finally:
             dialog.close()
+            dialog.deleteLater()
+            self.app.processEvents()
 
     @unittest.skipUnless(QT, 'Qt unavailable')
     def test_alternative_buttons_open_fixed_urls_directly(self):
