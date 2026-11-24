@@ -40,8 +40,6 @@ from __future__ import annotations
 
 # stdlib
 import logging
-import os
-from pathlib import Path
 import sys
 from typing import Any, Dict, Literal, Optional, cast
 
@@ -266,29 +264,14 @@ _qss_cache: Dict[str, str] = {}
 # QSS-GENERERING
 # ═══════════════════════════════════════════════════════════════════════════
 
-_offscreen_win_fonts_checked: bool = False
-
-
 def preferred_ui_font() -> str:
     """Use an installed, readable UI family without downloading fonts."""
-    global _offscreen_win_fonts_checked
     candidates = {
         'win32': ('Segoe UI Variable', 'Segoe UI', 'Arial'),
         'darwin': ('SF Pro Text', '.AppleSystemUIFont', 'Helvetica Neue'),
     }.get(sys.platform, ('Noto Sans', 'DejaVu Sans', 'Liberation Sans'))
     if QApplication.instance() is not None:
         families = list(QFontDatabase.families())
-        if not families and sys.platform == 'win32' and not _offscreen_win_fonts_checked:
-            _offscreen_win_fonts_checked = True
-            fonts_dir = Path(os.environ.get('WINDIR', r'C:\Windows')) / 'Fonts'
-            for ttf_name in ('segoeui.ttf', 'arial.ttf', 'tahoma.ttf'):
-                ttf_path = fonts_dir / ttf_name
-                if ttf_path.is_file():
-                    try:
-                        QFontDatabase.addApplicationFont(str(ttf_path))
-                    except Exception:
-                        pass
-            families = list(QFontDatabase.families())
         installed = set(families)
         for family in candidates:
             if family in installed:

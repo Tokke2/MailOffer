@@ -119,13 +119,7 @@ class DesignSystemTests(unittest.TestCase):
             window.close()
 
     def test_preferred_ui_font_handles_empty_and_custom_font_database(self):
-        import ui.styles as styles_mod
-        old_checked = styles_mod._offscreen_win_fonts_checked
-        try:
-            styles_mod._offscreen_win_fonts_checked = True
-            with mock.patch.object(QFontDatabase, 'families', return_value=[]):
-                self.assertEqual(preferred_ui_font(), self.app.font().family())
-            with mock.patch.object(QFontDatabase, 'families', return_value=['CustomSansOnly']):
-                self.assertEqual(preferred_ui_font(), 'CustomSansOnly')
-        finally:
-            styles_mod._offscreen_win_fonts_checked = old_checked
+        with mock.patch.object(QFontDatabase, 'families', return_value=[]):
+            self.assertEqual(preferred_ui_font(), self.app.font().family())
+        with mock.patch.object(QFontDatabase, 'families', return_value=['CustomSansOnly']):
+            self.assertEqual(preferred_ui_font(), 'CustomSansOnly')
