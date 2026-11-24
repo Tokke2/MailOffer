@@ -207,7 +207,7 @@ with mock.patch.object(QSystemTrayIcon, "isSystemTrayAvailable", return_value=Tr
     assert abs(win.geometry().x()) < 16000, f"bad x: {win.geometry().x()}"
     assert abs(win.geometry().y()) < 16000, f"bad y: {win.geometry().y()}"
 
-    tray = SystemTray(app, win, bus, settings)
+    tray = SystemTray(app=app, settings=settings, event_bus=bus, main_window=win)
     tray.setup()
     win.set_tray(tray)
 
