@@ -5,7 +5,7 @@ from PyQt6.QtCore import QObject, QEvent, QTimer, QRect
 from PyQt6.QtGui import QGuiApplication, QCursor
 from PyQt6.QtWidgets import (
     QWidget, QDialog, QMainWindow, QWizard, QMessageBox,
-    QScrollArea, QVBoxLayout, QLayout, QFormLayout, QLabel,
+    QScrollArea, QVBoxLayout, QLayout, QFormLayout, QLabel, QTableView,
 )
 
 
@@ -55,10 +55,27 @@ def adapt_form_rows(window):
                 item.widget().setWordWrap(True)
 
 
+def adapt_tables(window):
+    """Bound auto-measure work and retain manual resizing/horizontal scrolling."""
+    for table in window.findChildren(QTableView):
+        if table.property('mailofferReadableTable'):
+            continue
+        table.setProperty('mailofferReadableTable', True)
+        table.setAlternatingRowColors(True)
+        table.setWordWrap(False)
+        header = table.horizontalHeader()
+        header.setMinimumSectionSize(72)
+        header.setResizeContentsPrecision(200)
+        rows = table.verticalHeader()
+        rows.setMinimumSectionSize(28)
+        rows.setDefaultSectionSize(max(32, table.fontMetrics().height() + 14))
+
+
 def fit_window(window, available=None):
     if not isinstance(window, (QDialog, QMainWindow)) or not window.isWindow():
         return
     adapt_form_rows(window)
+    adapt_tables(window)
     if window.isMinimized() or window.isMaximized() or window.isFullScreen():
         return
     if available is None:
@@ -107,7 +124,7 @@ class ScreenFitController(QObject):
     def __init__(self, app):
         super().__init__(app)
         self.app = app
-        self._pending = set()
+        self._pending = weakref.WeakKeyDictionary()
         app.installEventFilter(self)
         app.screenAdded.connect(self._screen_added)
         app.screenRemoved.connect(lambda screen: self.refit_all())
@@ -128,10 +145,19 @@ class ScreenFitController(QObject):
         if not isinstance(window, (QDialog, QMainWindow)) or not window.isWindow():
             return
         if window in self._pending:
+            self._pending[window].start(60)
             return
-        self._pending.add(window)
+        timer = QTimer(self)
+        timer.setSingleShot(True)
+        self._pending[window] = timer
+        reference = weakref.ref(window)
         def run():
-            self._pending.discard(window)
+            target = reference()
+            timer.deleteLater()
+            if target is None:
+                return
+            self._pending.pop(target, None)
+            window = target
             try:
                 fit_window(window)
                 handle = window.windowHandle()
@@ -140,7 +166,8 @@ class ScreenFitController(QObject):
                     window._screen_fit_connected = True
             except RuntimeError:
                 pass  # transient dialog was deleted before the queued callback
-        QTimer.singleShot(0, run)
+        timer.timeout.connect(run)
+        timer.start(60)
 
     def eventFilter(self, watched, event):
         if event.type() in (QEvent.Type.Show, QEvent.Type.Resize, QEvent.Type.FontChange, QEvent.Type.StyleChange):

@@ -66,3 +66,54 @@ class DesignSystemTests(unittest.TestCase):
             self.assertFalse(pixmap.isNull())
             self.assertGreaterEqual(pixmap.width(), int(32 * ratio))
             self.assertGreaterEqual(pixmap.devicePixelRatio(), ratio)
+
+    def test_background_polling_slows_but_resumes_on_show(self):
+        from PyQt6.QtCore import QTimer
+        from ui.idle_polling import update_polling
+        window = QWidget()
+        window._contacts_poll = QTimer(window)
+        window._mail_images_timer = QTimer(window)
+        window._draft_timer = QTimer(window)
+        window._draft_timer.setInterval(2000)
+        try:
+            update_polling(window)
+            self.assertEqual(window._contacts_poll.interval(), 15000)
+            window.show()
+            update_polling(window)
+            self.assertEqual(window._contacts_poll.interval(), 2000)
+            self.assertEqual(window._mail_images_timer.interval(), 2000)
+            self.assertEqual(window._draft_timer.interval(), 2000)
+        finally:
+            window.close()
+
+    def test_avatar_cache_is_bounded_and_sharp(self):
+        from script.recipients import _make_avatar, _cached_avatar
+        from PyQt6.QtCore import QSize
+        _cached_avatar.cache_clear()
+        try:
+            for n in range(140):
+                self.assertFalse(_make_avatar(str(n), '#2563eb', 24).isNull())
+            self.assertLessEqual(_cached_avatar.cache_info().currsize, 128)
+            icon = _make_avatar('AB', '#2563eb', 24)
+            hits = _cached_avatar.cache_info().hits
+            _make_avatar('AB', '#2563eb', 24)
+            self.assertGreater(_cached_avatar.cache_info().hits, hits)
+            pixmap = icon.pixmap(QSize(24, 24), 2.0)
+            self.assertGreaterEqual(pixmap.width(), 48)
+        finally:
+            _cached_avatar.cache_clear()
+
+    def test_tables_have_readable_rows_and_bounded_measurement(self):
+        from PyQt6.QtWidgets import QTableWidget
+        from ui.screen_fit import adapt_tables
+        window = QWidget()
+        table = QTableWidget(2, 3, window)
+        table.setItem(0, 0, __import__('PyQt6.QtWidgets', fromlist=['QTableWidgetItem']).QTableWidgetItem('Preserved'))
+        try:
+            adapt_tables(window)
+            self.assertTrue(table.alternatingRowColors())
+            self.assertEqual(table.horizontalHeader().resizeContentsPrecision(), 200)
+            self.assertGreaterEqual(table.verticalHeader().defaultSectionSize(), 32)
+            self.assertEqual(table.item(0, 0).text(), 'Preserved')
+        finally:
+            window.close()

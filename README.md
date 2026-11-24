@@ -1154,3 +1154,23 @@ omskrivning av varje enskild specialdialogs lokala färger och ikoner.
   idé har nytta, prioritetshypotes och konkret valideringssteg.
 Ingen mjukvaruändring kan lova skarp text om skärmens upplösning eller
 Windows externa bitmapskalning är fel. Visuell flerskärmskontroll återstår.
+
+### Tydligare tabeller och mindre tomgångsarbete (bygg 2026102359)
+- Gemensam tabellanpassning ger alternerande rader, fontanpassad radhöjd,
+  minst 72 px kolumnbredd och avstängd radbrytning i celler. Manuell
+  kolumnjustering och horisontell rullning finns kvar; långa celler kan
+  fortfarande kräva bredare kolumn. Automatisk breddmätning begränsas till
+  200 rader i stället för Qt:s större standardurval.
+- Adressbokens initialikoner ritas i 1×/2×/3× och återanvänds från en
+  begränsad LRU-cache (128 kombinationer, inte obegränsad lagring).
+- Skärmanpassning samlar täta resize-/stil-/fonthändelser med 60 ms paus,
+  svaga fönsterreferenser och borttagna engångstimers.
+- Kontakt-/bildimportpollning går från 2 till 15 sekunder när appen är
+  dold/minimerad och återgår vid öppning. Utkastets autosparande, utskick,
+  säkerhetskopiering och uppdateringar stoppas inte. Dold kontaktuppdatering
+  kan därmed dröja längre. Daglig cacherensning kontrolleras var tionde
+  minut i stället för varje minut, fortfarande med separat dygnsgrind.
+Detta minskar vissa beräkningar/väckningar; ingen procentuell RAM-, CPU-,
+energi- eller hastighetsvinst utlovas utan mätning på användarens dator.
+25 produktidéer med validering finns fortsatt i docs/25-produktforslag.md;
+de är inte verifierade konkurrensluckor och har inte implementerats här.

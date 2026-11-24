@@ -1116,7 +1116,8 @@ class MainWindow(QMainWindow):
         self._update_schedule.start(60_000)
         self._cache_cleanup_timer = QTimer(self)
         self._cache_cleanup_timer.timeout.connect(self._run_cache_cleanup)
-        self._cache_cleanup_timer.start(60_000)
+        self._cache_cleanup_timer.setTimerType(Qt.TimerType.VeryCoarseTimer)
+        self._cache_cleanup_timer.start(600_000)
         QTimer.singleShot(8000, self._run_cache_cleanup)
         self._restore_update_session()
         self._setup_draft_autosave()
@@ -1131,6 +1132,8 @@ class MainWindow(QMainWindow):
         self._mail_images_timer = QTimer(self)
         self._mail_images_timer.timeout.connect(self._poll_mail_images)
         self._mail_images_timer.start(2000)
+        from ui.idle_polling import install_idle_polling
+        install_idle_polling(self)
 
         # (v5.5) Muskjulsskydd – idempotent (main.pyw installerar normalt)
         try:

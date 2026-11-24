@@ -2973,3 +2973,9 @@ Användaren valde från redan-valda: tema-knapp (§34 #6) och tydligare
 - Formuläretiketter radbryts vid platsbrist; global skärmkontroll vid font-/tema-/DPI-byte. Adressbokens handlingsrader radbryts.
 - 25 dokumenterade produktförslag med validering, ej verifierade konkurrens-/efterfrågepåståenden och ej implementerade.
 - Version 1.0.0, bygg 2026102358.
+
+### V7.65 – tydliga tabeller, skarpa avatarer och mindre tomgångsarbete
+- Läsbara tabellrader/kolumner och begränsad auto-breddmätning; befintlig data/manuell justering bevaras.
+- Adressboksavatarer 1×/2×/3× med 128-posters LRU-cache. Skärmkontroll debouncas 60 ms med svaga fönsterreferenser.
+- Dold kontakt-/bildpollning 15 s, synlig 2 s. Utkast och övriga tjänster oförändrade; cacherensningskontroll var 10:e minut.
+- Inga uppmätta prestanda-/energiprocent utlovas. Version 1.0.0, bygg 2026102359.

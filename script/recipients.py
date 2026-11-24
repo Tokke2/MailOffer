@@ -975,23 +975,40 @@ class AddContactDialog(QDialog):
 # Avatar-hjälpare
 # ═══════════════════════════════════════════════════════════════════════════
 
+from functools import lru_cache
+
+
 def _make_avatar(initials: str, color_hex: str, size: int = 32) -> QIcon:
-    """Skapa en rund avatar med initialer."""
-    pixmap = QPixmap(size, size)
-    pixmap.fill(QColor(0, 0, 0, 0))
-    painter = QPainter(pixmap)
-    painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-    painter.setBrush(QColor(color_hex))
-    painter.setPen(Qt.PenStyle.NoPen)
-    painter.drawEllipse(0, 0, size, size)
-    painter.setPen(QColor("#FFFFFF"))
-    font = QFont()
-    font.setBold(True)
-    font.setPointSize(int(size * 0.4))
-    painter.setFont(font)
-    painter.drawText(pixmap.rect(), int(Qt.AlignmentFlag.AlignCenter), initials)
-    painter.end()
-    return QIcon(pixmap)
+    # Return an implicitly shared copy so callers cannot mutate the cache.
+    return QIcon(_cached_avatar(initials, color_hex, size))
+
+
+@lru_cache(maxsize=128)
+def _cached_avatar(initials: str, color_hex: str, size: int) -> QIcon:
+    """Bounded cache, native 1x/2x/3x representations for clear small text."""
+    icon = QIcon()
+    for ratio in (1, 2, 3):
+        pixmap = QPixmap(size * ratio, size * ratio)
+        pixmap.setDevicePixelRatio(ratio)
+        pixmap.fill(QColor(0, 0, 0, 0))
+        painter = QPainter(pixmap)
+        try:
+            painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+            painter.setRenderHint(QPainter.RenderHint.TextAntialiasing)
+            painter.setBrush(QColor(color_hex))
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.drawEllipse(0, 0, size, size)
+            painter.setPen(QColor('#FFFFFF'))
+            font = QFont()
+            font.setBold(True)
+            font.setPixelSize(max(10, int(size * 0.4)))
+            painter.setFont(font)
+            from PyQt6.QtCore import QRect
+            painter.drawText(QRect(0, 0, size, size), int(Qt.AlignmentFlag.AlignCenter), initials)
+        finally:
+            painter.end()
+        icon.addPixmap(pixmap)
+    return icon
 
 
 def _color_for_category(category: str, colors: Dict[str, str]) -> str:
