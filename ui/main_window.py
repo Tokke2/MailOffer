@@ -3129,7 +3129,7 @@ class MainWindow(QMainWindow):
                         "Kunde inte läsa placeholders direkt från mallfil",
                         exc_info=True,
                     )
-        if self._has_en_recipient() and "vin" not in seen:
+        if (keys or self._has_en_recipient()) and "vin" not in seen:
             add_key("vin")
         return keys
 

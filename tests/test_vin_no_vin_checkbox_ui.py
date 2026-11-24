@@ -1,7 +1,9 @@
 import os
+import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
@@ -19,7 +21,7 @@ try:
     from ui.main_window import MainWindow, vin_required_missing
 
     HAS_QT = True
-except ImportError:
+except Exception:
     HAS_QT = False
 
 
@@ -40,8 +42,9 @@ class NoVinPureLogicTests(unittest.TestCase):
         self.assertIn("Registration: ABC123", cleaned)
         self.assertIn("Glass: Windshield", cleaned)
 
-        # When VIN is actually provided, VIN line is preserved
-        with_vin = _strip_empty_vin_line("Hello!\nVIN: YV1ABCDEF12345678\nThanks", "YV1ABCDEF12345678")
+        with_vin = _strip_empty_vin_line(
+            "Hello!\nVIN: YV1ABCDEF12345678\nThanks", "YV1ABCDEF12345678"
+        )
         self.assertIn("YV1ABCDEF12345678", with_vin)
 
     def test_compose_draft_and_update_session_accept_no_vin_bool(self) -> None:
@@ -81,7 +84,6 @@ class NoVinPureLogicTests(unittest.TestCase):
 
     def test_dry_run_english_email_without_vin_omits_vin_line_cleanly(self) -> None:
         from email import message_from_string
-        from unittest import mock
         from docx import Document
         import core.email_sender as email_sender
 
@@ -103,8 +105,12 @@ class NoVinPureLogicTests(unittest.TestCase):
             doc.save(str(tpl))
 
             with (
-                mock.patch.object(email_sender, "connect_smtp", return_value=mock.MagicMock()),
-                mock.patch.object(email_sender, "send_with_retry", side_effect=fake_send_with_retry),
+                mock.patch.object(
+                    email_sender, "connect_smtp", return_value=mock.MagicMock()
+                ),
+                mock.patch.object(
+                    email_sender, "send_with_retry", side_effect=fake_send_with_retry
+                ),
                 mock.patch.object(email_sender, "close_smtp"),
             ):
                 res = send_email(
@@ -127,7 +133,9 @@ class NoVinPureLogicTests(unittest.TestCase):
         self.assertEqual(len(sent_messages), 1)
         parsed = message_from_string(sent_messages[0])
         decoded_parts = [
-            part.get_payload(decode=True).decode(part.get_content_charset() or "utf-8", errors="replace")
+            part.get_payload(decode=True).decode(
+                part.get_content_charset() or "utf-8", errors="replace"
+            )
             for part in parsed.walk()
             if part.get_content_type() in ("text/plain", "text/html")
         ]
@@ -138,123 +146,133 @@ class NoVinPureLogicTests(unittest.TestCase):
             self.assertIn("MLB87F", body_text)
 
 
-@unittest.skipUnless(HAS_QT, "PyQt6 krävs för UI-test av 'Har ej VIN'-kryssrutan")
+@unittest.skipUnless(HAS_QT, "PyQt6 saknas")
 class NoVinCheckboxUiTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
-        cls.app = QApplication.instance() or QApplication([])
+        cls.app = QApplication.instance() or QApplication(sys.argv[:1])
+
+    def setUp(self) -> None:
+        patcher = mock.patch(
+            "PyQt6.QtWidgets.QSystemTrayIcon.isSystemTrayAvailable",
+            return_value=True,
+        )
+        patcher.start()
+        self.addCleanup(patcher.stop)
 
     def test_no_vin_checkbox_for_english_recipients_and_log_tabs(self) -> None:
-        from unittest import mock
+        tmp = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
+        self.addCleanup(tmp.cleanup)
+        root = Path(tmp.name)
+        tpl_dir = root / "Mallar"
+        tpl_dir.mkdir(parents=True)
+        # Template intentionally WITHOUT explicit ::vin:: token to verify VIN + checkbox still appear for [EN]
+        tpl_path = tpl_dir / "en_test.docx"
+        create_template(
+            tpl_path,
+            "Förfrågan ::modell:: ::reg::",
+            "Hej!\nBil: ::modell::\nRegnr: ::reg::\nMed vänlig hälsning\nKundtjänst",
+            overwrite=True,
+        )
 
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            tpl_dir = root / "Mallar"
-            tpl_dir.mkdir(parents=True)
-            # Template intentionally WITHOUT explicit ::vin:: token to verify VIN + checkbox still appear for [EN]!
-            tpl_path = tpl_dir / "en_test.docx"
-            create_template(
-                tpl_path,
-                "Förfrågan ::modell:: ::reg::",
-                "Hej!\nBil: ::modell::\nRegnr: ::reg::\nMed vänlig hälsning\nKundtjänst",
-                overwrite=True,
+        with mock.patch.dict(os.environ, {"EMAILAPP_PORTABLE": "1"}):
+            settings = SettingsManager(root)
+        settings.update_from_dict(
+            {
+                "auto_update_check": False,
+                "language": "sv",
+                "close_to_tray": False,
+                "minimize_to_tray": False,
+                "template_dir": "Mallar",
+                "default_bcc": [],
+            }
+        )
+        bus = EventBus()
+        rec = RecoveryManager(bus)
+
+        base_patch = mock.patch.object(MainWindow, "_base_dir", return_value=root)
+        base_patch.start()
+        self.addCleanup(base_patch.stop)
+
+        win = MainWindow(settings, bus, rec)
+        self.addCleanup(win.close)
+
+        win._scan_tpls()
+        idx = win._tpl_combo.findText("en_test.docx")
+        self.assertGreaterEqual(idx, 0)
+        win._tpl_combo.setCurrentIndex(idx)
+        win._on_tpl_sel("en_test.docx")
+        self.app.processEvents()
+
+        # 1. With only [SV] recipient, VIN is not required and hidden
+        win._add_recipient("to", "svensk@example.com", show_warning=False, lang="sv")
+        self.app.processEvents()
+        self.assertFalse(win._has_en_recipient())
+        self.assertFalse(
+            vin_required_missing(win._get_ph(), False, win._is_no_vin_checked())
+        )
+
+        # 2. Add [EN] recipient -> VIN field + 'Har ej VIN' checkbox become active
+        win._add_recipient("to", "english@example.com", show_warning=False, lang="en")
+        self.app.processEvents()
+        self.assertTrue(win._has_en_recipient())
+        self.assertIsNotNone(win._no_vin_cb)
+        self.assertIsInstance(win._no_vin_cb, QCheckBox)
+        self.assertEqual(win._no_vin_cb.objectName(), "noVinCheckbox")
+        self.assertEqual(win._no_vin_cb.text(), "Har ej VIN")
+        self.assertFalse(win._no_vin_cb.isChecked())
+
+        vin_widget = next(
+            w for k, w in win._ph_inputs.items() if k.lower() == "vin"
+        )
+        self.assertIsInstance(vin_widget, QLineEdit)
+        self.assertTrue(vin_widget.isEnabled())
+
+        # Empty VIN + unchecked 'Har ej VIN' -> missing VIN blocks send
+        params_blocked = win._gather_send_params()
+        self.assertTrue(
+            vin_required_missing(
+                params_blocked["replacements"],
+                params_blocked["include_english"],
+                params_blocked["no_vin"],
             )
+        )
 
-            with mock.patch.dict(os.environ, {"EMAILAPP_PORTABLE": "1"}):
-                settings = SettingsManager(root)
-            settings.update_from_dict(
-                {
-                    "auto_update_check": False,
-                    "language": "sv",
-                    "close_to_tray": False,
-                    "minimize_to_tray": False,
-                    "template_dir": "Mallar",
-                    "default_bcc": [],
-                }
+        # 3. Check 'Har ej VIN' -> VIN input disabled, send allowed, 'vin' not missing
+        win._no_vin_cb.setChecked(True)
+        self.app.processEvents()
+        self.assertTrue(win._is_no_vin_checked())
+        self.assertFalse(vin_widget.isEnabled())
+
+        params_ok = win._gather_send_params()
+        self.assertTrue(params_ok["no_vin"])
+        self.assertNotIn(
+            "vin", [k.lower() for k in params_ok["placeholders_missing"]]
+        )
+        self.assertFalse(
+            vin_required_missing(
+                params_ok["replacements"],
+                params_ok["include_english"],
+                params_ok["no_vin"],
             )
-            bus = EventBus()
-            rec = RecoveryManager(bus)
-            with mock.patch.object(MainWindow, "_base_dir", return_value=root):
-                win = MainWindow(settings, bus, rec)
-                try:
-                    win._scan_tpls()
-                    idx = win._tpl_combo.findText("en_test.docx")
-                    self.assertGreaterEqual(idx, 0)
-                    win._tpl_combo.setCurrentIndex(idx)
-                    win._on_tpl_sel("en_test.docx")
-                    self.app.processEvents()
+        )
 
-                    # 1. With only [SV] recipient, VIN is not required and hidden
-                    win._add_recipient("to", "svensk@example.com", show_warning=False, lang="sv")
-                    self.app.processEvents()
-                    self.assertFalse(win._has_en_recipient())
-                    self.assertFalse(
-                        vin_required_missing(win._get_ph(), False, win._is_no_vin_checked())
-                    )
+        # Draft snapshot preserves no_vin=True
+        snap = win._draft_snapshot()
+        self.assertIs(snap["no_vin"], True)
 
-                    # 2. Add [EN] recipient -> VIN field + 'Har ej VIN' checkbox appear!
-                    win._add_recipient("to", "english@example.com", show_warning=False, lang="en")
-                    self.app.processEvents()
-                    self.assertTrue(win._has_en_recipient())
-                    self.assertIsNotNone(win._no_vin_cb)
-                    self.assertIsInstance(win._no_vin_cb, QCheckBox)
-                    self.assertEqual(win._no_vin_cb.objectName(), "noVinCheckbox")
-                    self.assertEqual(win._no_vin_cb.text(), "Har ej VIN")
-                    self.assertFalse(win._no_vin_cb.isChecked())
+        # Reset after send unchecks 'Har ej VIN' and re-enables VIN field
+        win._reset_form_after_send()
+        self.app.processEvents()
+        self.assertFalse(win._is_no_vin_checked())
 
-                    vin_widget = next(
-                        w for k, w in win._ph_inputs.items() if k.lower() == "vin"
-                    )
-                    self.assertIsInstance(vin_widget, QLineEdit)
-                    self.assertTrue(vin_widget.isEnabled())
-
-                    # Empty VIN + unchecked 'Har ej VIN' -> missing VIN blocks send
-                    params_blocked = win._gather_send_params()
-                    self.assertTrue(
-                        vin_required_missing(
-                            params_blocked["replacements"],
-                            params_blocked["include_english"],
-                            params_blocked["no_vin"],
-                        )
-                    )
-
-                    # 3. Check 'Har ej VIN' -> VIN input disabled, send allowed, 'vin' not missing!
-                    win._no_vin_cb.setChecked(True)
-                    self.app.processEvents()
-                    self.assertTrue(win._is_no_vin_checked())
-                    self.assertFalse(vin_widget.isEnabled())
-
-                    params_ok = win._gather_send_params()
-                    self.assertTrue(params_ok["no_vin"])
-                    self.assertNotIn(
-                        "vin", [k.lower() for k in params_ok["placeholders_missing"]]
-                    )
-                    self.assertFalse(
-                        vin_required_missing(
-                            params_ok["replacements"],
-                            params_ok["include_english"],
-                            params_ok["no_vin"],
-                        )
-                    )
-
-                    # Draft snapshot preserves no_vin=True
-                    snap = win._draft_snapshot()
-                    self.assertIs(snap["no_vin"], True)
-
-                    # Reset after send unchecks 'Har ej VIN' and re-enables VIN field
-                    win._reset_form_after_send()
-                    self.app.processEvents()
-                    self.assertFalse(win._is_no_vin_checked())
-
-                    # Verify Loggar tab mode buttons exist and switch cleanly
-                    self.assertTrue(hasattr(win, "_log_mode_today_btn"))
-                    self.assertTrue(hasattr(win, "_log_mode_errors_btn"))
-                    win._set_log_view_mode("errors")
-                    self.assertEqual(win._log_view_mode, "errors")
-                    win._set_log_view_mode("today")
-                    self.assertEqual(win._log_view_mode, "today")
-                finally:
-                    win.close()
+        # Verify Loggar tab mode buttons exist and switch cleanly
+        self.assertTrue(hasattr(win, "_log_mode_today_btn"))
+        self.assertTrue(hasattr(win, "_log_mode_errors_btn"))
+        win._set_log_view_mode("errors")
+        self.assertEqual(win._log_view_mode, "errors")
+        win._set_log_view_mode("today")
+        self.assertEqual(win._log_view_mode, "today")
 
 
 if __name__ == "__main__":
