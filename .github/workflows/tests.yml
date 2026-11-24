@@ -136,11 +136,18 @@ jobs:
         run: |
           $env:QT_QPA_PLATFORM = 'offscreen'
           python tools/run_windows_tests.py test_mouse_navigation.py
-      - name: Testa systemfältets minimera och stäng
+      - name: Testa systemfältets minimera, stäng och Visa fönster (Win32 SW_HIDE)
         run: |
           $env:QT_QPA_PLATFORM = 'offscreen'
           python tools/run_windows_tests.py test_minimize_to_tray_ui.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python tools/run_windows_tests.py test_tray_close_safety.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Remove-Item Env:QT_QPA_PLATFORM -ErrorAction SilentlyContinue
+          python tools/run_windows_tests.py test_tray_show_sw_hide.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python tools/run_windows_tests.py test_placeholder_translation_safety.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Testa tre dagsloggar och gemensam startlogg
         shell: powershell
         run: |

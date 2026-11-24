@@ -388,6 +388,16 @@ class SystemTray:
         act_quit = self._menu.addAction("❌ Avsluta helt")
         act_quit.triggered.connect(self._do_quit)
 
+        # Håll starka Python-referenser så att PyQt6 aldrig kan frigöra QAction-wrappers
+        self._menu_actions = (
+            act_show,
+            act_hide,
+            act_settings,
+            act_updates,
+            act_smtp,
+            act_quit,
+        )
+
     # ─────────────────────────────────────────────────────────────────
     # SLOTS (körs i Qt main thread)
     # ─────────────────────────────────────────────────────────────────
@@ -493,46 +503,64 @@ class SystemTray:
     def _on_activated(
         self, reason: QSystemTrayIcon.ActivationReason
     ) -> None:
-        """Klick på tray-ikon → visa fönster (v4.4: även dubbelklick)."""
+        """Klick på tray-ikon → visa fönster (v4.4: även dubbelklick/mittenklick)."""
         if reason in (
             QSystemTrayIcon.ActivationReason.Trigger,
             QSystemTrayIcon.ActivationReason.DoubleClick,
+            QSystemTrayIcon.ActivationReason.MiddleClick,
         ):
             self._do_show()
 
-    def _do_show(self) -> None:
-        """Visa och fokusera huvudfönster."""
+    def _do_show(self, _checked: bool = False) -> None:
+        """Visa, avminimera och fokusera huvudfönster (även vid SW_HIDE-start)."""
+        del _checked
         try:
+            from core.window_focus import present_window
+
             main_window = self._main_window
-            if hasattr(main_window, "show"):
-                main_window.show()
-            if hasattr(main_window, "raise_"):
-                main_window.raise_()
-            if hasattr(main_window, "activateWindow"):
-                main_window.activateWindow()
-            self._bus.publish("ui.window_shown", {})
+            present_window(main_window)
+            # På Windows 10/11 stängs tray-popupmenyn (WM_EXITMENULOOP) strax efter
+            # triggered-signalen, varpå explorer.exe kan försöka återta fokus.
+            # En kort uppföljning säkerställer synlighet + förgrundsfokus.
+            try:
+                from PyQt6.QtCore import QTimer as _QtTimer
+                from PyQt6.QtWidgets import QWidget as _QtWidget
+
+                if isinstance(main_window, _QtWidget):
+                    _QtTimer.singleShot(
+                        50, lambda w=main_window: present_window(w)
+                    )
+            except Exception:
+                pass
+            if not getattr(main_window, "_publishes_window_shown", False):
+                self._bus.publish("ui.window_shown", {})
         except Exception:
             log.error("_do_show misslyckades", exc_info=True)
 
-    def _do_hide(self) -> None:
+    def _do_hide(self, _checked: bool = False) -> None:
         """Dölj huvudfönster."""
+        del _checked
         try:
-            if hasattr(self._main_window, "hide"):
-                self._main_window.hide()
-            self._bus.publish("ui.window_hidden", {})
+            main_window = self._main_window
+            if hasattr(main_window, "hide"):
+                main_window.hide()
+            if not getattr(main_window, "_publishes_window_shown", False):
+                self._bus.publish("ui.window_hidden", {})
         except Exception:
             log.error("_do_hide misslyckades", exc_info=True)
 
-    def _do_check_updates(self) -> None:
+    def _do_check_updates(self, _checked: bool = False) -> None:
         """Manual release check, with visible results even from a hidden window."""
+        del _checked
         try:
             self._do_show()
             self._main_window._check_updates(manual=True)
         except Exception:
             log.exception("Kunde inte söka efter uppdateringar från systemfältet")
 
-    def _do_open_settings(self) -> None:
+    def _do_open_settings(self, _checked: bool = False) -> None:
         """Visa inställningsfliken."""
+        del _checked
         try:
             self._do_show()
             if hasattr(self._main_window, "select_tab"):
@@ -540,8 +568,9 @@ class SystemTray:
         except Exception:
             log.error("_do_open_settings misslyckades", exc_info=True)
 
-    def _do_test_smtp(self) -> None:
+    def _do_test_smtp(self, _checked: bool = False) -> None:
         """Testa SMTP i bakgrundstråd och rapportera via tray."""
+        del _checked
         self._do_show()
         if hasattr(self._main_window, "select_tab"):
             self._main_window.select_tab("Inställningar")
@@ -574,12 +603,13 @@ class SystemTray:
 
         threading.Thread(target=_test, daemon=True, name="SMTPTestThread").start()
 
-    def _do_quit(self) -> None:
+    def _do_quit(self, _checked: bool = False) -> None:
         """Full shutdown via tray.
 
         main.pyw bör fortfarande ansvara för slutlig save/cache/bus-cleanup i
         sin finally-sektion. Här publiceras shutdown och appen stängs.
         """
+        del _checked
         try:
             log.info("Avsluta via tray-meny.")
             try:

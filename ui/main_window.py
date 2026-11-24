@@ -577,24 +577,36 @@ _NO_TRANSLATE_PLACEHOLDERS = {
 # Översättningshjälpare
 # ═══════════════════════════════════════════════════════════════════════════
 
+_UI_TRANSLATE_CACHE: Dict[str, str] = {}
+_UI_TRANSLATE_CACHE_MAX = 256
+
+
 def _translate(text: str) -> str:
-    """sv→en med fallback-kedja."""
-    if not text.strip():
+    """sv→en med minnescache och fallback-kedja."""
+    stripped = text.strip()
+    if not stripped:
         return text
+    cached = _UI_TRANSLATE_CACHE.get(stripped)
+    if cached is not None:
+        return cached
     for module_name in ("deep_translator", "googletrans"):
         try:
             if module_name == "deep_translator":
                 from deep_translator import GoogleTranslator  # type: ignore
                 result = GoogleTranslator(
                     source="sv", target="en"
-                ).translate(text)
+                ).translate(stripped)
             else:
                 from googletrans import Translator  # type: ignore
                 result = Translator().translate(
-                    text, src="sv", dest="en"
+                    stripped, src="sv", dest="en"
                 ).text
             if result:
-                return str(result)
+                clean = str(result)
+                if len(_UI_TRANSLATE_CACHE) >= _UI_TRANSLATE_CACHE_MAX:
+                    _UI_TRANSLATE_CACHE.pop(next(iter(_UI_TRANSLATE_CACHE)), None)
+                _UI_TRANSLATE_CACHE[stripped] = clean
+                return clean
         except ImportError:
             continue
         except Exception:
@@ -617,7 +629,14 @@ def _translate_placeholder_value(key: str, value: object) -> str:
         return mapped
     if key_l in {"modell", "model", "name", "namn", "company", "företag"}:
         return text
-    return _translate(text)
+    try:
+        from core.email_sender import _translate_placeholder_values
+
+        return _translate_placeholder_values({str(key): text}, True, True).get(
+            str(key), text
+        )
+    except Exception:
+        return _translate(text)
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -833,10 +852,12 @@ class SendWorker(QThread):
                 return
             include_english = bool(self.p.get("include_english", False))
             replacements_sv = dict(self.p.get("replacements", {}))
-            replacements_en = {
-                key: _translate_placeholder_value(str(key), value)
-                for key, value in replacements_sv.items()
-            }
+            explicit_replacements_en = self.p.get("replacements_en")
+            replacements_en = (
+                dict(explicit_replacements_en)
+                if isinstance(explicit_replacements_en, dict)
+                else None
+            )
 
             image_settings = {}
             getter = getattr(self.s, "image_compression_settings", None)
@@ -933,14 +954,15 @@ class SendWorker(QThread):
             # nycklar accepteras nu av core.email_sender.send_email()
             kwargs.update(image_settings)
 
-            try:
-                signature = inspect.signature(send_email)
-                if "replacements_en" in signature.parameters:
-                    kwargs["replacements_en"] = replacements_en
-                elif "english_replacements" in signature.parameters:
-                    kwargs["english_replacements"] = replacements_en
-            except Exception:
-                pass
+            if replacements_en is not None:
+                try:
+                    signature = inspect.signature(send_email)
+                    if "replacements_en" in signature.parameters:
+                        kwargs["replacements_en"] = replacements_en
+                    elif "english_replacements" in signature.parameters:
+                        kwargs["english_replacements"] = replacements_en
+                except Exception:
+                    pass
 
             from core.send_diagnostics import audit_dns
             self.progress.emit(0, 1, 'Kontrollerar avsändardomänens DNS (SPF/DMARC/DKIM)…')
@@ -7744,6 +7766,8 @@ class MainWindow(QMainWindow):
             self._base_dir() / str(self.settings.get("template_dir", "Mallar"))
         )
 
+    _publishes_window_shown = True
+
     def _restore_geo(self) -> None:
         from PyQt6.QtCore import QPoint, QRect
         from PyQt6.QtGui import QGuiApplication
@@ -7752,7 +7776,7 @@ class MainWindow(QMainWindow):
         geometry = str(self.settings.get("window_geometry", "") or "").strip()
         if geometry:
             match = re.fullmatch(
-                r"(\d+)x(\d+)(?:([+-]\d+)([+-]\d+))?", geometry
+                r"(\d+)x(\d+)(?:\+?([+-]\d+)\+?([+-]\d+))?", geometry
             )
             if match:
                 try:
@@ -7761,27 +7785,40 @@ class MainWindow(QMainWindow):
                     x_str, y_str = match.group(3), match.group(4)
                     if x_str is not None and y_str is not None:
                         x, y = int(x_str), int(y_str)
-                        candidate = QRect(x, y, w, h)
-                        screen = (
-                            QGuiApplication.screenAt(candidate.center())
-                            or self.screen()
-                            or QGuiApplication.primaryScreen()
-                        )
-                        if screen is not None:
-                            candidate = bounded_geometry(
-                                candidate, screen.availableGeometry()
+                        if abs(x) < 16000 and abs(y) < 16000:
+                            candidate = QRect(x, y, w, h)
+                            screen = (
+                                QGuiApplication.screenAt(candidate.center())
+                                or self.screen()
+                                or QGuiApplication.primaryScreen()
                             )
-                        self.resize(candidate.width(), candidate.height())
-                        self.move(candidate.topLeft())
-                    else:
+                            if screen is not None:
+                                candidate = bounded_geometry(
+                                    candidate, screen.availableGeometry()
+                                )
+                            self.resize(candidate.width(), candidate.height())
+                            self.move(candidate.topLeft())
+                            self._reflow_step2_attachments(self.width())
+                            return
+                        # Windows minimerad koordinat (-32000,-32000): behåll w/h men centrera
+                        x_str, y_str = None, None
+                    if x_str is None or y_str is None:
                         screen = self.screen() or QGuiApplication.primaryScreen()
                         if screen is not None:
                             area = screen.availableGeometry()
                             w = min(w, max(480, area.width() - 24))
                             h = min(h, max(360, area.height() - 24))
-                        self.resize(w, h)
-                    self._reflow_step2_attachments(self.width())
-                    return
+                            self.resize(w, h)
+                            self.move(
+                                QPoint(
+                                    area.x() + max(0, (area.width() - w) // 2),
+                                    area.y() + max(0, (area.height() - h) // 2),
+                                )
+                            )
+                        else:
+                            self.resize(w, h)
+                        self._reflow_step2_attachments(self.width())
+                        return
                 except Exception:
                     log.debug(
                         "Kunde inte återställa geometri: %s",
@@ -7803,6 +7840,17 @@ class MainWindow(QMainWindow):
             self.resize(1200, 820)
         self._reflow_step2_attachments(self.width())
 
+    def save_geometry(self) -> None:
+        """Spara giltig normalfönstergeometri (aldrig Windows -32000 minimerat läge)."""
+        geo = (
+            self.normalGeometry()
+            if (self.isMinimized() or self.isMaximized())
+            else self.geometry()
+        )
+        w, h, x, y = geo.width(), geo.height(), geo.x(), geo.y()
+        if w >= 320 and h >= 220 and abs(x) < 16000 and abs(y) < 16000:
+            self.settings.set("window_geometry", f"{w}x{h}{x:+d}{y:+d}")
+
     def resizeEvent(self, event: Any) -> None:  # noqa: N802
         super().resizeEvent(event)
         try:
@@ -7823,14 +7871,11 @@ class MainWindow(QMainWindow):
             log.warning("Kunde inte öppna: %s", resolved, exc_info=True)
 
     def show(self) -> None:  # type: ignore[override]
-        # show() ensamt återställer inte ett minimerat fönster –
-        # showNormal() krävs, annars "fastnar" fönstret i trayen.
-        if self.isMinimized():
-            super().showNormal()
-        else:
-            super().show()
-        self.raise_()
-        self.activateWindow()
+        # Synkronisera både Qt och Win32 HWND (tvingar fram SW_SHOWNORMAL/SW_RESTORE
+        # även när Starta EmailApp.vbs startat pythonw med SW_HIDE -> SW_SHOWDEFAULT).
+        from core.window_focus import ensure_qwidget_shown
+
+        ensure_qwidget_shown(self)
         self.bus.publish("ui.window_shown", {})
         # (v5.4) Uppdatering funnen medan appen låg i trayen? Fråga nu.
         if self._pending_update_info is not None:
@@ -7857,6 +7902,8 @@ class MainWindow(QMainWindow):
     def _minimize_to_tray(self) -> None:
         """Dölj minimerat fönster till trayen (körs uppskjutet)."""
         try:
+            if getattr(self, "_restoring_from_tray", False):
+                return
             if not self.isMinimized():
                 return  # användaren hann återställa fönstret
             if not bool(self.settings.get("minimize_to_tray", True)):
@@ -7874,6 +7921,7 @@ class MainWindow(QMainWindow):
             if (
                 event is not None
                 and event.type() == QEvent.Type.WindowStateChange
+                and not getattr(self, "_restoring_from_tray", False)
                 and self.isMinimized()
                 and bool(self.settings.get("minimize_to_tray", True))
                 and self._can_hide_to_tray()
@@ -7903,11 +7951,7 @@ class MainWindow(QMainWindow):
             except Exception:
                 log.warning("tray._do_quit() misslyckades", exc_info=True)
 
-        geo = self.geometry()
-        self.settings.set(
-            "window_geometry",
-            f"{geo.width()}x{geo.height()}+{geo.x()}+{geo.y()}",
-        )
+        self.save_geometry()
         self.bus.publish("app.shutdown", {"reason": "close"})
         event.accept()
 

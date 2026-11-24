@@ -198,6 +198,97 @@ GLASS_TYPE_MAP: Dict[str, str] = {
     "Vindruteglas (härdad)": "Windshield glass (tempered)",
 }
 
+_KNOWN_PLACEHOLDER_VALUE_MAP_LOWER: Dict[str, str] = {
+    **{k.lower(): v for k, v in GLASS_TYPE_MAP.items()},
+    "sidoruta": "Side window",
+    "taklucka": "Sunroof",
+    "panoramatak": "Panoramic roof",
+    "ja": "Yes",
+    "nej": "No",
+    "fram": "Front",
+    "bak": "Rear",
+    "vänster": "Left",
+    "höger": "Right",
+    "regnsensor": "Rain sensor",
+    "kamerafäste": "Camera bracket",
+    "head-up display": "Head-up display",
+    "värmeslingor": "Heated",
+    "akustikglas": "Acoustic glass",
+    "tonad": "Tinted",
+    "solskyddskant": "Sunshade band",
+}
+
+NO_TRANSLATE_PLACEHOLDER_KEYS = frozenset({
+    "reg",
+    "regnr",
+    "reg_nr",
+    "registreringsnummer",
+    "registration",
+    "license_plate",
+    "vin",
+    "chassi",
+    "chassinummer",
+    "chassis",
+    "modell",
+    "model",
+    "bilmodell",
+    "fabrikat",
+    "märke",
+    "marke",
+    "make",
+    "brand",
+    "namn",
+    "name",
+    "kund",
+    "customer",
+    "kontaktperson",
+    "foretag",
+    "företag",
+    "company",
+    "verkstad",
+    "email",
+    "e-post",
+    "epost",
+    "mail",
+    "telefon",
+    "tel",
+    "phone",
+    "mobil",
+    "mobile",
+    "order_id",
+    "ordernr",
+    "order_nr",
+    "ordernummer",
+    "fakturanr",
+    "kundnr",
+    "offertnr",
+    "skadenr",
+    "ärendenr",
+    "arendenr",
+    "artnr",
+    "art_nr",
+    "artikelnummer",
+    "part_number",
+    "oem",
+    "eurocode",
+    "glaskod",
+    "datum",
+    "date",
+    "tid",
+    "time",
+    "pris",
+    "price",
+    "belopp",
+    "amount",
+    "postnr",
+    "zip",
+    "url",
+    "link",
+})
+
+_PLACEHOLDER_TRANSLATION_CACHE: Dict[str, str] = {}
+_PLACEHOLDER_TRANSLATION_CACHE_MAX = 512
+
 HTML_TEMPLATE = """\
 <!DOCTYPE html>
 <html lang="sv">
@@ -349,6 +440,45 @@ ProgressCallback = Optional[Callable[[int, int, str], None]]
 # ═══════════════════════════════════════════════════════════════════════════
 # Hjälpfunktioner
 # ═══════════════════════════════════════════════════════════════════════════
+def _should_skip_placeholder_translation(key: str, value: str) -> bool:
+    """Returnera True om placeholder-nyckel eller värde ej ska maskinöversättas."""
+    stripped = (value or "").strip()
+    if not stripped:
+        return True
+    key_norm = str(key or "").strip().lower()
+    if key_norm in NO_TRANSLATE_PLACEHOLDER_KEYS:
+        return True
+    # Värden utan bokstäver (siffror, datum, priser, telefonnummer)
+    if not any(ch.isalpha() for ch in stripped):
+        return True
+    # E-postadresser och URL:er
+    low = stripped.lower()
+    if ("@" in stripped and " " not in stripped) or low.startswith(
+        ("http://", "https://", "www.")
+    ):
+        return True
+    # Alfanumeriska koder/ID:n utan mellanslag (t.ex. regnr JKH649, VIN KE201251209)
+    if " " not in stripped and any(ch.isdigit() for ch in stripped):
+        return True
+    # Korta versalkoder utan mellanslag som inte finns i känd ordlista
+    if (
+        " " not in stripped
+        and len(stripped) <= 20
+        and stripped == stripped.upper()
+        and low not in _KNOWN_PLACEHOLDER_VALUE_MAP_LOWER
+    ):
+        return True
+    return False
+
+
+def _cache_store_translation(source_text: str, translated_text: str) -> None:
+    if len(_PLACEHOLDER_TRANSLATION_CACHE) >= _PLACEHOLDER_TRANSLATION_CACHE_MAX:
+        # Enkel FIFO-trimning när cachen blir full
+        oldest_key = next(iter(_PLACEHOLDER_TRANSLATION_CACHE))
+        _PLACEHOLDER_TRANSLATION_CACHE.pop(oldest_key, None)
+    _PLACEHOLDER_TRANSLATION_CACHE[source_text] = translated_text
+
+
 def _translate_placeholder_values(
     replacements:       Dict[str, str],
     include_english:    bool,
@@ -358,9 +488,11 @@ def _translate_placeholder_values(
     Översätt placeholder-värden till engelska.
 
     Hybrid-modell:
-      - Kända värden (glastyper) → fast mappning (ögonblicklig)
-      - Okända värden → deep_translator (Google Translate gratis)
-      - Vid fel → ursprungsvärdet behålls
+      - Identifierare/koder (reg, vin, modell, ordernr, siffror m.fl.) → behålls alltid
+      - Kända värden (glastyper/verkstadstermer) → fast mappning (ögonblicklig)
+      - Cachade fraser → minnescache (inga upprepade HTTP-anrop)
+      - Övrig svensk fritext → deep_translator (batch-anrop via translate_batch)
+      - Vid fel / rate-limit → ursprungsvärdet behålls utan kaskadfel
 
     Args:
         replacements:     Dict med placeholder-nycklar och värden
@@ -376,46 +508,126 @@ def _translate_placeholder_values(
         return replacements
 
     translated: Dict[str, str] = {}
-    for key, value in replacements.items():
-        if not value:
+    pending_keys_by_text: Dict[str, List[str]] = {}
+
+    for key, raw_value in replacements.items():
+        if not raw_value:
+            translated[key] = raw_value
+            continue
+
+        value = str(raw_value)
+        stripped = value.strip()
+        if not stripped:
             translated[key] = value
             continue
 
-        # 1. Fast mappning för kända glastyper
-        if value in GLASS_TYPE_MAP:
-            translated[key] = GLASS_TYPE_MAP[value]
-            log.debug("Placeholder '%s': fast mappning '%s' → '%s'",
-                      key, value, translated[key])
+        # 1. Identifierare och koder (reg, vin, modell, e-post, nummer) ska aldrig översättas
+        if str(key or "").strip().lower() in NO_TRANSLATE_PLACEHOLDER_KEYS:
+            translated[key] = value
             continue
 
-        # 2. AI-översättning via deep_translator
+        # 2. Fast mappning för kända glastyper & verkstadstermer (skiftlägesokänslig)
+        exact_mapped = GLASS_TYPE_MAP.get(stripped) or _KNOWN_PLACEHOLDER_VALUE_MAP_LOWER.get(
+            stripped.lower()
+        )
+        if exact_mapped is not None:
+            translated[key] = exact_mapped
+            log.debug(
+                "Placeholder '%s': fast mappning '%s' → '%s'",
+                key, value, exact_mapped,
+            )
+            continue
+
+        # 3. Övriga koder/siffror/ID-strängar behålls oförändrade
+        if _should_skip_placeholder_translation(key, stripped):
+            translated[key] = value
+            continue
+
+        # 4. Minnescache
+        cached = _PLACEHOLDER_TRANSLATION_CACHE.get(stripped)
+        if cached is not None:
+            translated[key] = cached
+            continue
+
+        translated[key] = value
+        pending_keys_by_text.setdefault(stripped, []).append(key)
+
+    if not pending_keys_by_text:
+        return translated
+
+    unique_texts = list(pending_keys_by_text.keys())
+
+    # 5. AI-översättning via deep_translator (1 batch-anrop istället för N separata)
+    try:
+        from deep_translator import GoogleTranslator
+        _translator = GoogleTranslator(source="sv", target="en")
+    except ImportError:
+        log.warning(
+            "deep_translator saknas – %d placeholder-värde(n) behåller original",
+            len(unique_texts),
+        )
+        return translated
+    except Exception as exc:
+        log.warning(
+            "Kunde inte initiera översättare för placeholders: %s – behåller original",
+            exc,
+        )
+        return translated
+
+    resolved_by_text: Dict[str, str] = {}
+    batch_done = False
+
+    if len(unique_texts) > 1 and callable(getattr(_translator, "translate_batch", None)):
         try:
-            from deep_translator import GoogleTranslator
-            _translator = GoogleTranslator(source="sv", target="en")
-            result = _translator.translate(value)
-            if result and result.strip():
-                translated[key] = result.strip()
-                log.debug("Placeholder '%s': AI-översatt '%s' → '%s'",
-                          key, value, translated[key])
-            else:
-                translated[key] = value
-        except ImportError:
-            log.warning(
-                "deep_translator saknas – placeholder-värde '%s' "
-                "översätts ej (behåller original: '%s')",
-                key, value,
-            )
-            translated[key] = value
+            batch_result = _translator.translate_batch(unique_texts)
+            if isinstance(batch_result, list) and len(batch_result) == len(unique_texts):
+                for src_text, dst_text in zip(unique_texts, batch_result):
+                    clean = dst_text.strip() if isinstance(dst_text, str) and dst_text.strip() else src_text
+                    resolved_by_text[src_text] = clean
+                    if clean != src_text:
+                        _cache_store_translation(src_text, clean)
+                batch_done = True
         except Exception as exc:
-            log.warning(
-                "Kunde inte översätta placeholder '%s' (%s): %s – "
-                "behåller original",
-                key, value, exc,
-            )
-            translated[key] = value
+            msg_low = str(exc).lower()
+            if "too many requests" in msg_low or "429" in msg_low:
+                log.warning(
+                    "Översättningstjänsten begränsade anropstakten (rate limit) "
+                    "vid batch-översättning av %d fält – behåller originalvärden",
+                    len(unique_texts),
+                )
+                return translated
+            log.debug("translate_batch misslyckades (%s), provar styckvis fallback", exc)
 
-    log.info("Placeholder AI-översättning: %d fält bearbetade",
-             len(translated))
+    if not batch_done:
+        for src_text in unique_texts:
+            sample_key = pending_keys_by_text[src_text][0]
+            try:
+                result = _translator.translate(src_text)
+                if isinstance(result, str) and result.strip():
+                    clean = result.strip()
+                    resolved_by_text[src_text] = clean
+                    _cache_store_translation(src_text, clean)
+                else:
+                    resolved_by_text[src_text] = src_text
+            except Exception as exc:
+                log.warning(
+                    "Kunde inte översätta placeholder '%s' (%s): %s – "
+                    "behåller original",
+                    sample_key, src_text, exc,
+                )
+                msg_low = str(exc).lower()
+                if "too many requests" in msg_low or "429" in msg_low:
+                    break
+
+    for src_text, dst_text in resolved_by_text.items():
+        for key in pending_keys_by_text[src_text]:
+            translated[key] = dst_text
+            log.debug(
+                "Placeholder '%s': AI-översatt '%s' → '%s'",
+                key, src_text, dst_text,
+            )
+
+    log.info("Placeholder AI-översättning: %d fält bearbetade", len(translated))
     return translated
 
 
@@ -1298,6 +1510,7 @@ def send_email(
     # Språkgrupperade mottagare (v3.9) – e-post → "sv"/"en"
     recipients_to_lang:       Optional[Dict[str, str]] = None,
     recipients_bcc_lang:      Optional[Dict[str, str]] = None,
+    replacements_en:          Optional[Dict[str, str]] = None,
     # Progress
     on_progress:              ProgressCallback = None,
 ) -> SendResult:
@@ -1455,16 +1668,24 @@ def send_email(
 
     # ── Placeholder-uppsättningar per språk (v3.9) ─────────────────
     replacements_sv = dict(replacements)
-    replacements_en = dict(replacements)
-    if include_english and translate_placeholders and replacements:
-        replacements_en = _translate_placeholder_values(
-            replacements, True, translate_placeholders,
-        )
+    if replacements_en is not None:
+        resolved_en = dict(replacements_en)
         if en_to or en_bcc:
             result.had_translation = True
             result.had_placeholder_translation = True
-            log.debug("Placeholder-värden översatta: %d fält (EN)",
-                      len(replacements_en))
+    elif include_english and translate_placeholders and replacements and (en_to or en_bcc):
+        resolved_en = _translate_placeholder_values(
+            replacements, True, translate_placeholders,
+        )
+        result.had_translation = True
+        result.had_placeholder_translation = True
+        log.debug(
+            "Placeholder-värden översatta: %d fält (EN)",
+            len(resolved_en),
+        )
+    else:
+        resolved_en = dict(replacements)
+    replacements_en = resolved_en
 
     # ── Kommentar → platshållare ::kommentar:: ─────────────────────
     if comment:
@@ -1892,5 +2113,6 @@ __all__ = [
     "MAX_ATTACHMENT_SIZE_MB",
     "MAX_TOTAL_ATTACHMENTS_MB",
     "GLASS_TYPE_MAP",
+    "NO_TRANSLATE_PLACEHOLDER_KEYS",
     "_translate_placeholder_values",
 ]

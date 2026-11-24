@@ -392,10 +392,22 @@ def save_window_geometry(
 
     try:
         if hasattr(main_window, "geometry"):
-            geo = main_window.geometry()
-            geometry_str = f"{geo.width()}x{geo.height()}+{geo.x()}+{geo.y()}"
-            settings.set("window_geometry", geometry_str)
-            log.debug("Geometri sparad via geometry(): %s", geometry_str)
+            is_min = bool(
+                hasattr(main_window, "isMinimized") and main_window.isMinimized()
+            )
+            is_max = bool(
+                hasattr(main_window, "isMaximized") and main_window.isMaximized()
+            )
+            geo = (
+                main_window.normalGeometry()
+                if (is_min or is_max) and hasattr(main_window, "normalGeometry")
+                else main_window.geometry()
+            )
+            w, h, x, y = geo.width(), geo.height(), geo.x(), geo.y()
+            if w >= 320 and h >= 220 and abs(x) < 16000 and abs(y) < 16000:
+                geometry_str = f"{w}x{h}{x:+d}{y:+d}"
+                settings.set("window_geometry", geometry_str)
+                log.debug("Geometri sparad via geometry(): %s", geometry_str)
     except Exception as exc:
         log.debug("Kunde inte spara geometri via fallback: %s", exc)
 
