@@ -164,6 +164,7 @@ class NoVinCheckboxUiTests(unittest.TestCase):
         tmp = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
         self.addCleanup(tmp.cleanup)
         root = Path(tmp.name)
+        (root / ".portable").touch()
         tpl_dir = root / "Mallar"
         tpl_dir.mkdir(parents=True)
         # Template intentionally WITHOUT explicit ::vin:: token to verify VIN + checkbox still appear for [EN]
@@ -175,24 +176,15 @@ class NoVinCheckboxUiTests(unittest.TestCase):
             overwrite=True,
         )
 
-        with mock.patch.dict(os.environ, {"EMAILAPP_PORTABLE": "1"}):
-            settings = SettingsManager(root)
-        settings.update_from_dict(
-            {
-                "auto_update_check": False,
-                "language": "sv",
-                "close_to_tray": False,
-                "minimize_to_tray": False,
-                "template_dir": "Mallar",
-                "default_bcc": [],
-            }
-        )
+        settings = SettingsManager(root)
+        settings.set("auto_update_check", False)
+        settings.set("ui_language", "sv")
+        settings.set("close_to_tray", False)
+        settings.set("minimize_to_tray", False)
+        settings.set("template_dir", "Mallar")
+        settings.set("default_bcc", [])
         bus = EventBus()
         rec = RecoveryManager(bus)
-
-        base_patch = mock.patch.object(MainWindow, "_base_dir", return_value=root)
-        base_patch.start()
-        self.addCleanup(base_patch.stop)
 
         win = MainWindow(settings, bus, rec)
         self.addCleanup(win.close)

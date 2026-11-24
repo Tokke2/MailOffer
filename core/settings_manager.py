@@ -269,6 +269,7 @@ def get_defaults() -> Dict[str, Any]:
         # användaren kan alltid ändra i dropdown-menyn på Skicka-fliken
         "default_template": "",
         "include_english": False,
+        "no_vin_checked": False,
         "translate_placeholders": True,
         "replacements_values": {},
         "recent_files": [],
@@ -549,6 +550,7 @@ class SettingsManager:
 
         bool_fields = [
             "include_english",
+            "no_vin_checked",
             "autostart",
             "startup",
             "close_to_tray",
