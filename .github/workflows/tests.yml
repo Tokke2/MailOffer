@@ -117,22 +117,24 @@ jobs:
           python tools/run_windows_tests.py test_attachment_optimization.py
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python tools/run_windows_tests.py test_shutdown_collection.py
+      - name: Testa Har ej VIN-kryssruta för EN och loggvy
+        run: |
+          $env:QT_QPA_PLATFORM = 'windows'
+          python tools/run_windows_tests.py test_vin_no_vin_checkbox_ui.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python tools/run_windows_tests.py test_daily_log_and_auto_error_cleanup.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Testa låst stöddialog
         run: |
           $env:QT_QPA_PLATFORM = 'windows'
-          python tools/run_windows_tests.py test_donation_locked.py
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python tools/run_windows_tests.py test_design_system_ui.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python tools/run_windows_tests.py test_donation_locked.py
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           $env:QT_QPA_PLATFORM = 'offscreen'
           python tools/run_windows_tests.py test_screen_fit.py
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python tools/run_windows_tests.py test_branch_dpi_perf.py
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-      - name: Testa Har ej VIN-kryssruta för EN och loggvy
-        run: |
-          $env:QT_QPA_PLATFORM = 'windows'
-          python tools/run_windows_tests.py test_vin_no_vin_checkbox_ui.py
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Testa klickbar dropdowntext
         run: |
