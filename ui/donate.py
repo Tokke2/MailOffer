@@ -30,7 +30,7 @@ _PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(_PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(_PROJECT_ROOT))
 
-from PyQt6.QtCore import Qt, QUrl
+from PyQt6.QtCore import QEvent, Qt, QUrl
 from PyQt6.QtGui import QDesktopServices, QPixmap
 from PyQt6.QtWidgets import (
     QApplication,
@@ -69,25 +69,31 @@ def open_url_in_browser(url: str) -> bool:
         return False
 
 
-def swish_qr_pixmap(payload: str, size: int = 230) -> Optional[QPixmap]:
+def swish_qr_pixmap(
+    payload: str, size: int = 230, dpr: float = 1.0
+) -> Optional[QPixmap]:
     """Rita QR-kod för en Swish-payload. None om qrcode-paketet saknas."""
     if not payload:
         return None
     try:
         import qrcode  # type: ignore
 
-        # Whole-pixel modules and a four-module quiet zone: no interpolation.
+        ratio = max(1.0, float(dpr or 1.0))
+        target_px = max(1, int(round(size * ratio)))
+        # Whole physical-pixel modules and a four-module quiet zone: no interpolation.
         qr = qrcode.QRCode(border=4, box_size=1, error_correction=qrcode.constants.ERROR_CORRECT_M)
         qr.add_data(payload)
         qr.make(fit=True)
         modules = qr.modules_count + 8
-        qr.box_size = max(1, size // modules)
+        qr.box_size = max(1, target_px // modules)
         image = qr.make_image(fill_color='black', back_color='white')
         buffer = io.BytesIO()
         image.save(buffer, format="PNG")
         pixmap = QPixmap()
         if not pixmap.loadFromData(buffer.getvalue()):
             return None
+        if ratio != 1.0:
+            pixmap.setDevicePixelRatio(ratio)
         return pixmap
     except Exception:
         log.debug("Kunde inte rita Swish-QR (qrcode saknas?)", exc_info=True)
@@ -171,7 +177,8 @@ class DonateDialog(QDialog):
         layout.addWidget(_centered(QLabel('🔒 Fasta mottagare · Rickard Längkvist\nVälj Swish, Ko-fi eller PayPal. Granska och bekräfta alltid betalningen hos betaltjänsten.')))
         amounts = QGroupBox('Valfritt belopp – inga nivåer eller krav')
         amount_layout = QVBoxLayout(amounts)
-        chips = QHBoxLayout()
+        from ui.responsive import WrapLayout
+        chips = WrapLayout()
         self._amount = QSpinBox()
         self._amount.setRange(0, 99999)
         self._amount.setSpecialValueText('Välj hos betaltjänsten')
@@ -248,20 +255,29 @@ class DonateDialog(QDialog):
         """App-ikonen överst (samma som överallt annars i appen)."""
         label = QLabel()
         label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._header_icon_label = label
+        self._refresh_header_icon()
+        return label
+
+    def _refresh_header_icon(self) -> None:
+        label = getattr(self, "_header_icon_label", None)
+        if label is None:
+            return
         try:
             from core.app_icon import get_app_icon
+            from PyQt6.QtCore import QSize
 
             icon = get_app_icon()
-            from PyQt6.QtCore import QSize
-            pixmap = icon.pixmap(QSize(84, 84), self.devicePixelRatioF()) if icon is not None else QPixmap()
+            dpr = max(1.0, float(self.devicePixelRatioF() or 1.0))
+            pixmap = icon.pixmap(QSize(84, 84), dpr) if icon is not None else QPixmap()
             if not pixmap.isNull():
+                label.setStyleSheet("")
                 label.setPixmap(pixmap)
-                return label
+                return
         except Exception:
             log.debug("Kunde inte ladda app-ikonen till donationen", exc_info=True)
         label.setText("❤️☕")
         label.setStyleSheet("font-size: 40pt; background: transparent;")
-        return label
 
     def _link_row(self, caption, url, on_open, on_copy, css_class):
         row = QHBoxLayout()
@@ -297,12 +313,21 @@ class DonateDialog(QDialog):
             button.setChecked(amount == value)
         self._amount_info.setText(f'Valt: {value} kr – tack! 💚' if value else 'Valfritt belopp – välj hos betaltjänsten. Tack! 💚')
         self._swish_payload = build_swish_payload(DEFAULT_SWISH_NUMBER, amount=str(value) if value else '')
-        self._qr_pixmap = swish_qr_pixmap(self._swish_payload)
+        dpr = max(1.0, float(self.devicePixelRatioF() or 1.0))
+        self._qr_pixmap = swish_qr_pixmap(self._swish_payload, dpr=dpr)
         if self._qr_pixmap is not None and not self._qr_pixmap.isNull():
             self._swish_qr_label.setPixmap(self._qr_pixmap)
         else:
             self._swish_qr_label.clear()
             self._swish_qr_label.setText('QR-koden kunde inte skapas. Kontrollera tillägget qrcode. Inget Swish-nummer visas i klartext.')
+
+    def event(self, event: QEvent) -> bool:  # type: ignore[override]
+        result = super().event(event)
+        if event is not None and event.type() == QEvent.Type.ScreenChangeInternal:
+            self._refresh_header_icon()
+            if hasattr(self, "_amount"):
+                self._refresh_swish_qr()
+        return result
 
     def _why_group(self) -> QWidget:
         widget = QWidget()

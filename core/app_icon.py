@@ -173,8 +173,8 @@ _FALLBACK_SIZE = 256
 
 
 def _draw_fallback_icon() -> object:
-    """Rita en ren kuvertikon med QPainter (blå rund botten + vitt kuvert)."""
-    from PyQt6.QtCore import QPoint, QRectF, Qt
+    """Rita en ren kuvertikon med QPainter i flera HiDPI-storlekar."""
+    from PyQt6.QtCore import QPointF, QRectF, Qt
     from PyQt6.QtGui import (
         QColor,
         QIcon,
@@ -183,36 +183,43 @@ def _draw_fallback_icon() -> object:
         QPixmap,
     )
 
-    size = _FALLBACK_SIZE
-    pixmap = QPixmap(size, size)
-    pixmap.fill(QColor(0, 0, 0, 0))
+    icon = QIcon()
+    base = QColor("#2563EB")
+    for logical in (16, 24, 32, 48, 64, 128, _FALLBACK_SIZE):
+        for ratio in (1.0, 2.0):
+            px = max(1, int(round(logical * ratio)))
+            pixmap = QPixmap(px, px)
+            pixmap.setDevicePixelRatio(ratio)
+            pixmap.fill(QColor(0, 0, 0, 0))
 
-    painter = QPainter(pixmap)
-    painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+            painter = QPainter(pixmap)
+            painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+            try:
+                s = float(logical)
+                margin = max(1.0, s * 0.04)
+                outer = QRectF(margin, margin, s - margin * 2, s - margin * 2)
+                painter.setPen(QPen(QColor(255, 255, 255, 210), max(1.0, s * 0.03)))
+                painter.setBrush(base)
+                painter.drawEllipse(outer)
 
-    try:
-        base = QColor("#2563EB")
-        outer = QRectF(10, 10, size - 20, size - 20)
-        painter.setPen(QPen(QColor(255, 255, 255, 210), 8))
-        painter.setBrush(base)
-        painter.drawEllipse(outer)
+                env_x, env_y = s * 0.24, s * 0.34
+                env_w, env_h = s * 0.52, s * 0.35
+                env = QRectF(env_x, env_y, env_w, env_h)
+                painter.setPen(QPen(QColor(255, 255, 255, 245), max(1.0, s * 0.024)))
+                painter.setBrush(QColor(255, 255, 255, 245))
+                painter.drawRoundedRect(env, s * 0.055, s * 0.055)
 
-        env_x, env_y, env_w, env_h = 62, 88, 132, 90
-        env = QRectF(env_x, env_y, env_w, env_h)
-        painter.setPen(QPen(QColor(255, 255, 255, 245), 6))
-        painter.setBrush(QColor(255, 255, 255, 245))
-        painter.drawRoundedRect(env, 14, 14)
+                fold_pen = QPen(base.darker(125), max(1.2, s * 0.024))
+                fold_pen.setCapStyle(Qt.PenCapStyle.RoundCap)
+                painter.setPen(fold_pen)
+                mid = QPointF(env_x + env_w / 2.0, env_y + env_h / 2.0 + s * 0.03)
+                painter.drawLine(QPointF(env_x + s * 0.02, env_y + s * 0.05), mid)
+                painter.drawLine(QPointF(env_x + env_w - s * 0.02, env_y + s * 0.05), mid)
+            finally:
+                painter.end()
+            icon.addPixmap(pixmap)
 
-        fold_pen = QPen(base.darker(125), 6)
-        fold_pen.setCapStyle(Qt.PenCapStyle.RoundCap)
-        painter.setPen(fold_pen)
-        mid = QPoint(env_x + env_w // 2, env_y + env_h // 2 + 8)
-        painter.drawLine(QPoint(env_x + 5, env_y + 12), mid)
-        painter.drawLine(QPoint(env_x + env_w - 5, env_y + 12), mid)
-    finally:
-        painter.end()
-
-    return QIcon(pixmap)
+    return icon
 
 
 __all__ = [

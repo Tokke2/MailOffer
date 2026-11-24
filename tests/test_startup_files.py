@@ -161,12 +161,12 @@ class TestIcons(unittest.TestCase):
             from PIL import Image
         except ImportError:
             self.skipTest("Pillow saknas i testmiljön")
-        master = Image.open(ROOT / "icons" / "app_icon.png")
-        self.assertEqual(master.mode, "RGBA")
-        self.assertEqual(master.getpixel((0, 0))[3], 0)  # genomskinligt hörn
-        ico = Image.open(ROOT / "icons" / "app_icon.ico")
-        sizes = set(ico.info.get("sizes", set()))
-        self.assertTrue({(16, 16), (32, 32), (48, 48), (256, 256)} <= sizes)
+        with Image.open(ROOT / "icons" / "app_icon.png") as master:
+            self.assertEqual(master.mode, "RGBA")
+            self.assertEqual(master.getpixel((0, 0))[3], 0)  # genomskinligt hörn
+        with Image.open(ROOT / "icons" / "app_icon.ico") as ico:
+            sizes = set(ico.info.get("sizes", set()))
+            self.assertTrue({(16, 16), (32, 32), (48, 48), (256, 256)} <= sizes)
 
 
 if __name__ == "__main__":

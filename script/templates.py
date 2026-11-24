@@ -25,6 +25,7 @@ import logging
 import os
 import re
 from dataclasses import dataclass
+from functools import lru_cache
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
@@ -87,6 +88,7 @@ def _iter_placeholder_matches(text: str) -> List[str]:
     return keys
 
 
+@lru_cache(maxsize=256)
 def _build_key_regex(key: str) -> re.Pattern:
     """Bygg regex för EN placeholder-nyckel i alla tre format."""
     escaped = re.escape(key.strip())
@@ -499,6 +501,8 @@ def scan_templates_dir(
 
     names.sort()
     if use_cache:
+        if cache_key not in _scan_cache and len(_scan_cache) >= 32:
+            _scan_cache.pop(next(iter(_scan_cache)), None)
         _scan_cache[cache_key] = (_build_signature(directory), names)
     return names
 

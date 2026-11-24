@@ -1,11 +1,12 @@
 """Keep application windows reachable in Qt logical pixels (DPI-aware)."""
 import weakref
 
-from PyQt6.QtCore import QObject, QEvent, QTimer, QRect
+from PyQt6.QtCore import QObject, QEvent, QTimer, QRect, Qt
 from PyQt6.QtGui import QGuiApplication, QCursor
 from PyQt6.QtWidgets import (
-    QWidget, QDialog, QMainWindow, QWizard, QMessageBox,
-    QScrollArea, QVBoxLayout, QLayout, QFormLayout, QLabel, QTableView,
+    QAbstractItemView, QComboBox, QWidget, QDialog, QMainWindow, QWizard,
+    QMessageBox, QScrollArea, QVBoxLayout, QLayout, QFormLayout, QLabel,
+    QTableView, QTreeView,
 )
 
 
@@ -56,19 +57,63 @@ def adapt_form_rows(window):
 
 
 def adapt_tables(window):
-    """Bound auto-measure work and retain manual resizing/horizontal scrolling."""
+    """Bound auto-measure work, recalculate row/column metrics on DPI/font changes."""
     for table in window.findChildren(QTableView):
-        if table.property('mailofferReadableTable'):
+        if not table.property('mailofferReadableTable'):
+            table.setProperty('mailofferReadableTable', True)
+            table.setAlternatingRowColors(True)
+            table.setWordWrap(False)
+            table.setTextElideMode(Qt.TextElideMode.ElideRight)
+            table.setHorizontalScrollMode(QAbstractItemView.ScrollMode.ScrollPerPixel)
+            table.setVerticalScrollMode(QAbstractItemView.ScrollMode.ScrollPerPixel)
+            header = table.horizontalHeader()
+            header.setResizeContentsPrecision(200)
+        fm = table.fontMetrics()
+        font_h = fm.height()
+        if table.property('mailofferFontHeight') != font_h:
+            table.setProperty('mailofferFontHeight', font_h)
+            header = table.horizontalHeader()
+            header.setMinimumSectionSize(max(72, fm.horizontalAdvance('MMMMMM')))
+            rows = table.verticalHeader()
+            rows.setMinimumSectionSize(28)
+            rows.setDefaultSectionSize(max(32, font_h + 14))
+
+
+def adapt_trees(window):
+    """Uniform row heights, bounded header auto-measure and smooth HiDPI scrolling."""
+    for tree in window.findChildren(QTreeView):
+        if not tree.property('mailofferReadableTree'):
+            tree.setProperty('mailofferReadableTree', True)
+            tree.setAlternatingRowColors(True)
+            tree.setUniformRowHeights(True)
+            tree.setWordWrap(False)
+            tree.setTextElideMode(Qt.TextElideMode.ElideRight)
+            tree.setHorizontalScrollMode(QAbstractItemView.ScrollMode.ScrollPerPixel)
+            tree.setVerticalScrollMode(QAbstractItemView.ScrollMode.ScrollPerPixel)
+            header = tree.header()
+            header.setResizeContentsPrecision(200)
+        fm = tree.fontMetrics()
+        font_h = fm.height()
+        if tree.property('mailofferTreeFontHeight') != font_h:
+            tree.setProperty('mailofferTreeFontHeight', font_h)
+            tree.header().setMinimumSectionSize(max(72, fm.horizontalAdvance('MMMMMM')))
+
+
+def adapt_combos(window):
+    """Prevent long dropdown entries from forcing window overflow on compact screens."""
+    for combo in window.findChildren(QComboBox):
+        if combo.property('mailofferAdaptiveCombo'):
             continue
-        table.setProperty('mailofferReadableTable', True)
-        table.setAlternatingRowColors(True)
-        table.setWordWrap(False)
-        header = table.horizontalHeader()
-        header.setMinimumSectionSize(72)
-        header.setResizeContentsPrecision(200)
-        rows = table.verticalHeader()
-        rows.setMinimumSectionSize(28)
-        rows.setDefaultSectionSize(max(32, table.fontMetrics().height() + 14))
+        combo.setProperty('mailofferAdaptiveCombo', True)
+        if combo.sizeAdjustPolicy() == QComboBox.SizeAdjustPolicy.AdjustToContentsOnFirstShow:
+            combo.setSizeAdjustPolicy(
+                QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon
+            )
+            if combo.minimumContentsLength() <= 0:
+                combo.setMinimumContentsLength(12)
+        view = combo.view()
+        if view is not None:
+            view.setTextElideMode(Qt.TextElideMode.ElideNone)
 
 
 def fit_window(window, available=None):
@@ -76,6 +121,8 @@ def fit_window(window, available=None):
         return
     adapt_form_rows(window)
     adapt_tables(window)
+    adapt_trees(window)
+    adapt_combos(window)
     if window.isMinimized() or window.isMaximized() or window.isFullScreen():
         return
     if available is None:
@@ -134,6 +181,8 @@ class ScreenFitController(QObject):
     def _screen_added(self, screen):
         screen.availableGeometryChanged.connect(lambda rect: self.refit_all())
         screen.logicalDotsPerInchChanged.connect(lambda dpi: self.refit_all())
+        if hasattr(screen, 'physicalDotsPerInchChanged'):
+            screen.physicalDotsPerInchChanged.connect(lambda dpi: self.refit_all())
         self.refit_all()
 
     def refit_all(self):
@@ -170,7 +219,13 @@ class ScreenFitController(QObject):
         timer.start(60)
 
     def eventFilter(self, watched, event):
-        if event.type() in (QEvent.Type.Show, QEvent.Type.Resize, QEvent.Type.FontChange, QEvent.Type.StyleChange):
+        if event.type() in (
+            QEvent.Type.Show,
+            QEvent.Type.Resize,
+            QEvent.Type.FontChange,
+            QEvent.Type.StyleChange,
+            QEvent.Type.ScreenChangeInternal,
+        ):
             self.schedule(watched)
         return False
 

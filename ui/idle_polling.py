@@ -10,7 +10,9 @@ def update_polling(window):
         if timer is None:
             continue
         interval = 2000 if active else 15000
-        timer.setTimerType(Qt.TimerType.CoarseTimer)
+        timer.setTimerType(
+            Qt.TimerType.CoarseTimer if active else Qt.TimerType.VeryCoarseTimer
+        )
         if timer.interval() != interval:
             timer.setInterval(interval)
 

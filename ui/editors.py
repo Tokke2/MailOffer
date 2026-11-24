@@ -194,7 +194,8 @@ class SendConfirmDialog(QDialog):
 
         self.setWindowTitle("📤 Bekräfta sändning")
         self.setModal(True)
-        self.setMinimumWidth(560)
+        self.setMinimumWidth(380)
+        self.resize(560, 480)
         self._build_ui()
 
     def _c(self) -> Dict[str, str]:
@@ -753,12 +754,18 @@ class PlaceholderPanel(QWidget):
         header.setProperty("cssClass", "softPanel")
         header_layout = QHBoxLayout(header)
         header_layout.setContentsMargins(10, 8, 10, 8)
-        for text, width in (("Namn", 130), ("Värde", 230), ("Status", 58)):
-            label = QLabel(text)
-            label.setStyleSheet("font-weight: bold;")
-            label.setFixedWidth(width)
-            header_layout.addWidget(label)
-        header_layout.addStretch()
+        header_layout.setSpacing(8)
+        lbl_name_hdr = QLabel("Namn")
+        lbl_name_hdr.setStyleSheet("font-weight: 700;")
+        lbl_name_hdr.setMinimumWidth(96)
+        header_layout.addWidget(lbl_name_hdr, stretch=2)
+        lbl_val_hdr = QLabel("Värde")
+        lbl_val_hdr.setStyleSheet("font-weight: 700;")
+        header_layout.addWidget(lbl_val_hdr, stretch=4)
+        lbl_status_hdr = QLabel("Status")
+        lbl_status_hdr.setStyleSheet("font-weight: 700;")
+        lbl_status_hdr.setFixedWidth(48)
+        header_layout.addWidget(lbl_status_hdr)
         box_layout.addWidget(header)
 
         self._scroll = QScrollArea()
@@ -773,7 +780,8 @@ class PlaceholderPanel(QWidget):
         self._scroll.setWidget(self._inner)
         box_layout.addWidget(self._scroll)
 
-        buttons = QHBoxLayout()
+        from ui.responsive import WrapLayout
+        buttons = WrapLayout()
         btn_refresh = QPushButton("🔄 Uppdatera")
         btn_refresh.clicked.connect(self.refresh)
         buttons.addWidget(btn_refresh)
@@ -782,7 +790,6 @@ class PlaceholderPanel(QWidget):
         btn_clear.setProperty("cssClass", "danger")
         btn_clear.clicked.connect(self.clear_values)
         buttons.addWidget(btn_clear)
-        buttons.addStretch()
         box_layout.addLayout(buttons)
 
         main.addWidget(box)
@@ -806,57 +813,67 @@ class PlaceholderPanel(QWidget):
         self.refresh()
 
     def refresh(self) -> None:
-        """Bygg om rader baserat på _data (v4.2: idempotent)."""
-        # Ta bort befintliga rader (alla utom stretch i slutet)
-        while self._grid.count() > 1:
-            item = self._grid.takeAt(0)
-            if item.widget():
-                item.widget().deleteLater()
-        self._fields.clear()
+        """Bygg om rader baserat på _data (v4.2: idempotent, adaptiv bredd)."""
+        self._inner.setUpdatesEnabled(False)
+        try:
+            # Ta bort befintliga rader (alla utom stretch i slutet)
+            while self._grid.count() > 1:
+                item = self._grid.takeAt(0)
+                if item.widget():
+                    item.widget().deleteLater()
+            self._fields.clear()
+            self._indicators = {}
 
-        for key, value in sorted(self._data.items()):
-            row = QFrame()
-            row.setProperty("cssClass", "card")
-            row_layout = QHBoxLayout(row)
-            row_layout.setContentsMargins(8, 6, 8, 6)
-            row_layout.setSpacing(8)
+            for key, value in sorted(self._data.items()):
+                row = QFrame()
+                row.setProperty("cssClass", "card")
+                row_layout = QHBoxLayout(row)
+                row_layout.setContentsMargins(8, 6, 8, 6)
+                row_layout.setSpacing(8)
 
-            name_label = QLabel(key)
-            name_label.setFixedWidth(130)
-            name_label.setStyleSheet("font-weight: bold;")
-            row_layout.addWidget(name_label)
+                name_label = QLabel(key)
+                name_label.setMinimumWidth(96)
+                name_label.setWordWrap(True)
+                name_label.setStyleSheet("font-weight: 700;")
+                row_layout.addWidget(name_label, stretch=2)
 
-            field = QLineEdit(value)
-            field.setFixedWidth(230)
-            field.textChanged.connect(
-                lambda text, k=key: self._on_field_changed(k, text)
-            )
-            row_layout.addWidget(field)
-            self._fields[key] = field
-
-            indicator = QLabel("✅" if value.strip() else "⬜")
-            indicator.setStyleSheet("font-size: 13pt;")
-            indicator.setFixedWidth(58)
-            row_layout.addWidget(indicator)
-
-            if self._editor_ref:
-                btn_insert = QPushButton("➕")
-                btn_insert.setToolTip("Infoga placeholder i editorn")
-                btn_insert.setFixedWidth(36)
-                btn_insert.clicked.connect(
-                    lambda checked=False, k=key: (
-                        self._editor_ref.insert_placeholder(k)
-                        if self._editor_ref
-                        else None
-                    )
+                field = QLineEdit(value)
+                field.setMinimumWidth(110)
+                field.textChanged.connect(
+                    lambda text, k=key: self._on_field_changed(k, text)
                 )
-                row_layout.addWidget(btn_insert)
+                row_layout.addWidget(field, stretch=4)
+                self._fields[key] = field
 
-            row_layout.addStretch()
-            self._grid.insertWidget(self._grid.count() - 1, row)
+                indicator = QLabel("✅" if value.strip() else "⬜")
+                indicator.setAlignment(Qt.AlignmentFlag.AlignCenter)
+                indicator.setStyleSheet("font-size: 12pt;")
+                indicator.setFixedWidth(36)
+                row_layout.addWidget(indicator)
+                self._indicators[key] = indicator
+
+                if self._editor_ref:
+                    btn_insert = QPushButton("➕")
+                    btn_insert.setToolTip("Infoga placeholder i editorn")
+                    btn_insert.setFixedWidth(36)
+                    btn_insert.clicked.connect(
+                        lambda checked=False, k=key: (
+                            self._editor_ref.insert_placeholder(k)
+                            if self._editor_ref
+                            else None
+                        )
+                    )
+                    row_layout.addWidget(btn_insert)
+
+                self._grid.insertWidget(self._grid.count() - 1, row)
+        finally:
+            self._inner.setUpdatesEnabled(True)
 
     def _on_field_changed(self, key: str, value: str) -> None:
         self._data[key] = value
+        indicators = getattr(self, "_indicators", None)
+        if isinstance(indicators, dict) and key in indicators:
+            indicators[key].setText("✅" if value.strip() else "⬜")
         if self._on_change:
             self._on_change(key, value)
         self.value_changed.emit(key, value)

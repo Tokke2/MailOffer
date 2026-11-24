@@ -277,12 +277,65 @@ def _default_fetcher(url: str, timeout: float) -> Tuple[int, bytes]:
         return int(exc.code or 0), body
 
 
+_FORBIDDEN_BRANCH_NAMES = frozenset({"main", "master", "head"})
+_FORBIDDEN_MAIN_URL_RE = re.compile(
+    r"(?i)(?:"
+    r"/(?:zipball|tarball)/(?:refs/heads/)?(?:main|master)(?:[/?#]|$)"
+    r"|/archive/(?:refs/heads/)?(?:main|master)\.(?:zip|tar\.gz)(?:[?#]|$)"
+    r"|/git/refs?/heads/(?:main|master)(?:[/?#]|$)"
+    r"|/(?:branches|commits)/(?:main|master)(?:[/?#]|$)"
+    r"|raw\.githubusercontent\.com/[^/]+/[^/]+/(?:refs/heads/)?(?:main|master)(?:/|$)"
+    r")"
+)
+
+
+def is_forbidden_main_ref(ref: object) -> bool:
+    """Hård regel: appuppdateringar får aldrig arbeta mot main-branchen."""
+    cleaned = str(ref or "").strip().strip("/").lower()
+    if not cleaned:
+        return False
+    if cleaned in _FORBIDDEN_BRANCH_NAMES:
+        return True
+    for prefix in ("refs/heads/", "refs/remotes/origin/", "remotes/origin/", "heads/", "origin/"):
+        if cleaned.startswith(prefix) and cleaned[len(prefix):] in _FORBIDDEN_BRANCH_NAMES:
+            return True
+    return False
+
+
+def is_forbidden_main_url(url: object) -> bool:
+    """True om en URL pekar mot main/master-branch i stället för release-tagg/commit."""
+    text = str(url or "").strip()
+    if not text:
+        return False
+    if _FORBIDDEN_MAIN_URL_RE.search(text):
+        return True
+    try:
+        parsed = urllib.parse.urlsplit(text)
+        for key, values in urllib.parse.parse_qs(parsed.query).items():
+            if key.lower() in {"ref", "branch", "sha", "commitish", "target_commitish"}:
+                if any(is_forbidden_main_ref(val) for val in values):
+                    return True
+    except Exception:
+        pass
+    return False
+
+
+def _guard_fetcher(fetch: Fetcher) -> Fetcher:
+    """Förhindra att uppdateraren någonsin anropar en main-branch-URL."""
+    def guarded(url: str, timeout: float) -> Tuple[int, bytes]:
+        if is_forbidden_main_url(url):
+            raise ValueError("Uppdatering mot main-branchen är blockerad (hård regel).")
+        return fetch(url, timeout)
+
+    return guarded
+
+
 def latest_release_url(repo: str = GITHUB_REPO) -> str:
     return f"{API_BASE}/repos/{repo}/releases/latest"
 
 
 def _pick_download_url(payload: Dict[str, Any]) -> str:
-    """Bifogad .zip-asset först, annars GitHubs zipball för taggen."""
+    """Bifogad .zip-asset först, annars GitHubs zipball för taggen (aldrig main)."""
     assets = payload.get("assets")
     if isinstance(assets, list):
         for asset in assets:
@@ -290,16 +343,22 @@ def _pick_download_url(payload: Dict[str, Any]) -> str:
                 continue
             name = str(asset.get("name") or "").lower()
             url = str(asset.get("browser_download_url") or "")
-            if url and name.endswith(".zip"):
+            if url and name.endswith(".zip") and not is_forbidden_main_url(url):
                 return url
-    return str(payload.get("zipball_url") or "")
+    zipball = str(payload.get("zipball_url") or "")
+    if is_forbidden_main_url(zipball):
+        return ""
+    return zipball
 
 
 def resolve_release_commit(tag: str, repo: str, fetch: Fetcher, timeout: float) -> str:
     """Resolve the release tag itself, never target_commitish (which may be main)."""
+    if is_forbidden_main_ref(tag):
+        raise ValueError("Uppdatering mot main-branchen är blockerad (hård regel).")
+    guarded = _guard_fetcher(fetch)
     url = f"{API_BASE}/repos/{repo}/git/ref/tags/{quote(tag, safe='')}"
     for _ in range(8):
-        status, body = fetch(url, timeout)
+        status, body = guarded(url, timeout)
         if status != 200:
             raise RuntimeError(f"Kunde inte läsa release-taggens commit (HTTP {status}).")
         payload = json.loads(body.decode("utf-8"))
@@ -370,7 +429,7 @@ def check_for_update(
     visa dem snällt (och autosökningen kan vara tyst).
     """
     info = UpdateInfo()
-    fetch = fetcher or _default_fetcher
+    fetch = _guard_fetcher(fetcher or _default_fetcher)
     url = latest_release_url(repo)
     try:
         status, body = fetch(url, float(timeout))
@@ -398,11 +457,23 @@ def check_for_update(
 
     info.raw = payload
     info.tag = str(payload.get("tag_name") or "")
+    if is_forbidden_main_ref(info.tag):
+        info.error = "Uppdatering mot main-branchen är blockerad (hård regel)."
+        return info
+    raw_zipball = str(payload.get("zipball_url") or "")
+    raw_assets = payload.get("assets") if isinstance(payload.get("assets"), list) else []
+    had_main_url = is_forbidden_main_url(raw_zipball) or any(
+        isinstance(a, dict) and is_forbidden_main_url(a.get("browser_download_url"))
+        for a in raw_assets
+    )
     info.latest_version = normalize_tag(info.tag)
     info.name = str(payload.get("name") or info.tag)
     info.notes = str(payload.get("body") or "").strip()
     info.html_url = str(payload.get("html_url") or "")
     info.download_url = _pick_download_url(payload)
+    if not info.download_url and had_main_url:
+        info.error = "Uppdatering mot main-branchen är blockerad (hård regel)."
+        return info
     info.build_id = parse_build_id(payload)
     info.fingerprint = release_fingerprint(payload)
     newer = is_newer_version(info.latest_version, current_version)
@@ -485,7 +556,9 @@ def download_update_zip(
     """Ladda ner release-zip till ``dest_dir/update.zip``."""
     if not str(url or "").strip():
         raise ValueError("Ingen nedladdningslänk (download_url är tom).")
-    fetch = fetcher or _default_fetcher
+    if is_forbidden_main_url(url):
+        raise ValueError("Uppdatering mot main-branchen är blockerad (hård regel).")
+    fetch = _guard_fetcher(fetcher or _default_fetcher)
     status, body = fetch(str(url), float(timeout))
     if status != 200:
         raise RuntimeError(f"Nedladdningen misslyckades (HTTP {status}).")
@@ -567,6 +640,8 @@ def apply_github_update(
 
     if not info or not info.download_url:
         raise ValueError("Ingen nedladdningslänk – sök efter uppdateringar först.")
+    if is_forbidden_main_ref(getattr(info, "tag", "")) or is_forbidden_main_url(info.download_url):
+        raise ValueError("Uppdatering mot main-branchen är blockerad (hård regel).")
     tmp_root = Path(tempfile.mkdtemp(prefix="epostofferten-update-"))
     try:
         zip_path = download_update_zip(
@@ -612,6 +687,8 @@ __all__ = [
     "download_update_zip",
     "extract_update_zip",
     "find_app_root",
+    "is_forbidden_main_ref",
+    "is_forbidden_main_url",
     "is_newer_version",
     "latest_release_url",
     "normalize_tag",

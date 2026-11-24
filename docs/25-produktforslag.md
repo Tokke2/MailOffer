@@ -50,3 +50,42 @@ separata beslut om åtkomst, lagring, kostnad och integritet.
 **För att kalla något efterfrågat:** spara anonymiserade intervjufynd eller
 faktiska ärenden, frekvens och datum. **För att kalla något en konkurrensfördel:**
 ange produkt, version/plan, verifierad dokumentation och vad jämförelsen gäller.
+
+---
+
+## Omgång 2: 25 nya nischförslag (lokal offert- och reservdelsförfrågan utan molninlåsning)
+
+Följande 25 nya förslag fokuserar på arbetsflöden där generiska e-postklienter
+(Outlook, Thunderbird), nyhetsbrevsverktyg (Mailchimp, Brevo) och molnbaserade
+upphandlingsportaler lämnar luckor: snabba tekniska förfrågningar med foton,
+fordons-/artikelidentifiering, tvåspråkig fackterminologi, leverantörshygien
+och noll-moln-integritet.
+
+| # | Nytt förslag (saknas i generiska e-post-/nyhetsbrevsverktyg) | Konkret användarnytta | Prioritet / validering |
+|---|---|---|---|
+| 1 | Lokal EXIF- och GPS-rensning på foton vid sändning (originalfilen bevaras orörd) | Kundens hemadress/verkstadsposition och kameradata läcker inte till externa leverantörer | Hög – verifiera på 20 mobilfoton från iOS/Android |
+| 2 | Smart bildoptimering med total storleksbudget per mottagardomän (t.ex. max 8 MB MIME) | Slippa studsar hos leverantörer med äldre mailservrar utan att typskyltar blir oläsbara | Hög – mät läsbarhet på chassiplåtar efter skalning |
+| 3 | Lokal offline-OCR för regnummer, 17-teckens VIN och OEM-artikelnummer ur inklistrat foto | Slipp skriva av långa chassi- och artikelkoder manuellt med risk för sifferfel | Hög – mät träffsäkerhet på smutsiga/vinklade skyltar |
+| 4 | Inbyggd VIN- (ISO 3779 kontrollsiffra, I/O/Q-spärr) och nordisk regnummervalidering | Stoppar felaktiga underlag innan 15 leverantörer räknar på fel fordon | Hög – enhetstesta mot kända giltiga/ogiltiga VIN |
+| 5 | Klickbar visuell fordons-/glaskarta i vektorformat med höger-/vänsterstyrningskontroll | Noll missförstånd mellan t.ex. vänster bakre sidoruta, kvartsruta och ventilationsruta | Hög – användartesta på 5 glasmästare/inköpare |
+| 6 | Låsbar branschspecifik fackordlista SV↔EN (OEM-termer, ADAS, sensortyper, lister) | Korrekt fackengelska till utländska leverantörer där vanlig översättning gissar fel | Hög – granska 30 verkliga engelska utskick |
+| 7 | Mobilkamerabrygga via engångs-QR över lokalt Wi-Fi (LAN) utan molnkonto | Fota skadan vid bilen och få in bilden i Steg 2 på 5 sekunder utan mejl-till-sig-själv | Medel – testa i verkstadsnät med brandvägg |
+| 8 | Direkt `Ctrl+V`-skärmklippsfångare med snabb beskärning och sekretessmaskering | Klistra in ur reservdelskatalog/EPC och maskera kundnamn eller egna priser direkt | Hög – mät tidsbesparing mot externt bildprogram |
+| 9 | Lokalt beräknad svarstidsklocka och leveransprecision per leverantör i adressboken | Se direkt vilka leverantörer som brukar svara snabbt på just den kategorin | Medel – kräver minst 20 historiska ärenden |
+| 10 | Leverantörskalender för nationella helgdagar per land, semesterstängt och frakt-cut-off | Varnar före sändning om t.ex. polsk/tysk leverantör har helgdag eller dagens cut-off passerats | Medel – testa med utländska leverantörsgrupper |
+| 11 | Lokal domän- och MX-förkontroll av mottagarlistan före SMTP-anslutning | Fångar felstavade domäner (`@gmial.com`) och nedlagda bolag innan de skadar avsändarryktet | Hög – kör offline-säker DNS-kontroll med timeout |
+| 12 | Adaptiv domän-throttling och jitter när flera mottagare delar mailserver/webbhotell | Förhindrar tillfällig greylisting eller spamblockering vid individuella utskick | Hög – verifiera mot strikta SMTP-reläer |
+| 13 | Kryptografiskt lokalt sändningskvitto (RFC-tidsstämpel, SHA-256 och SMTP-svar per mottagare) | Spårbart bevis vid reklamation eller tidsfrist utan att röja andra mottagare | Medel – testa läsbar PDF/JSON-export |
+| 14 | Ett-klicks artig ”Ärendet löst / beställt på annat håll”-uppföljning till övriga tillfrågade | Leverantörer som får återkoppling prioriterar avsändarens nästa förfrågan högre | Hög – intervjua 5 leverantörer om önskad ton |
+| 15 | Försäkrings- och ROT/RUT-fältpaket med separata vyer för leverantör respektive slutkund | Skadenummer/kunduppgifter stannar internt medan teknisk specifikation går till leverantör | Medel – validera mot verkliga skadeärenden |
+| 16 | Inbyggd inköps- till kundpriskalkylator (valuta, frakt, påslag, moms och avrundning) | Räkna fram kundoffert direkt från leverantörens EUR/PLN-svar utan separat kalkylblad | Medel – kontrollräkna mot befintliga rutiner |
+| 17 | Lokal ”tidsmaskin” för mallar med automatiska versionspunkter och visuell textdiff | Återställ en råkat raderad formulering på 5 sekunder utan Git eller molnbackup | Hög – låg komplexitet och noll databasberoende |
+| 18 | Villkorsstyrda mallstycken (`[om:adas]`, `[om:express]`, `[om:begagnat_ok]`) i SV + EN | En smart mall ersätter 10 nästan likadana varianter och håller båda språken i synk | Hög – bakåtkompatibel utökning av mallmotorn |
+| 19 | Signerade `.mailpack`-paket för säker lokal delning av mallar och ordlistor mellan kollegor | Nyanställd får rätt mallar och kategorier via USB/internmapp utan molnserver | Medel – förhandsgranska alltid paket före import |
+| 20 | Blixtsnabb kommandopalett (`Ctrl+P`) över regnummer, mallar, kontakter och historik | Hoppa till valfritt tidigare utskick eller rätt mall på <100 ms utan att lämna tangentbordet | Hög – stor vardagsnytta för vana användare |
+| 21 | Lokal `.eml`-import som omvandlar gamla skickade mejl till återanvändbara mallar/kontakter | Sänk tröskeln vid byte från manuell Outlook/Thunderbird-kopiering på 5 minuter | Medel – testa mot Outlook- och Thunderbird-export |
+| 22 | Portalfri snabbsvarsruta i mejlfoten (`Pris | Frakt | Leveranstid | OEM/Eftermarknad`) | Leverantören svarar direkt med ”Svara” i sin vanliga mejlklient utan inloggningskrångel | Hög – noll friktion för mottagaren |
+| 23 | Verkstads-/pekskärmsläge med extra stora träffytor (56 px) och handskvänlig kontrast | Enklare användning på surfplatta/dator vid billyft eller lagerhylla i starkt ljus | Medel – testa på 11–13" pekskärm i 150–200 % DPI |
+| 24 | Valbar läs-endast IMAP-studs- och autosvarsdetektor kopplad till utskickets `Message-ID` | Ser direkt i ärendet om en kontakt studsat eller är på semester utan att spara inkorgen | Senare – kräver uttryckligt opt-in för IMAP |
+| 25 | Begriplig svensk SPF/DKIM/DMARC-hälsopanel med guide för svenska webbhotell | Hjälper småföretag fixa DNS en gång för alla så offertförfrågningar når inkorgen | Hög – bygger vidare på befintlig DNS-kontroll |
+

@@ -292,6 +292,13 @@ def apply_ui_palette(app, colors):
     app.setPalette(palette)
     font = QFont(preferred_ui_font())
     font.setPointSizeF(10.5)
+    font.setStyleStrategy(
+        QFont.StyleStrategy.PreferAntialias | QFont.StyleStrategy.PreferQuality
+    )
+    if sys.platform == 'win32':
+        font.setHintingPreference(QFont.HintingPreference.PreferFullHinting)
+    else:
+        font.setHintingPreference(QFont.HintingPreference.PreferDefaultHinting)
     app.setFont(font)
 
 
@@ -488,19 +495,20 @@ def build_qss(c: Dict[str, str]) -> str:
     QTabBar::tab {{
         background: {c['tab_bg']};
         color: {c['tab_fg']};
-        padding: 10px 22px;
+        padding: 9px 18px;
         margin-right: 4px;
-        border-top-left-radius: 12px;
-        border-top-right-radius: 12px;
-        font-weight: bold;
-        font-size: 10pt;
-        border: 1px solid {c['border_soft']};
+        border-top-left-radius: 10px;
+        border-top-right-radius: 10px;
+        font-weight: 700;
+        font-size: 10.5pt;
+        border: 1px solid {c['border']};
         border-bottom: none;
     }}
 
     QTabBar::tab:selected {{
         background: {c['tab_active_bg']};
         color: {c['tab_active_fg']};
+        border-color: {c['tab_active_bg']};
         border-bottom: 3px solid {c['accent_hover']};
     }}
 
@@ -515,11 +523,11 @@ def build_qss(c: Dict[str, str]) -> str:
     QPushButton {{
         background-color: {c['button_bg']};
         color: {c['button_fg']};
-        border: none;
-        border-radius: 12px;
-        padding: 9px 18px;
-        font-weight: bold;
-        font-size: 10pt;
+        border: 1px solid transparent;
+        border-radius: 10px;
+        padding: 8px 16px;
+        font-weight: 700;
+        font-size: 10.5pt;
         min-height: 24px;
     }}
 
@@ -612,10 +620,10 @@ def build_qss(c: Dict[str, str]) -> str:
     QLineEdit, QTextEdit, QPlainTextEdit {{
         background-color: {c['entry_bg']};
         color: {c['entry_fg']};
-        border: 2px solid {c['border_soft']};
-        border-radius: 12px;
-        padding: 8px 12px;
-        font-size: 10pt;
+        border: 1px solid {c['border']};
+        border-radius: 10px;
+        padding: 7px 11px;
+        font-size: 10.5pt;
         selection-background-color: {c['select_bg']};
         selection-color: {c['select_fg']};
     }}
@@ -640,10 +648,10 @@ def build_qss(c: Dict[str, str]) -> str:
     QComboBox {{
         background-color: {c['entry_bg']};
         color: {c['entry_fg']};
-        border: 2px solid {c['border_soft']};
-        border-radius: 12px;
-        padding: 8px 12px;
-        font-size: 10pt;
+        border: 1px solid {c['border']};
+        border-radius: 10px;
+        padding: 7px 11px;
+        font-size: 10.5pt;
         min-height: 24px;
     }}
 
@@ -658,9 +666,9 @@ def build_qss(c: Dict[str, str]) -> str:
 
     QComboBox::drop-down {{
         border: none;
-        width: 32px;
-        border-top-right-radius: 12px;
-        border-bottom-right-radius: 12px;
+        width: 30px;
+        border-top-right-radius: 10px;
+        border-bottom-right-radius: 10px;
     }}
 
     QComboBox QAbstractItemView {{
@@ -678,16 +686,22 @@ def build_qss(c: Dict[str, str]) -> str:
     QListWidget, QTreeWidget, QTableWidget {{
         background-color: {c['entry_bg']};
         color: {c['text']};
-        border: 1px solid {c['border_soft']};
-        border-radius: 12px;
-        font-size: 10pt;
-        alternate-background-color: {c['bg_secondary']};
+        border: 1px solid {c['border']};
+        border-radius: 10px;
+        font-size: 10.5pt;
+        gridline-color: {c['border_soft']};
+        alternate-background-color: {c['surface_alt']};
         outline: none;
     }}
 
-    QListWidget::item, QTreeWidget::item, QTableWidget::item {{
-        padding: 6px 10px;
-        border-radius: 8px;
+    QListWidget::item {{
+        padding: 5px 10px;
+        border-radius: 6px;
+    }}
+
+    QTreeWidget::item, QTableWidget::item {{
+        padding: 4px 10px;
+        border-radius: 0px;
     }}
 
     QListWidget::item:selected,
@@ -697,32 +711,33 @@ def build_qss(c: Dict[str, str]) -> str:
         color: {c['select_fg']};
     }}
 
-    QListWidget::item:hover,
-    QTreeWidget::item:hover,
-    QTableWidget::item:hover {{
+    QListWidget::item:hover:!selected,
+    QTreeWidget::item:hover:!selected,
+    QTableWidget::item:hover:!selected {{
         background-color: {c['hover_bg']};
     }}
 
     QHeaderView::section {{
         background-color: {c['panel_bg']};
         color: {c['text']};
-        font-weight: bold;
-        padding: 8px;
+        font-weight: 700;
+        font-size: 10pt;
+        padding: 8px 10px;
         border: none;
-        border-right: 1px solid {c['border_soft']};
-        border-bottom: 1px solid {c['border_soft']};
+        border-right: 1px solid {c['border']};
+        border-bottom: 2px solid {c['border']};
     }}
 
     /* ══════════════════════════════════════════════
        GROUP BOX
     ══════════════════════════════════════════════ */
     QGroupBox {{
-        border: 1px solid {c['border_soft']};
-        border-radius: 14px;
+        border: 1px solid {c['border']};
+        border-radius: 12px;
         margin-top: 18px;
-        padding-top: 20px;
-        font-weight: bold;
-        font-size: 10pt;
+        padding-top: 18px;
+        font-weight: 700;
+        font-size: 10.5pt;
         color: {c['text']};
         background-color: {c['surface']};
     }}
@@ -1082,10 +1097,9 @@ def build_qss(c: Dict[str, str]) -> str:
     QMenu {{ padding: 6px; border: 1px solid {c['border']}; }}
     QMenu::item {{ padding: 8px 24px; border-radius: 6px; }}
     QMenu::item:selected {{ background: {c['accent']}; color: {c['inverse_text']}; }}
-    QHeaderView::section {{ background: {c['surface_alt']}; color: {c['text_secondary']}; padding: 10px 8px; border: none; border-bottom: 1px solid {c['border']}; }}
     QTableView, QTreeView, QListView {{ alternate-background-color: {c['surface_alt']}; selection-background-color: {c['accent']}; selection-color: {c['inverse_text']}; }}
     QToolTip {{ background: {c['surface']}; color: {c['text']}; border: 1px solid {c['border']}; padding: 8px; }}
-    QPushButton:focus, QLineEdit:focus, QComboBox:focus, QTextEdit:focus {{ border: 2px solid {c['accent']}; }}
+    QPushButton:focus, QLineEdit:focus, QComboBox:focus, QTextEdit:focus, QPlainTextEdit:focus, QListWidget:focus, QTreeWidget:focus, QTableWidget:focus, QSpinBox:focus, QDoubleSpinBox:focus {{ border: 2px solid {c['accent']}; }}
 
     /* ══════════════════════════════════════════════
        SCROLL AREA
@@ -1102,13 +1116,16 @@ def build_qss(c: Dict[str, str]) -> str:
 
 
 def get_cached_qss(mode: str) -> str:
-    """Returnera cachad QSS för läge (v1.3) – byggs endast en gång."""
+    """Returnera cachad QSS för läge + font (v1.4) – begränsad cache."""
     normalized = _ALIASES.get(mode, mode)
-    key = "dark" if normalized == "dark" else "light"
-    if key not in _qss_cache:
-        palette = DARK_COLORS if key == "dark" else LIGHT_COLORS
-        _qss_cache[key] = build_qss(palette)
-    return _qss_cache[key]
+    theme_key = "dark" if normalized == "dark" else "light"
+    cache_key = f"{theme_key}:{preferred_ui_font()}"
+    if cache_key not in _qss_cache:
+        if len(_qss_cache) >= 8:
+            _qss_cache.clear()
+        palette = DARK_COLORS if theme_key == "dark" else LIGHT_COLORS
+        _qss_cache[cache_key] = build_qss(palette)
+    return _qss_cache[cache_key]
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -1146,7 +1163,9 @@ class StyleEngine:
             return
         apply_ui_palette(cast(QApplication, qapp), self.get_colors())
         qss = get_cached_qss(self._mode)
-        cast(QApplication, qapp).setStyleSheet(qss)
+        app_typed = cast(QApplication, qapp)
+        if app_typed.styleSheet() != qss:
+            app_typed.setStyleSheet(qss)
         log.debug("QSS applicerat (läge=%s).", self._mode)
 
     def set_theme(self, theme: str) -> None:

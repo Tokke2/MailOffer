@@ -1165,6 +1165,13 @@ class ContactsTab(QWidget):
         ])
         self._tree.setAlternatingRowColors(True)
         self._tree.setUniformRowHeights(True)
+        self._tree.setTextElideMode(Qt.TextElideMode.ElideRight)
+        self._tree.setHorizontalScrollMode(
+            QAbstractItemView.ScrollMode.ScrollPerPixel
+        )
+        self._tree.setVerticalScrollMode(
+            QAbstractItemView.ScrollMode.ScrollPerPixel
+        )
         self._tree.setSelectionMode(
             QAbstractItemView.SelectionMode.ExtendedSelection
         )
@@ -1176,6 +1183,8 @@ class ContactsTab(QWidget):
         )
         # (v4.5) Klick på kolumnrubrik → sortera (stigande/fallande)
         self._tree.header().setStretchLastSection(True)
+        self._tree.header().setMinimumSectionSize(84)
+        self._tree.header().setResizeContentsPrecision(200)
         self._tree.header().setSectionsClickable(True)
         self._tree.header().setSortIndicatorShown(True)
         self._tree.header().sectionClicked.connect(self._on_header_clicked)
@@ -1208,7 +1217,7 @@ class ContactsTab(QWidget):
         crud_row.addStretch()
         info_layout.addLayout(crud_row)
 
-        csv_row = QHBoxLayout()
+        csv_row = WrapLayout()
         btn_import = QPushButton(tr("emaillist.import_btn"))
         btn_import.clicked.connect(self._import_csv)
         csv_row.addWidget(btn_import)
@@ -1224,10 +1233,9 @@ class ContactsTab(QWidget):
         btn_export_category = QPushButton(tr("emaillist.export_category_btn"))
         btn_export_category.clicked.connect(self._export_category_txt)
         csv_row.addWidget(btn_export_category)
-        csv_row.addStretch()
         info_layout.addLayout(csv_row)
 
-        push_row = QHBoxLayout()
+        push_row = WrapLayout()
         push_row.addWidget(QLabel("Markerade kontakter:"))
 
         btn_to = QPushButton("📬 Lägg till mottagare")
@@ -1252,7 +1260,6 @@ class ContactsTab(QWidget):
         btn_all_bcc.clicked.connect(lambda: self._push_all("bcc"))
         push_row.addWidget(btn_all_bcc)
 
-        push_row.addStretch()
         self._sel_label = QLabel("")
         self._sel_label.setProperty("cssClass", "subtext")
         push_row.addWidget(self._sel_label)
@@ -1431,8 +1438,6 @@ class ContactsTab(QWidget):
         if not self._store:
             return
 
-        self._tree.clear()
-
         query = self._search.text().strip()
         category = self._group_cb.currentText()
         # (v4.5) Språkfilter: (Alla) / SV / EN
@@ -1474,9 +1479,12 @@ class ContactsTab(QWidget):
                 self._group_cb.setCurrentIndex(0)
             self._group_cb.blockSignals(False)
 
-        for contact in contacts:
-            item = QTreeWidgetItem(
-                [
+        self._tree.setUpdatesEnabled(False)
+        try:
+            self._tree.clear()
+            rows: List[QTreeWidgetItem] = []
+            for contact in contacts:
+                cols = [
                     contact.name or "",
                     contact.email,
                     contact.company or "",
@@ -1484,15 +1492,22 @@ class ContactsTab(QWidget):
                     ("🇬🇧 EN" if contact.language == "en" else "🇸🇪 SV"),
                     "; ".join(contact.categories),
                 ]
-            )
-            item.setData(0, Qt.ItemDataRole.UserRole, contact.email)
-            item.setData(1, Qt.ItemDataRole.UserRole, contact.email)
-            self._tree.addTopLevelItem(item)
+                item = QTreeWidgetItem(cols)
+                item.setData(0, Qt.ItemDataRole.UserRole, contact.email)
+                item.setData(1, Qt.ItemDataRole.UserRole, contact.email)
+                for col_idx, col_val in enumerate(cols):
+                    if col_val:
+                        item.setToolTip(col_idx, col_val)
+                rows.append(item)
+            if rows:
+                self._tree.addTopLevelItems(rows)
 
-        self._tree.resizeColumnToContents(0)
-        self._tree.resizeColumnToContents(1)
-        self._tree.resizeColumnToContents(2)
-        self._tree.resizeColumnToContents(3)
+            for col_idx, max_w in ((0, 240), (1, 290), (2, 220), (3, 110)):
+                self._tree.resizeColumnToContents(col_idx)
+                if self._tree.columnWidth(col_idx) > max_w:
+                    self._tree.setColumnWidth(col_idx, max_w)
+        finally:
+            self._tree.setUpdatesEnabled(True)
 
         # (v4.6) Spara de visade kontakterna för "Lägg till alla visade"
         self._last_visible = list(contacts)

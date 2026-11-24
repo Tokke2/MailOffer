@@ -1,4 +1,5 @@
 """Escaped profile signatures and embedded (not remote) logos."""
+from functools import lru_cache
 from html import escape
 from pathlib import Path
 from email.mime.image import MIMEImage
@@ -38,14 +39,26 @@ def logo_part(path):
     return part
 
 
+@lru_cache(maxsize=16)
+def _validate_logo_cached(resolved_path: str, mtime_ns: int, file_size: int) -> str:
+    del mtime_ns, file_size  # del av cachenyckeln vid filändring
+    logo_part(resolved_path)
+    return escape(Path(resolved_path).as_uri(), quote=True)
+
+
 def preview_signature(plain, html, profile):
     """Use the sending renderer; resolve the CID image locally for preview."""
     logo = str(profile.get('signature_logo') or '')
+    logo_uri = ''
     if logo:
-        logo_part(logo)  # same validation as actual send
+        file = Path(logo)
+        stat = file.stat()  # same FileNotFoundError/OSError as logo_part
+        logo_uri = _validate_logo_cached(
+            str(file.resolve()), int(stat.st_mtime_ns), int(stat.st_size)
+        )
     plain, html = append_signature(
         plain, html, profile.get('signature_text', ''),
         profile.get('signature_contact', ''), bool(logo))
-    if logo and html:
-        html = html.replace('cid:mailoffer-signature', escape(Path(logo).resolve().as_uri(), quote=True))
+    if logo_uri and html:
+        html = html.replace('cid:mailoffer-signature', logo_uri)
     return plain, html

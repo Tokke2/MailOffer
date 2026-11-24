@@ -1174,3 +1174,28 @@ Detta minskar vissa beräkningar/väckningar; ingen procentuell RAM-, CPU-,
 energi- eller hastighetsvinst utlovas utan mätning på användarens dator.
 25 produktidéer med validering finns fortsatt i docs/25-produktforslag.md;
 de är inte verifierade konkurrensluckor och har inte implementerats här.
+
+### Hårt branchskydd, skarp HiDPI (>DPI), kolumnskärpa och resurshushållning (bygg 2026102360)
+- **Endast arbetsbranch, aldrig `main`:** `core/github_update.py` blockerar nu
+  aktivt alla referenser och nedladdnings-URL:er mot `main`/`master` vid både
+  kontroll, nedladdning och installation av appuppdateringar.
+- **Skarp HiDPI (`>DPI`), typsnitt, bilder och ikoner:** flikar och färgbrickor
+  ritas som skarpa QPainter-vektorikoner för `1.0×`–`3.0×` DPR (`ui/vector_icons.py`),
+  bildbilagor avkodas direkt nedskalade med `QImageReader.setScaledSize`, och
+  Swish-QR ritas med fysiska heltalspixlar per modul på skärmens DPR med
+  automatisk omritning vid skärmbyte. Typografin använder kvalitetskantutjämning
+  och plattformsanpassad hinting (ClearType i Windows).
+- **Skärmanpassad layout och knivskarpa kolumner:** dubbla/motstridiga
+  kolumnrubriksregler och rundade cellhörn i QSS är åtgärdade så kolumngränser
+  och text syns skarpt. Kontakt- och historikkolumner har maxtak för auto-bredd
+  med fulltext i tooltip, `QTreeView` och `QComboBox` omfattas av `screen_fit`,
+  Steg 2 växlar automatiskt mellan 1 och 2 kolumner vid `< 880 px`, och sparad
+  fönstergeometri stöder negativa flerskärmskoordinater med klämning till aktiv
+  arbetsyta.
+- **Minne, hastighet och energi:** begränsade cachar för ikoner, mallregex,
+  mallskanning, signaturlogotyp, live-förhandsvisning och sändhistorik;
+  120 ms/90 ms debounce vid textinmatning/sökning; `setUpdatesEnabled(False)`
+  vid tabell-/trädbygge; `VeryCoarseTimer` i dolt läge samt minskat I/O- och
+  SQLite-tomgångsarbete i felloggsamlaren.
+- **25 nya nischförslag (Omgång 2):** dokumenterade i `docs/25-produktforslag.md`
+  med fokus på lokal offert- och reservdelsförfrågan utan molninlåsning.

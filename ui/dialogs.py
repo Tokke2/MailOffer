@@ -540,17 +540,19 @@ class ProgressDialog(QDialog):
         self._style = theme_engine
         self.setWindowTitle(title)
         self.setModal(True)
-        self.setFixedSize(440, 150)
+        self.setMinimumSize(360, 145)
+        self.resize(460, 165)
         self.setWindowFlag(Qt.WindowType.WindowCloseButtonHint, False)
         self._build_ui()
 
     def _build_ui(self) -> None:
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(20, 20, 20, 20)
+        layout.setContentsMargins(20, 18, 20, 18)
         layout.setSpacing(10)
 
         self._lbl_status = QLabel("Förbereder sändning…")
-        self._lbl_status.setStyleSheet("font-size: 10pt; font-weight: bold;")
+        self._lbl_status.setWordWrap(True)
+        self._lbl_status.setStyleSheet("font-size: 10.5pt; font-weight: 700;")
         layout.addWidget(self._lbl_status)
 
         self._bar = QProgressBar()
@@ -648,7 +650,7 @@ class SettingsDialog(QDialog):
         super().__init__(parent)
         self.setWindowTitle("⚙️ Inställningar")
         self.setModal(True)
-        self.setMinimumSize(560, 620)
+        self.setMinimumSize(460, 440)
         self.resize(680, 760)
 
         self._test_cb = test_callback

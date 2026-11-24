@@ -184,6 +184,22 @@ _PREVIEW_HTML_TEMPLATE = """\
     border-radius: 18px;
     padding: 28px 32px;
     box-shadow: 0 14px 34px rgba(15, 23, 42, .10);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }}
+  .email-wrapper img {{
+    max-width: 100%;
+    height: auto;
+    image-rendering: -webkit-optimize-contrast;
+  }}
+  .email-wrapper table {{
+    max-width: 100%;
+    border-collapse: collapse;
+  }}
+  @media (max-width: 640px) {{
+    body {{ padding: 10px 8px; }}
+    .email-wrapper {{ padding: 16px 14px; border-radius: 12px; }}
+    .subject {{ font-size: 18px; }}
   }}
   .subject {{
     font-size: 22px;
@@ -542,12 +558,14 @@ class PreviewTab(QWidget):
         self._html_view.hide()
         main.addWidget(self._html_view, stretch=1)
 
-        # Footer-knappar
+        # Footer-knappar (radbryts på smala skärmar/delade paneler)
+        from ui.responsive import WrapLayout
         footer_card = QFrame()
         footer_card.setProperty("cssClass", "card")
-        footer = QHBoxLayout(footer_card)
-        footer.setContentsMargins(14, 10, 14, 10)
-        footer.setSpacing(8)
+        footer_outer = QVBoxLayout(footer_card)
+        footer_outer.setContentsMargins(14, 10, 14, 10)
+        footer_outer.setSpacing(6)
+        footer = WrapLayout()
 
         btn_browser = QPushButton("🌐 Öppna i webbläsare")
         btn_browser.setProperty("cssClass", "purple")
@@ -563,12 +581,11 @@ class PreviewTab(QWidget):
         btn_clear.clicked.connect(self.clear)
         footer.addWidget(btn_clear)
 
-        footer.addStretch()
-
         self._info_label = QLabel("")
         self._info_label.setProperty("cssClass", "muted")
         footer.addWidget(self._info_label)
 
+        footer_outer.addLayout(footer)
         main.addWidget(footer_card)
 
     # ─────────────────────────────────────────────────────────────────
@@ -794,9 +811,11 @@ class PreviewTab(QWidget):
                 str(k): str(v or "") for k, v in placeholder_values.items()
             }
 
-            # ── Cachad parsing (v4.3) ──────────────────────────────
+            # ── Cachad parsing (v4.4: begränsad cache + placeholder-nyckel) ──
+            placeholder_sig = tuple(sorted(placeholders.items()))
+
             def _cached_parse(key: Tuple[str, bool]) -> Tuple[str, str]:
-                cache_key = (str(path), key[1])
+                cache_key = (str(path), key[1], placeholder_sig)
                 try:
                     mtime = path.stat().st_mtime
                 except OSError:
@@ -811,6 +830,10 @@ class PreviewTab(QWidget):
                     replacements=placeholders,
                     include_english=key[1],
                 )
+                if len(self._parse_cache) >= 32:
+                    oldest_key = next(iter(self._parse_cache))
+                    self._parse_cache.pop(oldest_key, None)
+                    self._parse_cache_mtime.pop(oldest_key, None)
                 self._parse_cache[cache_key] = result
                 self._parse_cache_mtime[cache_key] = mtime
                 return result

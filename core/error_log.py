@@ -88,7 +88,11 @@ class ErrorLogCollector:
         self._thread = None
         self._archive_day = None
         self._last_archive = 0.0
+        self._last_archived_sig = None
         self._last_failure = None
+        self._history_verified = False
+        self._state_cache = None
+        self._state_sig = None
         self._mutex = threading.RLock()
 
     def _sources(self):
@@ -109,6 +113,23 @@ class ErrorLogCollector:
         from core.open_errors import record_error
         record_error(self.directory, source, text)
 
+    def _load_index(self):
+        try:
+            st = self.state_path.stat()
+            sig = (st.st_mtime_ns, st.st_size)
+            if self._state_cache is not None and self._state_sig == sig:
+                return dict(self._state_cache)
+            state = json.loads(self.state_path.read_text(encoding='utf-8'))
+            if isinstance(state, dict):
+                self._state_cache = dict(state)
+                self._state_sig = sig
+                return dict(state)
+        except (OSError, ValueError):
+            pass
+        self._state_cache = None
+        self._state_sig = None
+        return {}
+
     def _save_index(self, state):
         fd, temporary = tempfile.mkstemp(prefix='.errors-state-', dir=self.directory)
         try:
@@ -117,6 +138,13 @@ class ErrorLogCollector:
                 stream.flush()
                 os.fsync(stream.fileno())
             os.replace(temporary, self.state_path)
+            try:
+                st = self.state_path.stat()
+                self._state_cache = dict(state)
+                self._state_sig = (st.st_mtime_ns, st.st_size)
+            except OSError:
+                self._state_cache = None
+                self._state_sig = None
         finally:
             Path(temporary).unlink(missing_ok=True)
 
@@ -155,14 +183,21 @@ class ErrorLogCollector:
         """One bounded pass. Original logs are read only; output is never an input."""
         with self._mutex, _locked(self.directory):
             self._recover_archive_cursors()
-            from core.open_errors import import_history
-            import_history(self.directory)
-            try:
-                state = json.loads(self.state_path.read_text(encoding='utf-8'))
-                if not isinstance(state, dict):
-                    state = {}
-            except (OSError, ValueError):
-                state = {}
+            needs_history = (
+                not self._history_verified
+                or not (self.directory / 'error-issues.sqlite3').exists()
+                or not self.path.exists()
+                or (self.directory / 'unresolved-errors.log').exists()
+                or any(
+                    re.fullmatch(r'errors\.log\.\d+', p.name)
+                    for p in self.directory.glob('errors.log.*')
+                )
+            )
+            if needs_history:
+                from core.open_errors import import_history
+                import_history(self.directory)
+                self._history_verified = True
+            state = self._load_index()
             original_state = dict(state)
             count = 0
             active = {}
@@ -187,6 +222,14 @@ class ErrorLogCollector:
                         continuation = bool(previous.get('continuation', False))
                         if offset > info.st_size or prefix != previous.get('prefix', prefix):
                             offset, continuation = 0, False
+                        if not final and offset == info.st_size:
+                            active[key] = dict(
+                                offset=offset,
+                                prefix=prefix,
+                                prefix_length=prefix_length,
+                                continuation=continuation,
+                            )
+                            continue
                         stream.seek(0)
                         encoding = 'utf-16-le' if stream.read(2) == b'\xff\xfe' else 'utf-8'
                         stream.seek(offset)
@@ -305,23 +348,44 @@ class ErrorLogCollector:
         if self._thread is not None:
             return
         def loop():
+            import time
+            idle_wait = 5.0
+            prev_sig = None
             while not self._stop.is_set():
                 try:
-                    self.collect()
+                    collected = self.collect()
+                    sources_sig = []
+                    for src in self._sources():
+                        try:
+                            st = src.stat()
+                            sources_sig.append((str(src), st.st_size, st.st_mtime_ns))
+                        except OSError:
+                            continue
+                    sig_tuple = tuple(sources_sig)
                     day = datetime.now().date()
-                    import time
-                    if self._archive_day != day or time.monotonic() - self._last_archive >= 60:
+                    now_mono = time.monotonic()
+                    if self._archive_day != day or (
+                        now_mono - self._last_archive >= 60
+                        and sig_tuple != self._last_archived_sig
+                    ):
                         self.archive_completed_logs(today=day)
                         self._archive_day = day
-                        self._last_archive = time.monotonic()
+                        self._last_archive = now_mono
+                        self._last_archived_sig = sig_tuple
+                    if collected > 0 or sig_tuple != prev_sig:
+                        idle_wait = 5.0
+                    else:
+                        idle_wait = min(15.0, idle_wait + 5.0)
+                    prev_sig = sig_tuple
                     self._last_failure = None
                 except Exception as exc:
+                    idle_wait = 5.0
                     failure = f"{type(exc).__name__}: {exc}"
                     if failure != self._last_failure:
                         import logging
                         logging.getLogger(__name__).warning("Logginsamling/arkivering misslyckades: %s", failure)
                         self._last_failure = failure
-                self._stop.wait(5)
+                self._stop.wait(idle_wait)
         self._thread = threading.Thread(target=loop, name='ErrorLogCollector', daemon=True)
         self._thread.start()
         atexit.register(self.stop)

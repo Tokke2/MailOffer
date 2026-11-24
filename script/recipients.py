@@ -1063,8 +1063,13 @@ class AddressBookDialog(QDialog):
 
         self.setWindowTitle("📒 Adressbok")
         self.setModal(True)
-        self.setMinimumSize(820, 600)
+        self.setMinimumSize(520, 440)
         self.resize(900, 640)
+
+        self._search_timer = QTimer(self)
+        self._search_timer.setSingleShot(True)
+        self._search_timer.setInterval(90)
+        self._search_timer.timeout.connect(self._populate_contacts)
 
         self._adapter.reload()
         # (v5.5) Gruppsortering: "alpha" (A-Ö) eller "count" (flest först)
@@ -1095,7 +1100,7 @@ class AddressBookDialog(QDialog):
             "Sök namn, e-post, företag eller kategori…"
         )
         self._search.setMinimumHeight(34)
-        self._search.textChanged.connect(self._populate_contacts)
+        self._search.textChanged.connect(lambda *_: self._search_timer.start())
         top.addWidget(self._search)
 
         top.addWidget(QLabel("Sortera:"))
@@ -1125,9 +1130,10 @@ class AddressBookDialog(QDialog):
         layout.addLayout(top)
 
         splitter = QSplitter(Qt.Orientation.Horizontal)
+        splitter.setChildrenCollapsible(False)
 
         self._cat_list = QListWidget()
-        self._cat_list.setMinimumWidth(200)
+        self._cat_list.setMinimumWidth(160)
         self._cat_list.setMaximumWidth(280)
         self._cat_list.currentItemChanged.connect(
             lambda *_: self._on_category_changed()
@@ -1144,6 +1150,7 @@ class AddressBookDialog(QDialog):
         self._right_stack = QStackedWidget()
 
         self._contact_list = QListWidget()
+        self._contact_list.setUniformItemSizes(True)
         self._contact_list.setSelectionMode(
             QListWidget.SelectionMode.ExtendedSelection
         )
@@ -1377,59 +1384,63 @@ class AddressBookDialog(QDialog):
 
     # ── Kontaktlista ───────────────────────────────────────────────
     def _populate_contacts(self) -> None:
-        self._contact_list.clear()
-        colors = self._c()
+        self._contact_list.setUpdatesEnabled(False)
+        try:
+            self._contact_list.clear()
+            colors = self._c()
 
-        if self._current_category == "__all__":
-            contacts = self._adapter.all()
-        else:
-            grouped = self._adapter.grouped_by_category()
-            contacts = grouped.get(self._current_category, [])
+            if self._current_category == "__all__":
+                contacts = self._adapter.all()
+            else:
+                grouped = self._adapter.grouped_by_category()
+                contacts = grouped.get(self._current_category, [])
 
-        query = self._search.text().strip().lower()
-        if query:
-            contacts = [
-                contact
-                for contact in contacts
-                if query in contact.email.lower()
-                or query in contact.name.lower()
-                or query in contact.company.lower()
-                or any(
-                    query in category.lower()
-                    for category in contact.categories
+            query = self._search.text().strip().lower()
+            if query:
+                contacts = [
+                    contact
+                    for contact in contacts
+                    if query in contact.email.lower()
+                    or query in contact.name.lower()
+                    or query in contact.company.lower()
+                    or any(
+                        query in category.lower()
+                        for category in contact.categories
+                    )
+                ]
+
+            contacts = self._sorted_contacts(contacts)
+
+            if not contacts:
+                self._right_stack.setCurrentIndex(1)
+                self._update_info()
+                return
+
+            self._right_stack.setCurrentIndex(0)
+            for contact in contacts:
+                category_for_color = (
+                    contact.categories[0] if contact.categories else "Okategoriserad"
                 )
-            ]
+                color = _color_for_category(category_for_color, colors)
+                icon = _make_avatar(contact.initials(), color, size=36)
 
-        contacts = self._sorted_contacts(contacts)
+                display = contact.name or contact.email
+                sub_parts: List[str] = []
+                if contact.name and contact.email:
+                    sub_parts.append(contact.email)
+                if contact.company:
+                    sub_parts.append(contact.company)
+                if contact.categories:
+                    sub_parts.append(", ".join(contact.categories[:2]))
+                sub = "  ·  ".join(sub_parts)
+                text = f"  {display}\n  {sub}" if sub else f"  {display}"
 
-        if not contacts:
-            self._right_stack.setCurrentIndex(1)
-            self._update_info()
-            return
-
-        self._right_stack.setCurrentIndex(0)
-        for contact in contacts:
-            category_for_color = (
-                contact.categories[0] if contact.categories else "Okategoriserad"
-            )
-            color = _color_for_category(category_for_color, colors)
-            icon = _make_avatar(contact.initials(), color, size=36)
-
-            display = contact.name or contact.email
-            sub_parts: List[str] = []
-            if contact.name and contact.email:
-                sub_parts.append(contact.email)
-            if contact.company:
-                sub_parts.append(contact.company)
-            if contact.categories:
-                sub_parts.append(", ".join(contact.categories[:2]))
-            sub = "  ·  ".join(sub_parts)
-            text = f"  {display}\n  {sub}" if sub else f"  {display}"
-
-            item = QListWidgetItem(icon, text)
-            item.setData(Qt.ItemDataRole.UserRole, contact.email)
-            item.setToolTip(contact.display_name())
-            self._contact_list.addItem(item)
+                item = QListWidgetItem(icon, text)
+                item.setData(Qt.ItemDataRole.UserRole, contact.email)
+                item.setToolTip(contact.display_name())
+                self._contact_list.addItem(item)
+        finally:
+            self._contact_list.setUpdatesEnabled(True)
 
         self._update_info()
 

@@ -154,34 +154,54 @@ def create_tray_icon(state: str = "idle") -> QIcon:
         _icon_cache["idle"] = icon
         return icon
 
-    # Statuslägen: app-ikonen + badge nere till höger
-    pixmap = get_app_icon().pixmap(ICON_SIZE, ICON_SIZE)
-    if pixmap.isNull():
-        pixmap = QPixmap(ICON_SIZE, ICON_SIZE)
-        pixmap.fill(QColor(0, 0, 0, 0))
+    # Statuslägen: app-ikonen + badge nere till höger i flera skarpa HiDPI-storlekar
+    from PyQt6.QtCore import QSize
 
-    painter = QPainter(pixmap)
-    painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
-    painter.setRenderHint(QPainter.RenderHint.TextAntialiasing, True)
+    base_icon = get_app_icon()
+    icon = QIcon()
+    for logical in (16, 24, 32, 48, 64, ICON_SIZE):
+        for ratio in (1.0, 2.0):
+            px = max(1, int(round(logical * ratio)))
+            src = base_icon.pixmap(QSize(logical, logical), ratio)
+            if src.isNull():
+                pixmap = QPixmap(px, px)
+                pixmap.setDevicePixelRatio(ratio)
+                pixmap.fill(QColor(0, 0, 0, 0))
+            else:
+                pixmap = QPixmap(src)
+                if pixmap.width() != px or pixmap.height() != px:
+                    pixmap = pixmap.scaled(
+                        px,
+                        px,
+                        Qt.AspectRatioMode.KeepAspectRatio,
+                        Qt.TransformationMode.SmoothTransformation,
+                    )
+                pixmap.setDevicePixelRatio(ratio)
 
-    try:
-        badge_rect = QRectF(ICON_SIZE - 46, ICON_SIZE - 46, 38, 38)
-        painter.setPen(QPen(QColor(255, 255, 255, 245), 4))
-        painter.setBrush(QColor(ICON_COLORS[state]))
-        painter.drawEllipse(badge_rect)
+            painter = QPainter(pixmap)
+            painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+            painter.setRenderHint(QPainter.RenderHint.TextAntialiasing, True)
+            try:
+                s = float(logical)
+                bsize = max(7.0, s * 0.34)
+                inset = max(1.0, s * 0.04)
+                badge_rect = QRectF(s - bsize - inset, s - bsize - inset, bsize, bsize)
+                painter.setPen(QPen(QColor(255, 255, 255, 245), max(1.0, s * 0.03)))
+                painter.setBrush(QColor(ICON_COLORS[state]))
+                painter.drawEllipse(badge_rect)
 
-        painter.setPen(QPen(QColor(255, 255, 255), 2))
-        font = QFont()
-        font.setBold(True)
-        font.setPointSize(22 if state != "sending" else 18)
-        painter.setFont(font)
-        painter.drawText(
-            badge_rect, Qt.AlignmentFlag.AlignCenter, ICON_SYMBOLS[state]
-        )
-    finally:
-        painter.end()
+                painter.setPen(QPen(QColor(255, 255, 255), 1.5))
+                font = QFont()
+                font.setBold(True)
+                font.setPixelSize(max(6, int(round(bsize * (0.52 if state == "sending" else 0.62)))))
+                painter.setFont(font)
+                painter.drawText(
+                    badge_rect, Qt.AlignmentFlag.AlignCenter, ICON_SYMBOLS[state]
+                )
+            finally:
+                painter.end()
+            icon.addPixmap(pixmap)
 
-    icon = QIcon(pixmap)
     _icon_cache[state] = icon
     return icon
 

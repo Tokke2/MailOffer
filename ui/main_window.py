@@ -1368,28 +1368,27 @@ class MainWindow(QMainWindow):
         self.tabs.addTab(self._build_settings_tab(), tr("tab.settings"))
 
         from PyQt6.QtCore import QSize, Qt
-        from PyQt6.QtWidgets import QStyle
         self.tabs.setIconSize(QSize(18, 18))
         self.tabs.setUsesScrollButtons(True)
         self.tabs.tabBar().setExpanding(False)
         self.tabs.setElideMode(Qt.TextElideMode.ElideNone)
-        for index, icon in enumerate((
-            QStyle.StandardPixmap.SP_ArrowForward,
-            QStyle.StandardPixmap.SP_DirHomeIcon,
-            QStyle.StandardPixmap.SP_FileIcon,
-            QStyle.StandardPixmap.SP_FileDialogContentsView,
-            QStyle.StandardPixmap.SP_FileDialogDetailedView,
-            QStyle.StandardPixmap.SP_MessageBoxInformation,
-            QStyle.StandardPixmap.SP_FileDialogListView,
-        )):
-            self.tabs.setTabIcon(index, self.style().standardIcon(icon))
+        for index in range(len(self._tab_keys)):
             # Replace inconsistent platform emoji with one consistent icon set.
             text = self.tabs.tabText(index)
             while text and not text[0].isalnum():
                 text = text[1:]
             self.tabs.setTabText(index, text.strip())
             self.tabs.setTabToolTip(index, text.strip())
+        self._refresh_tab_icons()
         self._build_view_menu()
+
+    def _refresh_tab_icons(self) -> None:
+        if not hasattr(self, "tabs") or not hasattr(self, "_tab_keys"):
+            return
+        from ui.vector_icons import tab_icon
+        color = self._c().get("text", "#334155")
+        for index, key in enumerate(self._tab_keys):
+            self.tabs.setTabIcon(index, tab_icon(key, color_hex=color, size=20))
 
     def _build_view_menu(self) -> None:
         self._view_menu.clear()
@@ -1518,7 +1517,6 @@ class MainWindow(QMainWindow):
         from ui.keyboard_navigation import install_keyboard_navigation, configure_tab_flow
         install_keyboard_navigation()
         configure_tab_flow(getattr(self, '_wizard_steps', []))
-        self.setStyleSheet(self.styleSheet() + "\nQLineEdit:focus, QComboBox:focus, QTextEdit:focus, QPlainTextEdit:focus, QPushButton:focus, QListWidget:focus, QTreeWidget:focus, QTableWidget:focus { border: 2px solid #729fff; }")
 
     def _focus_send_field(self, name):
         self.select_tab("send")
@@ -2176,6 +2174,7 @@ class MainWindow(QMainWindow):
         self._draft_pending = self._draft_path().exists() and not getattr(self, "_restored_update_session", False)
         self._draft_last = None if getattr(self, "_restored_update_session", False) else self._draft_snapshot()
         self._draft_timer = QTimer(self)
+        self._draft_timer.setTimerType(Qt.TimerType.CoarseTimer)
         self._draft_timer.timeout.connect(self._autosave_draft)
         self._draft_timer.start(2000)
         QApplication.instance().aboutToQuit.connect(self._save_draft_at_exit)
@@ -2524,13 +2523,14 @@ class MainWindow(QMainWindow):
         outer.setContentsMargins(16, 14, 16, 14)
         outer.setSpacing(10)
 
-        top = QHBoxLayout()
+        from ui.responsive import WrapLayout
+        top = WrapLayout()
         top.addWidget(QLabel("Mall:"))
 
         self._tpl_combo = QComboBox()
-        self._tpl_combo.setMinimumWidth(360)
+        self._tpl_combo.setMinimumWidth(180)
         self._tpl_combo.currentTextChanged.connect(self._on_tpl_sel)
-        top.addWidget(self._tpl_combo, stretch=1)
+        top.addWidget(self._tpl_combo)
 
         btn_scan = QPushButton("🔄 Sök")
         btn_scan.clicked.connect(self._scan_tpls)
@@ -2548,10 +2548,11 @@ class MainWindow(QMainWindow):
         self._template_bcc_label.setWordWrap(True)
         outer.addWidget(self._template_bcc_label)
 
-        recipient_row = QHBoxLayout()
+        recipient_row = WrapLayout()
         recipient_row.addWidget(QLabel('Mallens mottagare:'))
         self._template_recipient_combo = QComboBox()
-        recipient_row.addWidget(self._template_recipient_combo, 1)
+        self._template_recipient_combo.setMinimumWidth(180)
+        recipient_row.addWidget(self._template_recipient_combo)
         self._template_recipient_add = QPushButton('Lägg till mottagare')
         self._template_recipient_add.clicked.connect(self._add_template_recipient)
         recipient_row.addWidget(self._template_recipient_add)
@@ -2564,7 +2565,7 @@ class MainWindow(QMainWindow):
         subject_row.addWidget(QLabel("Ämne:"))
         self._subject = QLineEdit()
         self._subject.setPlaceholderText("Skriv ämnesrad…")
-        self._subject.textChanged.connect(self._refresh_preview)
+        self._subject.textChanged.connect(self._schedule_preview_refresh)
         subject_row.addWidget(self._subject, stretch=1)
         outer.addLayout(subject_row)
 
@@ -2605,6 +2606,8 @@ class MainWindow(QMainWindow):
 
     # ── Steg 2: bilagor/bilder ─────────────────────────────────────
     def _build_step_attachments(self) -> QWidget:
+        from PyQt6.QtCore import QSize
+        from ui.responsive import WrapLayout
         card = QFrame()
         card.setProperty("cssClass", "card")
         outer = QVBoxLayout(card)
@@ -2613,21 +2616,25 @@ class MainWindow(QMainWindow):
 
         grid = QGridLayout()
         grid.setSpacing(12)
+        self._step2_grid = grid
 
         att_group = QGroupBox("🖼️ Bilder & bifogade filer")
         att_layout = QVBoxLayout(att_group)
+        self._step2_att_group = att_group
 
         self._drop_hint = QLabel(
             "Dra filer hit eller klicka på “Lägg till bilder/filer”"
         )
+        self._drop_hint.setWordWrap(True)
         self._drop_hint.setProperty("cssClass", "subtext")
         att_layout.addWidget(self._drop_hint)
 
         self._att_list = AttachmentDropListWidget(self._c())
+        self._att_list.setIconSize(QSize(26, 26))
         self._att_list.filesDropped.connect(self._handle_dropped_files)
         att_layout.addWidget(self._att_list)
 
-        att_buttons = QHBoxLayout()
+        att_buttons = WrapLayout()
         btn_add = QPushButton("➕ Lägg till bilder/filer")
         btn_add.setProperty("cssClass", "accent")
         btn_add.clicked.connect(self._add_att)
@@ -2646,15 +2653,16 @@ class MainWindow(QMainWindow):
         self._att_label = QLabel("0 bilagor")
         self._att_label.setProperty("cssClass", "subtext")
         att_buttons.addWidget(self._att_label)
-        att_buttons.addStretch()
         att_layout.addLayout(att_buttons)
 
         grid.addWidget(att_group, 0, 0)
 
         free_group = QGroupBox("💬 Fritext")
         free_layout = QVBoxLayout(free_group)
+        self._step2_free_group = free_group
 
         free_hint = QLabel("Fritext skickas med ovan signaturen i mailet.")
+        free_hint.setWordWrap(True)
         free_hint.setProperty("cssClass", "subtext")
         free_layout.addWidget(free_hint)
 
@@ -2663,28 +2671,54 @@ class MainWindow(QMainWindow):
         self._free_edit.setPlaceholderText(
             "Skriv valfri extra text som läggs till i mailet…"
         )
-        self._free_edit.textChanged.connect(self._refresh_preview)
+        self._free_edit.textChanged.connect(self._schedule_preview_refresh)
         free_layout.addWidget(self._free_edit)
 
         grid.addWidget(free_group, 0, 1)
         grid.setColumnStretch(0, 1)
         grid.setColumnStretch(1, 1)
+        self._step2_columns = 2
 
         outer.addLayout(grid)
         return card
 
+    def _reflow_step2_attachments(self, width: Optional[int] = None) -> None:
+        grid = getattr(self, "_step2_grid", None)
+        att_group = getattr(self, "_step2_att_group", None)
+        free_group = getattr(self, "_step2_free_group", None)
+        if grid is None or att_group is None or free_group is None:
+            return
+        avail = int(width if width is not None else self.width())
+        want_cols = 1 if avail < 880 else 2
+        if getattr(self, "_step2_columns", 2) == want_cols:
+            return
+        self._step2_columns = want_cols
+        grid.removeWidget(att_group)
+        grid.removeWidget(free_group)
+        if want_cols == 1:
+            grid.addWidget(att_group, 0, 0)
+            grid.addWidget(free_group, 1, 0)
+            grid.setColumnStretch(0, 1)
+            grid.setColumnStretch(1, 0)
+        else:
+            grid.addWidget(att_group, 0, 0)
+            grid.addWidget(free_group, 0, 1)
+            grid.setColumnStretch(0, 1)
+            grid.setColumnStretch(1, 1)
+
     # ── Steg 3: mottagare ──────────────────────────────────────────
     def _build_step_recipients(self) -> QWidget:
+        from ui.responsive import WrapLayout
         card = QFrame()
         card.setProperty("cssClass", "card")
         outer = QVBoxLayout(card)
         outer.setContentsMargins(16, 14, 16, 14)
         outer.setSpacing(12)
 
-        top = QHBoxLayout()
+        top = WrapLayout()
         title = QLabel("📒 Välj mottagare")
         title.setProperty("cssClass", "heading")
-        top.addWidget(title, stretch=1)
+        top.addWidget(title)
 
         btn_address_book = QPushButton("📒 Öppna adressbok")
         btn_address_book.setProperty("cssClass", "accent")
@@ -2693,7 +2727,7 @@ class MainWindow(QMainWindow):
         outer.addLayout(top)
 
         # (v5.2) Språk för nya mottagare
-        lang_row = QHBoxLayout()
+        lang_row = WrapLayout()
         lang_row.addWidget(QLabel("🌐 Språk för nya mottagare:"))
         self._new_lang_combo = QComboBox()
         self._new_lang_combo.addItem("🇸🇪 Svenska (SV)", "sv")
@@ -2705,7 +2739,7 @@ class MainWindow(QMainWindow):
         )
         lang_hint.setProperty("cssClass", "subtext")
         lang_hint.setWordWrap(True)
-        lang_row.addWidget(lang_hint, stretch=1)
+        lang_row.addWidget(lang_hint)
         outer.addLayout(lang_row)
 
         grid = QGridLayout()
@@ -2716,7 +2750,7 @@ class MainWindow(QMainWindow):
         legacy_box.setParent(card)
         legacy_box.hide()
         grid.setColumnStretch(0, 1)
-        grid.setColumnStretch(1, 1)
+        grid.setColumnStretch(1, 0)
         outer.addLayout(grid)
 
         info = QLabel(
@@ -3148,6 +3182,14 @@ class MainWindow(QMainWindow):
             elif item.layout():
                 self._clear_layout(item.layout())
 
+    def _schedule_preview_refresh(self, *_: Any) -> None:
+        if not hasattr(self, "_preview_debounce"):
+            self._preview_debounce = QTimer(self)
+            self._preview_debounce.setSingleShot(True)
+            self._preview_debounce.setInterval(120)
+            self._preview_debounce.timeout.connect(self._refresh_preview)
+        self._preview_debounce.start()
+
     def _on_ph_chg(self) -> None:
         values = self._get_ph()
         self._ensure_subject_contains_model_and_reg(update_field=True)
@@ -3157,7 +3199,7 @@ class MainWindow(QMainWindow):
             "template.placeholder_changed",
             {"key": "", "value": "", "all_values": values},
         )
-        self._refresh_preview()
+        self._schedule_preview_refresh()
 
     def _on_editor_changed(self) -> None:
         # Debounce (v4.6): omskapa placeholder-fält endast när
@@ -3168,7 +3210,7 @@ class MainWindow(QMainWindow):
             self._ph_debounce.setInterval(220)
             self._ph_debounce.timeout.connect(self._rebuild_ph)
         self._ph_debounce.start()
-        self._refresh_preview()
+        self._schedule_preview_refresh()
 
     def _update_ph_status(self) -> None:
         values = self._get_ph()
@@ -3363,25 +3405,30 @@ class MainWindow(QMainWindow):
             self._mail_images_prompt = False
 
     def _add_attachment_paths(self, paths: Sequence[str]) -> int:
+        from ui.vector_icons import attachment_icon
         existing = {_attachment_key(path) for path in self._attachments}
         added = 0
-        for file_path in paths:
-            cleaned = str(file_path).strip()
-            if not cleaned:
-                continue
-            path = Path(cleaned)
-            if not path.exists() or not path.is_file():
-                continue
-            key = _attachment_key(cleaned)
-            if key in existing:
-                continue
-            existing.add(key)
-            self._attachments.append(cleaned)
-            prefix = "🖼️ " if _is_image(cleaned) else "📎 "
-            item = QListWidgetItem(prefix + path.name)
-            item.setToolTip(cleaned)
-            self._att_list.addItem(item)
-            added += 1
+        self._att_list.setUpdatesEnabled(False)
+        try:
+            for file_path in paths:
+                cleaned = str(file_path).strip()
+                if not cleaned:
+                    continue
+                path = Path(cleaned)
+                if not path.exists() or not path.is_file():
+                    continue
+                key = _attachment_key(cleaned)
+                if key in existing:
+                    continue
+                existing.add(key)
+                self._attachments.append(cleaned)
+                prefix = "🖼️ " if _is_image(cleaned) else "📎 "
+                item = QListWidgetItem(attachment_icon(cleaned, size=26), prefix + path.name)
+                item.setToolTip(cleaned)
+                self._att_list.addItem(item)
+                added += 1
+        finally:
+            self._att_list.setUpdatesEnabled(True)
 
         if added:
             self._update_attachment_label()
@@ -4580,6 +4627,7 @@ class MainWindow(QMainWindow):
         )
         self._history_table.setColumnHidden(4, True)
         self._history_table.setAlternatingRowColors(True)
+        self._history_table.horizontalHeader().setStretchLastSection(True)
         self._history_table.setToolTip(
             "Dubbelklicka en rad för att öppna mailet i Skicka-fliken."
         )
@@ -4606,7 +4654,8 @@ class MainWindow(QMainWindow):
         hint.setProperty("cssClass", "subtext")
         layout.addWidget(hint)
 
-        buttons = QHBoxLayout()
+        from ui.responsive import WrapLayout
+        buttons = WrapLayout()
         self._btn_open_history_mail = QPushButton("✏️ Öppna / skicka om")
         self._btn_open_history_mail.setProperty("cssClass", "send")
         self._btn_open_history_mail.setToolTip(
@@ -4630,7 +4679,6 @@ class MainWindow(QMainWindow):
         btn_clear.clicked.connect(self._clear_history)
         buttons.addWidget(btn_clear)
 
-        buttons.addStretch()
         layout.addLayout(buttons)
 
         self._refresh_history()
@@ -4644,20 +4692,40 @@ class MainWindow(QMainWindow):
     def _load_history(self) -> List[Dict[str, Any]]:
         path = self._history_path()
         if not path.exists():
+            self._history_cache = None
+            self._history_cache_sig = None
             return []
         try:
+            st = path.stat()
+            sig = (st.st_mtime_ns, st.st_size)
+            if (
+                getattr(self, "_history_cache_sig", None) == sig
+                and isinstance(getattr(self, "_history_cache", None), list)
+            ):
+                return list(self._history_cache)
             data = json.loads(path.read_text(encoding="utf-8-sig"))
-            return data if isinstance(data, list) else []
+            rows = data if isinstance(data, list) else []
+            self._history_cache = list(rows)
+            self._history_cache_sig = sig
+            return rows
         except Exception:
             log.warning("Kunde inte läsa sändhistorik", exc_info=True)
             return []
 
     def _save_history(self, rows: List[Dict[str, Any]]) -> None:
+        trimmed = rows[-500:]
         path = self._history_path()
         path.write_text(
-            json.dumps(rows[-500:], ensure_ascii=False, indent=2),
+            json.dumps(trimmed, ensure_ascii=False, indent=2),
             encoding="utf-8",
         )
+        try:
+            st = path.stat()
+            self._history_cache = list(trimmed)
+            self._history_cache_sig = (st.st_mtime_ns, st.st_size)
+        except OSError:
+            self._history_cache = None
+            self._history_cache_sig = None
 
     def _append_send_history(self, result: SendResult) -> None:
         from core.send_safety import registration_number
@@ -4710,25 +4778,35 @@ class MainWindow(QMainWindow):
         if table is None:
             return
         self._history_rows = list(reversed(self._load_history()))
-        table.setRowCount(len(self._history_rows))
-        for row_idx, item in enumerate(self._history_rows):
-            values = [
-                str(item.get("timestamp", "")).replace("T", " "),
-                str(item.get("subject", "")),
-                str(item.get("template", "")),
-                str(len(item.get("to", []) or [])),
-                str(len(item.get("bcc", []) or [])),
-                str(
-                    item.get(
-                        "attachments_count",
-                        len(item.get("attachments", []) or []),
-                    )
-                ),
-                "✅ Skickat" if item.get("success", False) else "❌ Fel",
-            ]
-            for col, value in enumerate(values):
-                table.setItem(row_idx, col, QTableWidgetItem(value))
-        table.resizeColumnsToContents()
+        table.setUpdatesEnabled(False)
+        try:
+            table.setRowCount(len(self._history_rows))
+            for row_idx, item in enumerate(self._history_rows):
+                values = [
+                    str(item.get("timestamp", "")).replace("T", " "),
+                    str(item.get("subject", "")),
+                    str(item.get("template", "")),
+                    str(len(item.get("to", []) or [])),
+                    str(len(item.get("bcc", []) or [])),
+                    str(
+                        item.get(
+                            "attachments_count",
+                            len(item.get("attachments", []) or []),
+                        )
+                    ),
+                    "✅ Skickat" if item.get("success", False) else "❌ Fel",
+                ]
+                for col, value in enumerate(values):
+                    cell = QTableWidgetItem(value)
+                    if value:
+                        cell.setToolTip(value)
+                    table.setItem(row_idx, col, cell)
+            table.resizeColumnsToContents()
+            for col_idx, max_w in ((0, 175), (1, 320), (2, 220)):
+                if table.columnWidth(col_idx) > max_w:
+                    table.setColumnWidth(col_idx, max_w)
+        finally:
+            table.setUpdatesEnabled(True)
         self._update_history_open_button()
 
     def _history_current_row(self) -> int:
@@ -5873,9 +5951,15 @@ class MainWindow(QMainWindow):
                     str(profile.get("id") or ""),
                 )
                 from core.sender_profiles import normalize_profile_color
-                pixmap = QPixmap(16, 16)
-                pixmap.fill(QColor(normalize_profile_color(profile.get("profile_color"))))
-                combo.setItemIcon(index, QIcon(pixmap))
+                from ui.vector_icons import color_swatch_icon
+                combo.setItemIcon(
+                    index,
+                    color_swatch_icon(
+                        normalize_profile_color(profile.get("profile_color")),
+                        border_hex=self._c().get("border", "#64748B"),
+                        size=16,
+                    ),
+                )
                 if str(profile.get("id")) == wanted:
                     selected_index = index
             if profiles:
@@ -6827,6 +6911,8 @@ class MainWindow(QMainWindow):
         self._style.apply()
         if isinstance(self._att_list, AttachmentDropListWidget):
             self._att_list.set_theme_colors(self._c())
+        self._refresh_tab_icons()
+        self._refresh_sender_profile_combos()
         self._update_theme_button()
         self._status_reset()
         self._update_ph_status()
@@ -7659,26 +7745,70 @@ class MainWindow(QMainWindow):
         )
 
     def _restore_geo(self) -> None:
-        geometry = str(self.settings.get("window_geometry", "") or "")
+        from PyQt6.QtCore import QPoint, QRect
+        from PyQt6.QtGui import QGuiApplication
+        from ui.screen_fit import bounded_geometry
+
+        geometry = str(self.settings.get("window_geometry", "") or "").strip()
         if geometry:
-            try:
-                parts = geometry.split("+")
-                size = parts[0].split("x")
-                self.resize(int(size[0]), int(size[1]))
-                if len(parts) >= 3:
-                    self.move(int(parts[1]), int(parts[2]))
-                return
-            except Exception:
-                log.debug(
-                    "Kunde inte återställa geometri: %s",
-                    geometry, exc_info=True,
-                )
-        screen = self.screen()
+            match = re.fullmatch(
+                r"(\d+)x(\d+)(?:([+-]\d+)([+-]\d+))?", geometry
+            )
+            if match:
+                try:
+                    w = max(480, int(match.group(1)))
+                    h = max(360, int(match.group(2)))
+                    x_str, y_str = match.group(3), match.group(4)
+                    if x_str is not None and y_str is not None:
+                        x, y = int(x_str), int(y_str)
+                        candidate = QRect(x, y, w, h)
+                        screen = (
+                            QGuiApplication.screenAt(candidate.center())
+                            or self.screen()
+                            or QGuiApplication.primaryScreen()
+                        )
+                        if screen is not None:
+                            candidate = bounded_geometry(
+                                candidate, screen.availableGeometry()
+                            )
+                        self.resize(candidate.width(), candidate.height())
+                        self.move(candidate.topLeft())
+                    else:
+                        screen = self.screen() or QGuiApplication.primaryScreen()
+                        if screen is not None:
+                            area = screen.availableGeometry()
+                            w = min(w, max(480, area.width() - 24))
+                            h = min(h, max(360, area.height() - 24))
+                        self.resize(w, h)
+                    self._reflow_step2_attachments(self.width())
+                    return
+                except Exception:
+                    log.debug(
+                        "Kunde inte återställa geometri: %s",
+                        geometry, exc_info=True,
+                    )
+        screen = self.screen() or QGuiApplication.primaryScreen()
         area = screen.availableGeometry() if screen is not None else None
         if area is not None:
-            self.resize(min(1440, int(area.width() * 0.92)), min(960, int(area.height() * 0.88)))
+            w = min(1440, int(area.width() * 0.92))
+            h = min(960, int(area.height() * 0.88))
+            self.resize(w, h)
+            self.move(
+                QPoint(
+                    area.x() + max(0, (area.width() - w) // 2),
+                    area.y() + max(0, (area.height() - h) // 2),
+                )
+            )
         else:
             self.resize(1200, 820)
+        self._reflow_step2_attachments(self.width())
+
+    def resizeEvent(self, event: Any) -> None:  # noqa: N802
+        super().resizeEvent(event)
+        try:
+            self._reflow_step2_attachments(self.width())
+        except Exception:
+            log.debug("resizeEvent reflow misslyckades", exc_info=True)
 
     def _explorer(self, path: Any) -> None:
         resolved = str(Path(path).resolve())

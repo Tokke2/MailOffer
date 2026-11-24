@@ -2979,3 +2979,10 @@ Användaren valde från redan-valda: tema-knapp (§34 #6) och tydligare
 - Adressboksavatarer 1×/2×/3× med 128-posters LRU-cache. Skärmkontroll debouncas 60 ms med svaga fönsterreferenser.
 - Dold kontakt-/bildpollning 15 s, synlig 2 s. Utkast och övriga tjänster oförändrade; cacherensningskontroll var 10:e minut.
 - Inga uppmätta prestanda-/energiprocent utlovas. Version 1.0.0, bygg 2026102359.
+
+### V7.66 – hårt branchskydd (aldrig main), skarp HiDPI (>DPI), skärmanpassning och minnes-/energieffektivitet
+- Strikt `main`/`master`-blockering i `core/github_update.py`: appuppdateringar och källpaket får aldrig peka mot `main`/`master` utan endast taggade commits på arbetsbranchen.
+- Vektorikoner och färgbrickor i 1×–3× DPR samt `QImageReader`-nedskalade bilageminiatyrer i `ui/vector_icons.py` med begränsade LRU-cachar. Swish-QR ritas med fysiska heltalspixlar per modul på aktuell skärm-DPR.
+- Skarp QSS och typografi (`PreferAntialias | PreferQuality`, `PreferFullHinting` i Windows, 10,5 pt), enkla och högkontrast-kolumnrubriker med sidlinjer, rektangulära tabell-/trädceller, maxtak för automatisk kolumnbredd med fulltext-tooltip samt adaptiv 1-/2-kolumnslayout i Steg 2 (`< 880 px`) och flerskärmssäker geometriåterställning (inklusive negativa skärmkoordinater).
+- Begränsade LRU-/FIFO-cachar för mallregex, mallskanning, signaturlogotyp, live-förhandsvisning och sändhistorik; debouncad förhandsvisning/sökning; `VeryCoarseTimer` i dolt läge och reducerat tomgångsarbete i felloggsamlaren.
+- 25 nya nischförslag (Omgång 2) tillagda i `docs/25-produktforslag.md`. Version 1.0.0, bygg 2026102360.

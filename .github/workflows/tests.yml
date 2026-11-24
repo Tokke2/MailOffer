@@ -2,7 +2,13 @@ name: Tester
 
 on:
   push:
+    branches-ignore:
+      - main
+      - master
   pull_request:
+    branches-ignore:
+      - main
+      - master
 
 jobs:
   unittest:
@@ -117,6 +123,7 @@ jobs:
           python tools/run_windows_tests.py test_donation_locked.py
           python tools/run_windows_tests.py test_design_system_ui.py
           python tools/run_windows_tests.py test_screen_fit.py
+          python tools/run_windows_tests.py test_branch_dpi_perf.py
       - name: Testa klickbar dropdowntext
         run: |
           $env:QT_QPA_PLATFORM = 'offscreen'
