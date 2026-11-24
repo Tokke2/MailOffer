@@ -22,6 +22,13 @@ class WrapLayout(QLayout):
     def takeAt(self, index):
         return self._items.pop(index) if 0 <= index < len(self._items) else None
 
+    def __del__(self):
+        try:
+            while getattr(self, "_items", None):
+                self.takeAt(0)
+        except Exception:
+            pass
+
     def addStretch(self, *args):
         pass  # wrapping rows do not use expanding spacers
 

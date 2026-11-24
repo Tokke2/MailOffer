@@ -1,4 +1,5 @@
 """Expose Windows script-test failures as CI annotations as well as console output."""
+import faulthandler
 import json
 from pathlib import Path
 import subprocess
@@ -9,6 +10,7 @@ import unittest
 try:
     sys.stdout.reconfigure(encoding='utf-8', errors='backslashreplace')
     sys.stderr.reconfigure(encoding='utf-8', errors='backslashreplace')
+    faulthandler.enable()
 except Exception:
     pass
 
