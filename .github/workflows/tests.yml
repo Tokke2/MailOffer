@@ -124,6 +124,9 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python tools/run_windows_tests.py test_daily_log_and_auto_error_cleanup.py
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $env:QT_QPA_PLATFORM = 'offscreen'
+          python tools/run_windows_tests.py test_wheel_guard_ui.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Testa låst stöddialog
         run: |
           $env:QT_QPA_PLATFORM = 'windows'
