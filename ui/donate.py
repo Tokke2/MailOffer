@@ -321,13 +321,17 @@ class DonateDialog(QDialog):
             self._swish_qr_label.clear()
             self._swish_qr_label.setText('QR-koden kunde inte skapas. Kontrollera tillägget qrcode. Inget Swish-nummer visas i klartext.')
 
-    def event(self, event: QEvent) -> bool:  # type: ignore[override]
-        result = super().event(event)
-        if event is not None and event.type() == QEvent.Type.ScreenChangeInternal:
-            self._refresh_header_icon()
-            if hasattr(self, "_amount"):
-                self._refresh_swish_qr()
-        return result
+    def _on_screen_changed(self, *_args: object) -> None:
+        self._refresh_header_icon()
+        if hasattr(self, "_amount"):
+            self._refresh_swish_qr()
+
+    def showEvent(self, event) -> None:  # type: ignore[override]  # noqa: N802
+        super().showEvent(event)
+        handle = self.windowHandle()
+        if handle is not None and not getattr(self, "_donate_screen_connected", False):
+            handle.screenChanged.connect(self._on_screen_changed)
+            self._donate_screen_connected = True
 
     def _why_group(self) -> QWidget:
         widget = QWidget()

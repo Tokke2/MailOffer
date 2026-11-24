@@ -1,7 +1,6 @@
 """Expose Windows script-test failures as CI annotations as well as console output."""
 import faulthandler
 import json
-import mmap
 from pathlib import Path
 import subprocess
 import sys
@@ -24,46 +23,12 @@ def _ascii_workflow_arg(text: str, limit: int = 800) -> str:
     return safe.replace('%', '%25').replace('\r', '').replace('\n', '%0A')
 
 
-if len(sys.argv) >= 4 and sys.argv[1] == '--inner':
+if len(sys.argv) >= 3 and sys.argv[1] == '--inner':
     report_path = Path(sys.argv[2])
-    crumb_path = Path(sys.argv[3])
-    pattern = sys.argv[4] if len(sys.argv) > 4 else 'test_windows_launcher.py'
+    pattern = sys.argv[3] if len(sys.argv) > 3 else 'test_windows_launcher.py'
     sys.path.insert(0, str(root))
-
-    crumb_file = crumb_path.open('wb+')
-    crumb_file.write(b' ' * 4096)
-    crumb_file.flush()
-    crumb_map = mmap.mmap(crumb_file.fileno(), 4096)
-    ring = [''] * 12
-    idx = 0
-
-    def _profiler(frame, event, _arg):
-        global idx
-        if event not in ('call', 'c_call'):
-            return
-        code = frame.f_code
-        fn = code.co_filename
-        if 'MailOffer' not in fn and event != 'c_call':
-            return
-        entry = f"{event}:{Path(fn).name}:{frame.f_lineno}:{code.co_name}"
-        if event == 'c_call' and _arg is not None:
-            entry += f"->{getattr(_arg, '__name__', repr(_arg))}"
-        ring[idx % 12] = entry
-        idx += 1
-        ordered = ' | '.join(ring[(idx + i) % 12] for i in range(12) if ring[(idx + i) % 12])
-        raw = ordered.encode('ascii', 'backslashreplace')[:4090]
-        crumb_map.seek(0)
-        crumb_map.write(raw.ljust(4096, b' '))
-
-    sys.setprofile(_profiler)
-    try:
-        suite = unittest.defaultTestLoader.discover(str(root / 'tests'), pattern=pattern)
-        result = unittest.TextTestRunner(verbosity=2).run(suite)
-    finally:
-        sys.setprofile(None)
-        crumb_map.close()
-        crumb_file.close()
-
+    suite = unittest.defaultTestLoader.discover(str(root / 'tests'), pattern=pattern)
+    result = unittest.TextTestRunner(verbosity=2).run(suite)
     items = [
         {'test': str(case), 'traceback': text}
         for case, text in (result.errors + result.failures)
@@ -74,16 +39,8 @@ if len(sys.argv) >= 4 and sys.argv[1] == '--inner':
 pattern = sys.argv[1] if len(sys.argv) > 1 else 'test_windows_launcher.py'
 with tempfile.TemporaryDirectory() as tmp:
     report_file = Path(tmp) / 'report.json'
-    crumb_file = Path(tmp) / 'crumb.mmap'
     proc = subprocess.run(
-        [
-            sys.executable,
-            str(Path(__file__).resolve()),
-            '--inner',
-            str(report_file),
-            str(crumb_file),
-            pattern,
-        ],
+        [sys.executable, str(Path(__file__).resolve()), '--inner', str(report_file), pattern],
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
         text=True,
@@ -110,13 +67,7 @@ with tempfile.TemporaryDirectory() as tmp:
 
     if proc.returncode != 0 and not reported:
         hex_code = hex(proc.returncode & 0xFFFFFFFF)
-        crumbs = ''
-        if crumb_file.is_file():
-            try:
-                crumbs = crumb_file.read_bytes().decode('ascii', 'replace').strip()
-            except Exception:
-                crumbs = ''
-        body = _ascii_workflow_arg(f"{output}\nCRUMBS: {crumbs}", 880)
+        body = _ascii_workflow_arg(output, 850)
         print(
             f'::error title=EXIT {pattern} ({proc.returncode} / {hex_code})::{body}',
             flush=True,
