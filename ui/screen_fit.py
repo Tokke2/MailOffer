@@ -171,12 +171,33 @@ class ScreenFitController(QObject):
     def __init__(self, app):
         super().__init__(app)
         self.app = app
-        self._pending = weakref.WeakKeyDictionary()
+        self._pending = {}
         app.installEventFilter(self)
         app.screenAdded.connect(self._screen_added)
         app.screenRemoved.connect(lambda screen: self.refit_all())
         for screen in app.screens():
             self._screen_added(screen)
+
+    def _cleanup_pending(self, wid):
+        timer = self._pending.pop(wid, None)
+        if timer is not None:
+            try:
+                timer.stop()
+                timer.deleteLater()
+            except RuntimeError:
+                pass
+
+    def _connect_window_screen(self, window):
+        try:
+            handle = window.windowHandle()
+            if handle is not None and not getattr(window, '_screen_fit_connected', False):
+                ref = weakref.ref(window)
+                handle.screenChanged.connect(
+                    lambda _screen, r=ref: self.schedule(r()) if r() is not None and r().isVisible() else None
+                )
+                window._screen_fit_connected = True
+        except RuntimeError:
+            pass
 
     def _screen_added(self, screen):
         screen.availableGeometryChanged.connect(lambda rect: self.refit_all())
@@ -191,42 +212,70 @@ class ScreenFitController(QObject):
                 self.schedule(widget)
 
     def schedule(self, window):
-        if not isinstance(window, (QDialog, QMainWindow)) or not window.isWindow():
+        if window is None or not isinstance(window, (QDialog, QMainWindow)):
             return
-        if window in self._pending:
-            self._pending[window].start(60)
+        try:
+            if not window.isWindow() or not window.isVisible():
+                return
+        except RuntimeError:
+            return
+        wid = id(window)
+        existing = self._pending.get(wid)
+        if existing is not None:
+            try:
+                existing.start(60)
+                return
+            except RuntimeError:
+                self._pending.pop(wid, None)
+        try:
+            reference = weakref.ref(window, lambda _r, key=wid: self._cleanup_pending(key))
+        except TypeError:
             return
         timer = QTimer(self)
         timer.setSingleShot(True)
-        self._pending[window] = timer
-        reference = weakref.ref(window)
+        self._pending[wid] = timer
+
         def run():
+            self._pending.pop(wid, None)
+            try:
+                timer.deleteLater()
+            except RuntimeError:
+                pass
             target = reference()
-            timer.deleteLater()
             if target is None:
                 return
-            self._pending.pop(target, None)
-            window = target
             try:
-                fit_window(window)
-                handle = window.windowHandle()
-                if handle is not None and not getattr(window, '_screen_fit_connected', False):
-                    handle.screenChanged.connect(lambda screen, ref=weakref.ref(window): self.schedule(ref()) if ref() is not None else None)
-                    window._screen_fit_connected = True
+                if not target.isVisible():
+                    return
+                fit_window(target)
+                self._connect_window_screen(target)
             except RuntimeError:
                 pass  # transient dialog was deleted before the queued callback
+
         timer.timeout.connect(run)
         timer.start(60)
 
     def eventFilter(self, watched, event):
-        if event.type() in (
-            QEvent.Type.Show,
+        if event is None or not isinstance(watched, (QDialog, QMainWindow)):
+            return False
+        etype = event.type()
+        if etype == QEvent.Type.Show:
+            try:
+                if watched.isWindow():
+                    self._connect_window_screen(watched)
+                    self.schedule(watched)
+            except RuntimeError:
+                pass
+        elif etype in (
             QEvent.Type.Resize,
             QEvent.Type.FontChange,
             QEvent.Type.StyleChange,
-            QEvent.Type.ScreenChangeInternal,
         ):
-            self.schedule(watched)
+            try:
+                if watched.isVisible() and watched.isWindow():
+                    self.schedule(watched)
+            except RuntimeError:
+                pass
         return False
 
 
