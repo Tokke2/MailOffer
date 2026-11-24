@@ -15,6 +15,8 @@ def validate(state):
             valid = isinstance(value, list) and all(isinstance(item, str) for item in value)
         elif key in ('to_lang', 'bcc_lang', 'replacements'):
             valid = isinstance(value, dict) and all(isinstance(k, str) and isinstance(v, str) for k, v in value.items())
+        elif key == 'no_vin':
+            valid = isinstance(value, bool)
         else:
             valid = isinstance(value, str)
         if not valid:

@@ -549,10 +549,12 @@ _TAB_ALIASES: Dict[str, str] = {
 
 
 def vin_required_missing(
-    replacements: Dict[str, str], include_english: bool
+    replacements: Dict[str, str],
+    include_english: bool,
+    no_vin: bool = False,
 ) -> bool:
-    """True om EN-mottagare finns och VIN är tomt (då får man inte skicka)."""
-    if not include_english:
+    """True om EN-mottagare finns, 'Har ej VIN' ej är ikryssad och VIN är tomt."""
+    if not include_english or no_vin:
         return False
     vin = ""
     for key, value in (replacements or {}).items():
@@ -1067,6 +1069,9 @@ class MainWindow(QMainWindow):
         self._tray_ref: Optional[Any] = None
         self._ph_inputs: Dict[str, QWidget] = {}
         self._ph_row_widgets: Dict[str, Tuple[QWidget, ...]] = {}
+        self._no_vin_cb: Optional[QCheckBox] = None
+        self._in_rebuild_ph: bool = False
+        self._log_view_mode: str = "today"
         self._attachments: List[str] = []
         self._last_tpl: Optional[Path] = None
         self._send_busy = False
@@ -2187,6 +2192,7 @@ class MainWindow(QMainWindow):
         return {"template_name": self._tpl_combo.currentText(),
                 "subject": self._subject.text(), "body": self._editor.toPlainText(),
                 "free_text": self._free_edit.toPlainText(), "replacements": self._get_ph(),
+                "no_vin": self._is_no_vin_checked(),
                 "to": self._list_items(self._to_list), "bcc": self._list_items(self._bcc_list),
                 "to_lang": self._list_langs(self._to_list), "bcc_lang": self._list_langs(self._bcc_list),
                 "attachment_paths": list(self._attachments),
@@ -2253,6 +2259,7 @@ class MainWindow(QMainWindow):
         self._subject.setText(state.get("subject", ""))
         self._editor.setPlainText(state.get("body", ""))
         self._free_edit.setPlainText(state.get("free_text", ""))
+        self.settings.set("no_vin_checked", bool(state.get("no_vin", False)))
         self.settings.set("replacements_values", state.get("replacements", {}))
         self._rebuild_ph()
         for target in ("to", "bcc"):
@@ -3122,79 +3129,140 @@ class MainWindow(QMainWindow):
                         "Kunde inte läsa placeholders direkt från mallfil",
                         exc_info=True,
                     )
+        if self._has_en_recipient() and "vin" not in seen:
+            add_key("vin")
         return keys
 
+    def _is_no_vin_checked(self) -> bool:
+        cb = getattr(self, "_no_vin_cb", None)
+        if cb is not None:
+            try:
+                return bool(cb.isChecked())
+            except RuntimeError:
+                self._no_vin_cb = None
+        return bool(self.settings.get("no_vin_checked", False))
+
+    def _on_no_vin_toggled(self, checked: bool) -> None:
+        self.settings.set("no_vin_checked", bool(checked))
+        for key, widget in self._ph_inputs.items():
+            if key.lower() == "vin" and isinstance(widget, QLineEdit):
+                widget.setEnabled(not checked)
+                widget.setPlaceholderText(
+                    "VIN saknas – utelämnas i engelskt mejl"
+                    if checked
+                    else "Skriv 🔢 vin (obligatoriskt för en)…"
+                )
+        self._on_ph_chg()
+
     def _rebuild_ph(self) -> None:
-        self._clear_layout(self._ph_area)
-        self._ph_inputs.clear()
-        self._ph_row_widgets.clear()
+        self._in_rebuild_ph = True
+        try:
+            self._no_vin_cb = None
+            self._clear_layout(self._ph_area)
+            self._ph_inputs.clear()
+            self._ph_row_widgets.clear()
 
-        keys = self._extract_placeholder_keys()
-        if not keys:
-            self._ph_status.setText(
-                "ℹ️ Inga uppgifter behöver fyllas i för denna mall."
+            keys = self._extract_placeholder_keys()
+            if not keys:
+                self._ph_status.setText(
+                    "ℹ️ Inga uppgifter behöver fyllas i för denna mall."
+                )
+                self._refresh_preview()
+                return
+
+            # (v5.4) Labels alltid svenska – mallen fylls i på svenska,
+            # engelsk version genereras automatiskt till EN-mottagare
+            labels = _PH_SV
+            saved = self.settings.get("replacements_values", {}) or {}
+            no_vin_saved = bool(self.settings.get("no_vin_checked", False))
+
+            header = QLabel(f"🔑 Fyll i mallens uppgifter här: {', '.join(keys)}")
+            header.setWordWrap(True)
+            header.setStyleSheet(
+                f"color: {self._c().get('accent', '')}; font-weight: bold;"
             )
+            self._ph_area.addWidget(header)
+
+            grid = QGridLayout()
+            grid.setSpacing(10)
+            colors = ["accent", "purple", "success", "warning"]
+            palette = self._c()
+
+            for row, key in enumerate(keys):
+                key_l = key.lower()
+                label_text = labels.get(key_l, key.replace("_", " ").title())
+                color = palette.get(
+                    colors[row % len(colors)], palette.get("accent", "")
+                )
+
+                label = QLabel(f"{label_text}:")
+                label.setStyleSheet(
+                    f"color: {color}; font-weight: bold; font-size: 10pt;"
+                )
+                grid.addWidget(label, row, 0)
+
+                default = str(saved.get(key, saved.get(key_l, "")) or "")
+                if key_l in PLACEHOLDER_DROPDOWNS:
+                    from ui.clickable_combo import ClickableComboBox
+                    field: QWidget = ClickableComboBox()
+                    field.addItems(PLACEHOLDER_DROPDOWNS[key_l])  # type: ignore[attr-defined]
+                    field.setEditable(True)  # type: ignore[attr-defined]
+                    if default:
+                        field.setCurrentText(default)  # type: ignore[attr-defined]
+                    field.currentTextChanged.connect(self._on_ph_chg)  # type: ignore[attr-defined]
+                    cell_widget: QWidget = field
+                elif key_l == "vin":
+                    vin_edit = QLineEdit(default)
+                    vin_edit.setPlaceholderText(
+                        "VIN saknas – utelämnas i engelskt mejl"
+                        if no_vin_saved
+                        else f"Skriv {label_text.lower()}…"
+                    )
+                    vin_edit.setEnabled(not no_vin_saved)
+                    vin_edit.textChanged.connect(self._on_ph_chg)
+                    field = vin_edit
+
+                    vin_container = QWidget()
+                    vin_row = QHBoxLayout(vin_container)
+                    vin_row.setContentsMargins(0, 0, 0, 0)
+                    vin_row.setSpacing(8)
+                    vin_row.addWidget(vin_edit, stretch=1)
+
+                    no_vin_cb = QCheckBox("Har ej VIN")
+                    no_vin_cb.setObjectName("noVinCheckbox")
+                    no_vin_cb.setToolTip(
+                        "Markera om VIN-nummer saknas – engelskt mejl kan då skickas utan VIN-rad."
+                    )
+                    no_vin_cb.setChecked(no_vin_saved)
+                    no_vin_cb.toggled.connect(self._on_no_vin_toggled)
+                    vin_row.addWidget(no_vin_cb)
+                    self._no_vin_cb = no_vin_cb
+                    cell_widget = vin_container
+                else:
+                    line_edit = QLineEdit(default)
+                    line_edit.setPlaceholderText(f"Skriv {label_text.lower()}…")
+                    line_edit.textChanged.connect(self._on_ph_chg)
+                    field = line_edit
+                    cell_widget = line_edit
+                grid.addWidget(cell_widget, row, 1)
+
+                is_done = bool(default.strip()) or (key_l == "vin" and no_vin_saved)
+                indicator = QLabel("✅" if is_done else "⬜")
+                indicator.setStyleSheet("font-size: 15pt;")
+                grid.addWidget(indicator, row, 2)
+                self._ph_inputs[key] = field
+                self._ph_row_widgets[key] = (label, cell_widget, indicator)
+
+            grid.setColumnStretch(1, 1)
+            self._ph_area.addLayout(grid)
+            from ui.keyboard_navigation import configure_tab_flow
+            configure_tab_flow(getattr(self, '_wizard_steps', []))
+            self._ensure_subject_contains_model_and_reg(update_field=True)
+            self._update_en_only_placeholder_visibility()
+            self._update_ph_status()
             self._refresh_preview()
-            return
-
-        # (v5.4) Labels alltid svenska – mallen fylls i på svenska,
-        # engelsk version genereras automatiskt till EN-mottagare
-        labels = _PH_SV
-        saved = self.settings.get("replacements_values", {}) or {}
-
-        header = QLabel(f"🔑 Fyll i mallens uppgifter här: {', '.join(keys)}")
-        header.setWordWrap(True)
-        header.setStyleSheet(
-            f"color: {self._c().get('accent', '')}; font-weight: bold;"
-        )
-        self._ph_area.addWidget(header)
-
-        grid = QGridLayout()
-        grid.setSpacing(10)
-        colors = ["accent", "purple", "success", "warning"]
-        palette = self._c()
-
-        for row, key in enumerate(keys):
-            key_l = key.lower()
-            label_text = labels.get(key_l, key.replace("_", " ").title())
-            color = palette.get(
-                colors[row % len(colors)], palette.get("accent", "")
-            )
-
-            label = QLabel(f"{label_text}:")
-            label.setStyleSheet(
-                f"color: {color}; font-weight: bold; font-size: 10pt;"
-            )
-            grid.addWidget(label, row, 0)
-
-            default = str(saved.get(key, saved.get(key_l, "")) or "")
-            if key_l in PLACEHOLDER_DROPDOWNS:
-                from ui.clickable_combo import ClickableComboBox
-                field = ClickableComboBox()
-                field.addItems(PLACEHOLDER_DROPDOWNS[key_l])
-                field.setEditable(True)
-                if default:
-                    field.setCurrentText(default)
-                field.currentTextChanged.connect(self._on_ph_chg)
-            else:
-                field = QLineEdit(default)
-                field.setPlaceholderText(f"Skriv {label_text.lower()}…")
-                field.textChanged.connect(self._on_ph_chg)
-            grid.addWidget(field, row, 1)
-
-            indicator = QLabel("✅" if default.strip() else "⬜")
-            indicator.setStyleSheet("font-size: 15pt;")
-            grid.addWidget(indicator, row, 2)
-            self._ph_inputs[key] = field
-
-        grid.setColumnStretch(1, 1)
-        self._ph_area.addLayout(grid)
-        from ui.keyboard_navigation import configure_tab_flow
-        configure_tab_flow(getattr(self, '_wizard_steps', []))
-        self._ensure_subject_contains_model_and_reg(update_field=True)
-        self._update_en_only_placeholder_visibility()
-        self._update_ph_status()
-        self._refresh_preview()
+        finally:
+            self._in_rebuild_ph = False
 
     def _clear_layout(self, layout: Any) -> None:
         while layout.count():
@@ -3237,12 +3305,17 @@ class MainWindow(QMainWindow):
     def _update_ph_status(self) -> None:
         values = self._get_ph()
         show_en_only = self._has_en_recipient()
+        no_vin = self._is_no_vin_checked()
         counted = {
             key: value
             for key, value in values.items()
             if show_en_only or str(key).lower() not in EN_ONLY_PLACEHOLDERS
         }
-        filled = sum(1 for value in counted.values() if value.strip())
+        filled = sum(
+            1
+            for key, value in counted.items()
+            if value.strip() or (str(key).lower() == "vin" and no_vin)
+        )
         total = len(counted)
         colors = self._c()
 
@@ -3274,13 +3347,19 @@ class MainWindow(QMainWindow):
 
         for row, key in enumerate(self._ph_inputs):
             value = self._widget_text(self._ph_inputs[key])
+            done = bool(value.strip()) or (str(key).lower() == "vin" and no_vin)
             item = grid.itemAtPosition(row, 2)
             if item and item.widget():
-                item.widget().setText("✅" if value.strip() else "⬜")
+                item.widget().setText("✅" if done else "⬜")
 
     def _get_ph(self) -> Dict[str, str]:
+        no_vin = self._is_no_vin_checked()
         return {
-            key: self._widget_text(widget).strip()
+            key: (
+                ""
+                if (str(key).lower() == "vin" and no_vin)
+                else self._widget_text(widget).strip()
+            )
             for key, widget in self._ph_inputs.items()
         }
 
@@ -4143,8 +4222,15 @@ class MainWindow(QMainWindow):
         )
 
     def _update_en_only_placeholder_visibility(self) -> None:
-        """Visa VIN-fältet bara när det finns EN-mottagare."""
+        """Visa VIN-fältet (inkl. 'Har ej VIN') bara när det finns EN-mottagare."""
         show = self._has_en_recipient()
+        if (
+            show
+            and not getattr(self, "_in_rebuild_ph", False)
+            and "vin" not in {str(k).lower() for k in self._ph_inputs}
+        ):
+            self._rebuild_ph()
+            return
         rows = getattr(self, "_ph_row_widgets", {}) or {}
         for key, widgets in rows.items():
             if str(key).lower() not in EN_ONLY_PLACEHOLDERS:
@@ -4197,6 +4283,7 @@ class MainWindow(QMainWindow):
                 continue
             it.setText(f"{email} {_lang_tag(new_lang)}")
             it.setData(Qt.ItemDataRole.UserRole, new_lang)
+        self._update_en_only_placeholder_visibility()
         self._refresh_preview()
         self._status(
             f"🌐 {len(selected)} mottagare: {_lang_tag(new_lang)}", "info"
@@ -5043,6 +5130,37 @@ class MainWindow(QMainWindow):
         widget = QWidget()
         layout = QVBoxLayout(widget)
 
+        view_row = QHBoxLayout()
+        view_row.setSpacing(8)
+        self._log_mode_today_btn = QPushButton("📅 Dagens logg (endast idag)")
+        self._log_mode_today_btn.setCheckable(True)
+        self._log_mode_today_btn.setChecked(True)
+        self._log_mode_today_btn.setObjectName("logModeTodayButton")
+        self._log_mode_today_btn.clicked.connect(
+            lambda: self._set_log_view_mode("today")
+        )
+        view_row.addWidget(self._log_mode_today_btn)
+
+        self._log_mode_errors_btn = QPushButton(
+            "🛠 Samlad felsökningslogg – ej fixade fel"
+        )
+        self._log_mode_errors_btn.setCheckable(True)
+        self._log_mode_errors_btn.setObjectName("logModeErrorsButton")
+        self._log_mode_errors_btn.clicked.connect(
+            lambda: self._set_log_view_mode("errors")
+        )
+        view_row.addWidget(self._log_mode_errors_btn)
+
+        self._log_archive_info = QLabel(
+            "📦 Äldre dagar arkiveras automatiskt i logs/archive/ · Fixade fel rensas automatiskt"
+        )
+        self._log_archive_info.setStyleSheet(
+            f"color: {self._c().get('text_secondary', '')}; font-size: 9pt;"
+        )
+        view_row.addStretch()
+        view_row.addWidget(self._log_archive_info)
+        layout.addLayout(view_row)
+
         self._log_edit = QPlainTextEdit()
         self._log_edit.setReadOnly(True)
         self._log_edit.setFont(QFont("Consolas", 9))
@@ -5055,7 +5173,7 @@ class MainWindow(QMainWindow):
         btn_refresh.clicked.connect(self._refresh_log)
         buttons.addWidget(btn_refresh)
 
-        btn_open = QPushButton("📂 Öppna")
+        btn_open = QPushButton("📂 Öppna dagens logg")
         btn_open.clicked.connect(self._open_log)
         buttons.addWidget(btn_open)
         btn_errors = QPushButton("🛠 Öppna samlad fellogg")
@@ -5080,6 +5198,18 @@ class MainWindow(QMainWindow):
         layout.addLayout(buttons)
         return widget
 
+    def _set_log_view_mode(self, mode: str) -> None:
+        self._log_view_mode = "errors" if mode == "errors" else "today"
+        if hasattr(self, "_log_mode_today_btn"):
+            self._log_mode_today_btn.setChecked(self._log_view_mode == "today")
+        if hasattr(self, "_log_mode_errors_btn"):
+            self._log_mode_errors_btn.setChecked(self._log_view_mode == "errors")
+        self._refresh_log()
+
+    def _ensure_logs_archived_and_cleaned(self) -> Path:
+        from core.diagnostics import collect_errors
+        return collect_errors(self._base_dir())
+
     def _export_support_report(self):
         path, _ = QFileDialog.getSaveFileName(self, 'Exportera senaste felsökningsrapport',
                                             'E-postofferten-felsokning.txt', 'Text (*.txt)')
@@ -5097,12 +5227,49 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(self, 'Felsökningsrapport', 'Kunde inte spara rapporten.')
 
     def _refresh_log(self) -> None:
+        from datetime import date as _date
+        from core.log_archive import filter_today_log_text
+        from core.open_errors import open_issues
+
+        errors_path = self._ensure_logs_archived_and_cleaned()
+        logs_dir = errors_path.parent
+        today = _date.today()
+
+        try:
+            open_count = len(open_issues(logs_dir))
+        except Exception:
+            open_count = 0
+        if hasattr(self, "_log_mode_errors_btn"):
+            self._log_mode_errors_btn.setText(
+                f"🛠 Samlad felsökningslogg – ej fixade fel ({open_count})"
+            )
+
+        if getattr(self, "_log_view_mode", "today") == "errors":
+            content = (
+                errors_path.read_text(encoding="utf-8", errors="replace").strip()
+                if errors_path.exists()
+                else ""
+            )
+            self._log_edit.setPlainText(
+                content
+                if content
+                else "✅ Inga ofixade fel i den samlade felsökningsloggen (fixade fel rensas och arkiveras automatiskt)."
+            )
+            cursor = self._log_edit.textCursor()
+            cursor.movePosition(cursor.MoveOperation.Start)
+            self._log_edit.setTextCursor(cursor)
+            return
+
         log_path = self._log_path()
         if not log_path or not log_path.exists():
             self._status("⚠️ Loggfil saknas", "warning")
             return
+        raw_text = log_path.read_text(encoding="utf-8-sig", errors="replace")
+        today_only = filter_today_log_text(raw_text, today=today, default_date=today)
         self._log_edit.setPlainText(
-            log_path.read_text(encoding="utf-8", errors="replace")
+            today_only
+            if today_only.strip()
+            else f"Inga loggposter för idag ({today.isoformat()}). Äldre dagar är arkiverade i logs/archive/."
         )
         cursor = self._log_edit.textCursor()
         cursor.movePosition(cursor.MoveOperation.End)
@@ -5119,11 +5286,12 @@ class MainWindow(QMainWindow):
 
     def _manage_open_errors(self):
         from core.open_errors import open_issues, resolve_issues
+        self._ensure_logs_archived_and_cleaned()
         dialog = QDialog(self)
-        dialog.setWindowTitle("Öppna fel")
+        dialog.setWindowTitle("Öppna fel (ej fixade)")
         layout = QVBoxLayout(dialog)
-        info = QLabel("Fel ligger kvar tills du själv markerar dem som åtgärdade. "
-                      "Bekräfta att orsaken är löst först. Valda fel säkerhetskopieras till verifierat arkiv och tas sedan bort ur errors.log. Återkommer felet öppnas det igen.")
+        info = QLabel("Här visas alla aktiva ej fixade fel i den samlade felsökningsloggen (errors.log). "
+                      "Fixade fel arkiveras och rensas automatiskt efter åtgärd/uppdatering, men du kan även markera valda fel som åtgärdade manuellt nedan. Återkommer ett fel öppnas det igen.")
         info.setWordWrap(True)
         layout.addWidget(info)
         choices = QListWidget()
@@ -5149,6 +5317,7 @@ class MainWindow(QMainWindow):
             try:
                 resolve_issues(directory, selected)
                 refresh()
+                self._refresh_log()
             except Exception:
                 log.exception("Kunde inte markera fel som åtgärdade")
                 QMessageBox.warning(dialog, "Öppna fel", "Kunde inte spara ändringen. Se loggen.")
@@ -5170,14 +5339,18 @@ class MainWindow(QMainWindow):
 
     def _open_combined_errors(self) -> None:
         try:
-            from core.diagnostics import collect_errors
-            path = collect_errors(self._base_dir())
+            path = self._ensure_logs_archived_and_cleaned()
+            self._set_log_view_mode("errors")
             self._explorer(path)
         except Exception:
             log.exception("Kunde inte öppna samlad fellogg")
             self._status("Kunde inte öppna felloggen – kontrollera skrivbehörighet och ledigt diskutrymme.", "error")
 
     def _open_log(self) -> None:
+        try:
+            self._ensure_logs_archived_and_cleaned()
+        except Exception:
+            log.debug("Arkivering före öppna logg misslyckades", exc_info=True)
         path = self._log_path()
         if path:
             self._explorer(path)
@@ -7096,10 +7269,12 @@ class MainWindow(QMainWindow):
             "request_receipts": bool(
                 self.settings.get("request_receipts", False)
             ),
+            "no_vin": self._is_no_vin_checked(),
             "placeholders_missing": [
                 key
                 for key, value in replacements.items()
                 if not value.strip()
+                and not (str(key).lower() == "vin" and self._is_no_vin_checked())
             ],
             "warnings": [],
         }
@@ -7451,13 +7626,15 @@ class MainWindow(QMainWindow):
         if vin_required_missing(
             params.get("replacements") or {},
             bool(params.get("include_english")),
+            bool(params.get("no_vin", False)),
         ):
             QMessageBox.warning(
                 self,
                 "VIN saknas",
                 "VIN-nummer är obligatoriskt när det finns en "
-                "engelsk mottagare [EN].\n\n"
-                "Fyll i fältet 🔢 VIN (obligatoriskt för EN) i steg ①.",
+                "engelsk mottagare [EN], om du inte markerat 'Har ej VIN'.\n\n"
+                "Fyll i fältet 🔢 VIN (obligatoriskt för EN) eller kryssa i "
+                "'Har ej VIN' i steg ①.",
             )
             self.select_tab("send")
             return False
@@ -7666,17 +7843,26 @@ class MainWindow(QMainWindow):
         Mallval + malltext behålls (spec) – allt inmatat töms.
         """
         self.settings.set("replacements_values", {})
+        self.settings.set("no_vin_checked", False)
+        if self._no_vin_cb is not None:
+            try:
+                self._no_vin_cb.blockSignals(True)
+                self._no_vin_cb.setChecked(False)
+            finally:
+                self._no_vin_cb.blockSignals(False)
 
         # Platshållarfält (v4.7: duck-typad – fungerar för alla widgettyper;
         # QComboBox måste tömmas via setCurrentText, ALDRIG clear() som
         # raderar dropdown-alternativen)
-        for widget in self._ph_inputs.values():
+        for key, widget in self._ph_inputs.items():
             try:
                 widget.blockSignals(True)
                 if hasattr(widget, "setCurrentText"):
                     widget.setCurrentText("")
                 elif hasattr(widget, "clear"):
                     widget.clear()
+                if str(key).lower() == "vin" and isinstance(widget, QLineEdit):
+                    widget.setEnabled(True)
             except Exception:
                 log.debug("Kunde inte rensa fält %r", widget, exc_info=True)
             finally:
@@ -7725,6 +7911,7 @@ class MainWindow(QMainWindow):
         # Standard-Bcc + arkivkopia laddas in igen (ska alltid finnas)
         self._load_default_recipients()
 
+        self._update_en_only_placeholder_visibility()
         self._update_ph_status()
         self._refresh_preview()
         self._status("🧹 Formuläret rensades efter sändning", "info")
@@ -7877,6 +8064,8 @@ class MainWindow(QMainWindow):
 
         ensure_qwidget_shown(self)
         self.bus.publish("ui.window_shown", {})
+        from core.open_errors import notify_subsystem_recovered
+        notify_subsystem_recovered(self._base_dir(), ("tray_window",))
         # (v5.4) Uppdatering funnen medan appen låg i trayen? Fråga nu.
         if self._pending_update_info is not None:
             QTimer.singleShot(400, self._maybe_prompt_pending_update)

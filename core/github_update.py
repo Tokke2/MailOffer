@@ -540,6 +540,12 @@ def check_for_update(
         info.build_id or "-", info.same_version_files_changed,
         info.commit_sha or "-", info.files_compared, len(info.changed_files),
     )
+    if not info.error:
+        from core.open_errors import notify_subsystem_recovered
+        notify_subsystem_recovered(
+            base_dir or Path(__file__).resolve().parents[1],
+            ("github_update",),
+        )
     return info
 
 

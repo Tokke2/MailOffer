@@ -17,8 +17,8 @@ jobs:
       matrix:
         python-version: ["3.11", "3.12"]
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
         with:
           python-version: ${{ matrix.python-version }}
       # Endast python-docx behövs i CI (DOCX-roundtrip-testet).
@@ -29,7 +29,7 @@ jobs:
         run: python -m compileall -q main.pyw core ui script tests
       - name: Kör enhetstester
         run: python -m unittest discover -s tests -v
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: "22"
       - name: Testa Thunderbird-protokoll
@@ -41,7 +41,7 @@ jobs:
       matrix:
         host-python: ["3.12", "3.14"]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Kontrollera PowerShell och VBS utan installation
         shell: powershell
         run: |
@@ -78,7 +78,7 @@ jobs:
       - name: Testa flera Python-launchers med separata sökvägar
         shell: powershell
         run: ./tests/test_python_launchers.ps1
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: ${{ matrix.host-python }}
       - name: Kontrollera system-Python från PowerShell 5.1
@@ -121,9 +121,15 @@ jobs:
         run: |
           $env:QT_QPA_PLATFORM = 'offscreen'
           python tools/run_windows_tests.py test_donation_locked.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python tools/run_windows_tests.py test_design_system_ui.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python tools/run_windows_tests.py test_screen_fit.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python tools/run_windows_tests.py test_branch_dpi_perf.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python tools/run_windows_tests.py test_vin_no_vin_checkbox_ui.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Testa klickbar dropdowntext
         run: |
           $env:QT_QPA_PLATFORM = 'offscreen'
@@ -157,7 +163,11 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           ./tests/test_startup_logging.ps1
       - name: Testa dagsarkivering med öppna Windows-loggfiler
-        run: python tools/run_windows_tests.py test_log_compaction.py
+        run: |
+          python tools/run_windows_tests.py test_log_compaction.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python tools/run_windows_tests.py test_daily_log_and_auto_error_cleanup.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
   desktop-portability:
     runs-on: ${{ matrix.os }}
@@ -165,8 +175,8 @@ jobs:
       matrix:
         os: [ubuntu-latest, macos-latest]
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
       - name: Testa autostartkonfiguration och säkert stängbeteende

@@ -126,12 +126,14 @@ def install_qt():
 
 
 def collect_errors(base):
-    """Refresh the combined log on demand; do not reconfigure logging/hooks."""
+    """Refresh the combined log & archive non-today logs on demand."""
     from core.error_log import ErrorLogCollector
+    from core.open_errors import auto_cleanup_fixed_issues
     collector = _error_collector
     if collector is None or Path(base).resolve() != collector.base.resolve():
-        collector = ErrorLogCollector(base)
-    collector.collect(final=True)
+        collector = ErrorLogCollector(base, canonical_layout=True)
+    collector.archive_completed_logs()
+    auto_cleanup_fixed_issues(collector.directory)
     return collector.path
 
 

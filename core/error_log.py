@@ -91,6 +91,7 @@ class ErrorLogCollector:
         self._last_archived_sig = None
         self._last_failure = None
         self._history_verified = False
+        self._build_cleanup_verified = False
         self._state_cache = None
         self._state_sig = None
         self._mutex = threading.RLock()
@@ -269,6 +270,10 @@ class ErrorLogCollector:
             state = dict(list(state.items())[-512:])
             if state != original_state or not self.state_path.exists():
                 self._save_index(state)
+            if not self._build_cleanup_verified:
+                from core.open_errors import auto_cleanup_fixed_issues
+                auto_cleanup_fixed_issues(self.directory)
+                self._build_cleanup_verified = True
             if not self.path.exists():
                 self.path.touch()
             return count

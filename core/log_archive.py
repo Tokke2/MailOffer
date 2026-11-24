@@ -18,7 +18,40 @@ import zipfile
 RETENTION_DAYS = 7
 _ARCHIVE_NAME = re.compile(r'.+\.log(?:\.\d+)?-[0-9a-f]{16}\.zip')
 _reported_skips = set()
-_DATE = re.compile(r'^(?:=== Collected )?(\d{4}-\d{2}-\d{2})(?:[ T]|$)')
+_DATE_ISO = re.compile(r'^(?:=== Collected )?\[?(\d{4}-\d{2}-\d{2})(?:[ T\]|]|$)')
+_DATE_EU = re.compile(r'^\[?(\d{2})/(\d{2})/(\d{4})(?:[ T\]|]|$)')
+
+
+def _parse_record_date(line):
+    match = _DATE_ISO.match(line)
+    if match:
+        try:
+            return date.fromisoformat(match[1])
+        except ValueError:
+            pass
+    match_eu = _DATE_EU.match(line)
+    if match_eu:
+        try:
+            return date(int(match_eu[3]), int(match_eu[2]), int(match_eu[1]))
+        except ValueError:
+            pass
+    return None
+
+
+def filter_today_log_text(text, today=None, *, default_date=None):
+    """Return only log lines from *today* (or later), hiding older days' entries."""
+    if not text:
+        return ""
+    today = today or date.today()
+    current = default_date or today
+    kept = []
+    for line in text.splitlines(keepends=True):
+        parsed = _parse_record_date(line)
+        if parsed is not None:
+            current = parsed
+        if current >= today:
+            kept.append(line)
+    return "".join(kept)
 
 
 def snapshot(directory, name, day, data):
@@ -151,12 +184,9 @@ def archive_logs(directory, today=None, *, eligible=None, prepared=None, rewritt
             current = datetime.fromtimestamp(source.stat().st_mtime).date()
             groups, kept = defaultdict(list), []
             for line in text.splitlines(keepends=True):
-                match = _DATE.match(line)
-                if match:
-                    try:
-                        current = date.fromisoformat(match[1])
-                    except ValueError:
-                        pass
+                parsed_day = _parse_record_date(line)
+                if parsed_day is not None:
+                    current = parsed_day
                 if current < today:
                     groups[current].append(line)
                 else:

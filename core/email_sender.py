@@ -649,7 +649,7 @@ def _strip_vin_from_swedish(text: str) -> str:
 
 
 def _strip_empty_vin_line(text: str, vin: str) -> str:
-    """Om VIN är tom, ta bort VIN-raden ur engelska mailet."""
+    """Om VIN är tom (t.ex. när 'Har ej VIN' markerats), ta bort VIN-raden ur engelska mailet."""
     if not text:
         return text
     if str(vin or "").strip():
@@ -657,11 +657,13 @@ def _strip_empty_vin_line(text: str, vin: str) -> str:
     kept: List[str] = []
     for line in text.splitlines():
         low = line.strip().lower()
-        if "::vin::" in low:
+        if "::vin::" in low or "{vin}" in low or "((vin))" in low:
             continue
-        if re.match(r"^vin\s*:\s*$", low):
-            continue
-        if re.match(r"^vin number\s*:\s*$", low):
+        plain_low = re.sub(r"<[^>]+>", "", low).strip()
+        if re.match(
+            r"^(?:vin(?:\s*(?:no\.?|number|nr))?|chassis(?:\s*(?:no\.?|number))?)\s*[-:]\s*$",
+            plain_low,
+        ):
             continue
         kept.append(line)
     return "\n".join(kept).strip()
@@ -1931,6 +1933,12 @@ def send_email(
             result.batches_sent, result.total_recipients,
             result.recipients_sv, result.recipients_en, subject,
         )
+        if not dry_run and not result.errors:
+            from core.open_errors import notify_subsystem_recovered
+            notify_subsystem_recovered(
+                Path(__file__).resolve().parents[1],
+                ("smtp_send", "placeholder_translation"),
+            )
     except EmailSendError:
         raise
     except smtplib.SMTPException as exc:
@@ -2085,6 +2093,11 @@ def test_smtp_connection(
             smtp_server, smtp_port, username, password,
             timeout=timeout, use_ssl=use_ssl,
             disable_tls=False, smtp_debug=False,
+        )
+        from core.open_errors import notify_subsystem_recovered
+        notify_subsystem_recovered(
+            Path(__file__).resolve().parents[1],
+            ("smtp_send",),
         )
         return True, (
             f"Anslutning till {smtp_server}:{smtp_port} lyckades! "

@@ -5,7 +5,7 @@ from pathlib import Path
 import tempfile
 
 FIELDS = {'template_name', 'subject', 'body', 'free_text', 'replacements', 'to', 'bcc',
-          'to_lang', 'bcc_lang', 'attachment_paths', 'profile_id', 'tab'}
+          'to_lang', 'bcc_lang', 'attachment_paths', 'profile_id', 'tab', 'no_vin'}
 
 
 def save_session(path, state):

@@ -840,16 +840,30 @@ class PreviewTab(QWidget):
 
             # Svensk del utan engelsk blockrendering
             subject_sv, body_sv = _cached_parse((str(path), False))
+            try:
+                from core.email_sender import (
+                    _strip_empty_vin_line,
+                    _strip_vin_from_swedish,
+                )
+            except Exception:
+                _strip_vin_from_swedish = lambda t: t  # type: ignore[assignment]
+                _strip_empty_vin_line = lambda t, _v: t  # type: ignore[assignment]
 
             if include_english:
                 subject_both, body_both = _cached_parse(
                     (str(path), True)
                 )
                 body_en = _remove_prefix_lines(body_both, body_sv)
+                vin_val = next(
+                    (v for k, v in placeholders.items() if k.lower() == "vin"),
+                    "",
+                )
+                body_en = _strip_empty_vin_line(body_en, vin_val)
                 subject_rendered = subject_both or subject_sv or "(Inget ämne)"
             else:
                 body_en = ""
                 subject_rendered = subject_sv or "(Inget ämne)"
+            body_sv = _strip_vin_from_swedish(body_sv)
 
             section_sv_plain = _insert_free_text_plain(
                 body_sv, free_text, "sv"
