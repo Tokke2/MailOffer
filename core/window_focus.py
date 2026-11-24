@@ -7,6 +7,7 @@ from typing import Any
 
 log = logging.getLogger(__name__)
 
+_SW_HIDE = 0
 _SW_SHOWNORMAL = 1
 _SW_SHOWMAXIMIZED = 3
 _SW_SHOW = 5
@@ -246,6 +247,17 @@ def ensure_qwidget_shown(window: Any) -> None:
 
         if native_win32:
             hwnd = int(window.winId())
+            # På första QWidget.show() i en process startad med STARTUPINFO SW_HIDE
+            # anropar Qt6 ShowWindow(SW_SHOWDEFAULT) -> SW_HIDE (firstShow=true).
+            # En omedelbar hide()+show()-cykel förbrukar firstShow så att Qt6:s egen
+            # QWindowsWindow hamnar i synk med Win32 innan vi sätter förgrundsfokus.
+            if hwnd and not win32_is_window_visible(hwnd):
+                QWidget.hide(window)
+                if was_maximized:
+                    QWidget.showMaximized(window)
+                else:
+                    QWidget.showNormal(window)
+                hwnd = int(window.winId())
             _force_win32_show_and_focus(
                 hwnd, maximize=was_maximized, keep_topmost=keep_topmost
             )
@@ -258,6 +270,23 @@ def ensure_qwidget_shown(window: Any) -> None:
             setattr(window, "_restoring_from_tray", False)
         except Exception:
             pass
+
+
+def ensure_qwidget_hidden(window: Any) -> None:
+    """Hide *window* in both Qt and native Win32 (even after SW_HIDE startup)."""
+    from PyQt6.QtWidgets import QWidget
+
+    native_win32 = _is_native_windows_qpa()
+    hwnd = int(window.winId()) if native_win32 and window.testAttribute(
+        __import__("PyQt6.QtCore", fromlist=["Qt"]).Qt.WidgetAttribute.WA_WState_Created
+    ) else 0
+    QWidget.hide(window)
+    if native_win32 and hwnd and win32_is_window_visible(hwnd):
+        try:
+            user32, _, wintypes = _win32_apis()
+            user32.ShowWindow(wintypes.HWND(hwnd), _SW_HIDE)
+        except Exception:
+            log.debug("Win32 ShowWindow(SW_HIDE) misslyckades", exc_info=True)
 
 
 def present_window(window: Any) -> None:

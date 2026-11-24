@@ -517,18 +517,26 @@ class SystemTray:
         try:
             from core.window_focus import present_window
 
+            seq = getattr(self, "_show_seq", 0) + 1
+            self._show_seq = seq
             main_window = self._main_window
             present_window(main_window)
             # På Windows 10/11 stängs tray-popupmenyn (WM_EXITMENULOOP) strax efter
             # triggered-signalen, varpå explorer.exe kan försöka återta fokus.
-            # En kort uppföljning säkerställer synlighet + förgrundsfokus.
+            # En kort uppföljning säkerställer synlighet + förgrundsfokus (men
+            # avbryts om användaren/testet hunnit dölja fönstret under tiden).
             try:
                 from PyQt6.QtCore import QTimer as _QtTimer
                 from PyQt6.QtWidgets import QWidget as _QtWidget
 
                 if isinstance(main_window, _QtWidget):
                     _QtTimer.singleShot(
-                        50, lambda w=main_window: present_window(w)
+                        50,
+                        lambda w=main_window, s=seq: (
+                            present_window(w)
+                            if getattr(self, "_show_seq", 0) == s
+                            else None
+                        ),
                     )
             except Exception:
                 pass
@@ -541,6 +549,7 @@ class SystemTray:
         """Dölj huvudfönster."""
         del _checked
         try:
+            self._show_seq = getattr(self, "_show_seq", 0) + 1
             main_window = self._main_window
             if hasattr(main_window, "hide"):
                 main_window.hide()

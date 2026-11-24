@@ -7882,7 +7882,9 @@ class MainWindow(QMainWindow):
             QTimer.singleShot(400, self._maybe_prompt_pending_update)
 
     def hide(self) -> None:  # type: ignore[override]
-        super().hide()
+        from core.window_focus import ensure_qwidget_hidden
+
+        ensure_qwidget_hidden(self)
         self.bus.publish("ui.window_hidden", {})
 
     def _can_hide_to_tray(self) -> bool:
