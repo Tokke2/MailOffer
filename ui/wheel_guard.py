@@ -296,6 +296,8 @@ class _WheelGuard(QObject):  # type: ignore[misc]
         """True för en yttre skrollbehållare (QScrollArea) men INTE ett textfält."""
         if widget is None:
             return False
+        if type(widget).__name__ in ("QScrollArea", "DummyScrollArea"):
+            return True
         if HAS_QT:
             try:
                 if isinstance(widget, QScrollArea):
@@ -306,8 +308,7 @@ class _WheelGuard(QObject):  # type: ignore[misc]
                     return True
             except Exception:
                 return False
-            return False
-        return type(widget).__name__ in ("QScrollArea", "DummyScrollArea")
+        return False
 
     @classmethod
     def _resolve_guarded_widget(cls, widget: object) -> Optional[object]:
