@@ -14,7 +14,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Tuple
 
-DPR_LEVELS: Tuple[float, ...] = (1.0, 1.25, 1.5, 1.75, 2.0, 2.25, 2.5, 3.0)
+DPR_LEVELS: Tuple[float, ...] = (1.0, 1.25, 1.5, 2.0, 3.0)
 IMAGE_SUFFIXES = frozenset({
     ".png", ".jpg", ".jpeg", ".webp", ".bmp", ".gif", ".tif", ".tiff",
 })
