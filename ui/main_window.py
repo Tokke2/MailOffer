@@ -5470,7 +5470,7 @@ class MainWindow(QMainWindow):
 
         self._log_edit = QPlainTextEdit()
         self._log_edit.setReadOnly(True)
-        log_font = QFont("Consolas" if IS_WINDOWS else "Monospace", 10)
+        log_font = QFont("Consolas" if os.name == "nt" else "Monospace", 10)
         log_font.setStyleHint(QFont.StyleHint.Monospace)
         log_font.setStyleStrategy(
             QFont.StyleStrategy.PreferAntialias | QFont.StyleStrategy.PreferQuality
