@@ -1,0 +1,2 @@
+Läs och följ alla permanenta projektregler i `AGENTS.md` (i projektroten) samt `docs/forslagslogg.md`.
+Varje kodförändring MÅSTE uppdatera `BUILD_ID` i `core/version.py` och uppdatera GitHub Release (`v1.0.0`) markerad som `Latest` (`make_latest="true"` via `tools/sync_latest_release.py`), eftersom appens uppdaterare jämför filer mot `/releases/latest`. Var 10:e chattmeddelande ska en ny lista på 10 ej återbrukade förslag visas och sparas i `docs/forslagslogg.md`.

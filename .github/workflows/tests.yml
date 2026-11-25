@@ -193,5 +193,25 @@ jobs:
           python tools/run_windows_tests.py test_desktop_portability.py
           python tools/run_windows_tests.py test_tray_close_safety.py
           python tools/run_windows_tests.py test_vector_branding.py
+          python tools/run_windows_tests.py test_release_rules_guard.py
           sh -n 'Starta MailOffer.sh'
           sh -n 'Starta MailOffer.command'
+
+  sync-latest-release:
+    needs: [unittest, windows-startup-syntax, desktop-portability]
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - name: Uppdatera release-tagg och markera som Latest
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_SHA: ${{ github.sha }}
+          GITHUB_REF_NAME: ${{ github.ref_name }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: python tools/sync_latest_release.py
