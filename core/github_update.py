@@ -11,13 +11,15 @@ Flöde:
    metadata, så att uppdaterade filer i t.ex. v1.0.0 ändå erbjuds som
    uppdatering (ägarbeslut 2026-10-21).
    I appen verifieras dessutom release-taggens verkliga commit (även
-   annoterade taggar), och SHA-256 för nedladdade appfiler jämförs med
-   installationen. Detta fungerar även utan tidigare sparat fingeravtryck.
-2. ``apply_github_update()`` laddar ner release-zip:en (bifogad
-   ``.zip``-asset om den finns, annars ``zipball_url``), packar upp
-   den säkert (zip-slip-skydd) och delegerar kopieringen till
-   ``core/app_update.apply_update_from_dir`` – som ALDRIG rör JSON,
-   inställningar, adresslistor eller mallmappen (``update_protect``).
+   annoterade taggar), officiell asset-SHA-256 (``digest``) och SHA-256
+   för nedladdade appfiler mot installationen.
+2. ``apply_github_update()`` återanvänder verifierad release-zip från
+   ``.data/update_cache/`` (eller laddar ner över krypterad HTTPS),
+   packar upp den säkert (zip-slip-, symlänk-, krypterings- och
+   zip-bomb-skydd) och delegerar kopieringen till
+   ``core/app_update.apply_update_from_dir`` – som validerar
+   Python-syntax, skriver atomärt med automatisk rollback och ALDRIG rör
+   JSON, inställningar, adresslistor eller mallmappen (``update_protect``).
 
 Beslut (användaren 2026-10-19): ENDAST Releases – appen följer alltså
 inte ``main``-branchen. Finns ingen publicerad release rapporteras
@@ -37,16 +39,20 @@ import datetime as _dt
 import hashlib
 import json
 import logging
+import os
+import posixpath
 import re
 import shutil
 import tempfile
+import time
 import urllib.error
+import urllib.parse
 import urllib.request
 from urllib.parse import quote
 import zipfile
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Callable, Dict, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from core.version import (
     BUILD_ID as CURRENT_BUILD_ID,
@@ -58,7 +64,25 @@ log = logging.getLogger(__name__)
 
 API_BASE = "https://api.github.com"
 MAX_ZIP_BYTES = 200 * 1024 * 1024  # 200 MB – skydd mot trasiga svar
+MAX_JSON_BYTES = 8 * 1024 * 1024   # 8 MB – skydd för JSON-metadata
+MAX_EXTRACT_FILES = 20_000
+MAX_EXTRACT_BYTES = 400 * 1024 * 1024
 AUTO_CHECK_INTERVAL_HOURS = 12
+_STREAM_CHUNK_BYTES = 64 * 1024
+_TRANSIENT_HTTP_CODES = frozenset({408, 429, 500, 502, 503, 504})
+_SHA256_RE = re.compile(r"^[0-9a-fA-F]{64}$")
+_BUILD_SECTION_RE = re.compile(r"(?m)^##\s+BUILD([0-9A-Za-z_.-]+)\b[^\n]*$")
+_HTML_COMMENT_RE = re.compile(r"<!--.*?-->", re.DOTALL)
+_WINDOWS_RESERVED_NAMES = frozenset(
+    {
+        "CON",
+        "PRN",
+        "AUX",
+        "NUL",
+        *(f"COM{i}" for i in range(1, 10)),
+        *(f"LPT{i}" for i in range(1, 10)),
+    }
+)
 
 Fetcher = Callable[[str, float], Tuple[int, bytes]]
 
@@ -128,8 +152,47 @@ def parse_build_id(value: object) -> str:
         text = f"{value.get('name') or ''} {value.get('body') or ''}"
     else:
         text = str(value or "")
-    match = _BUILD_MARKER_RE.search(text)
-    return match.group(1).strip() if match else ""
+    matches = _BUILD_MARKER_RE.findall(text)
+    if not matches:
+        return ""
+    if all(m.strip().isdigit() for m in matches):
+        return max((m.strip() for m in matches), key=int)
+    return matches[-1].strip()
+
+
+def extract_latest_release_notes(
+    notes: str, build_id: str = "", *, max_chars: int = 900
+) -> str:
+    """Plocka ut det senaste/matchande versionsavsnittet ur release-texten.
+
+    När en release har kumulativa ``## BUILD...``-avsnitt ligger de nyaste
+    ändringarna längst ned; tidigare kapades ``notes[:700]`` från toppen
+    vilket dolde nyheterna i själva bygget.
+    """
+    cleaned = _HTML_COMMENT_RE.sub("", str(notes or "")).strip()
+    if not cleaned:
+        return ""
+    sections = list(_BUILD_SECTION_RE.finditer(cleaned))
+    if sections:
+        chosen_idx = len(sections) - 1
+        wanted = str(build_id or "").strip()
+        if wanted:
+            for idx, m in enumerate(sections):
+                if m.group(1).strip() == wanted:
+                    chosen_idx = idx
+                    break
+        start = sections[chosen_idx].start()
+        end = (
+            sections[chosen_idx + 1].start()
+            if chosen_idx + 1 < len(sections)
+            else len(cleaned)
+        )
+        block = cleaned[start:end].strip()
+    else:
+        block = cleaned
+    if len(block) > max_chars:
+        block = block[: max_chars - 1].rstrip() + "…"
+    return block
 
 
 def _is_newer_build(latest: object, current: object) -> bool:
@@ -230,7 +293,7 @@ def should_auto_check(
 
 
 # ───────────────────────────────────────────────────────────────────────
-# GitHub API
+# GitHub API & transportskydd
 # ───────────────────────────────────────────────────────────────────────
 
 @dataclass
@@ -254,27 +317,7 @@ class UpdateInfo:
     error: str = ""
     no_releases: bool = False
     raw: Dict[str, Any] = field(default_factory=dict)
-
-
-def _default_fetcher(url: str, timeout: float) -> Tuple[int, bytes]:
-    """GET via urllib. Returnerar (status, body); HTTP-fel → status."""
-    request = urllib.request.Request(
-        url,
-        headers={
-            "Accept": "application/vnd.github+json",
-            "User-Agent": f"E-postofferten/{CURRENT_VERSION} (+https://github.com/{GITHUB_REPO})",
-            "X-GitHub-Api-Version": "2022-11-28",
-        },
-    )
-    try:
-        with urllib.request.urlopen(request, timeout=timeout) as response:
-            return int(getattr(response, "status", 200) or 200), response.read()
-    except urllib.error.HTTPError as exc:
-        try:
-            body = exc.read()
-        except Exception:
-            body = b""
-        return int(exc.code or 0), body
+    expected_asset_sha256: str = ""
 
 
 _FORBIDDEN_BRANCH_NAMES = frozenset({"main", "master", "head"})
@@ -320,12 +363,99 @@ def is_forbidden_main_url(url: object) -> bool:
     return False
 
 
+def validate_update_url(url: object) -> str:
+    """Validera att ``url`` använder krypterad ``https://`` och aldrig pekar mot ``main``."""
+    text = str(url or "").strip()
+    if is_forbidden_main_url(text):
+        raise ValueError("Uppdatering mot main-branchen är blockerad (hård regel).")
+    parsed = urllib.parse.urlsplit(text)
+    if (parsed.scheme or "").lower() != "https" or not parsed.hostname:
+        raise ValueError("Endast krypterade HTTPS-länkar tillåts vid uppdatering.")
+    return text
+
+
+class _SafeHttpsRedirectHandler(urllib.request.HTTPRedirectHandler):
+    """Verifiera att varje HTTP-omdirigering stannar på ``https://`` och ej ``main``."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):  # type: ignore[override]
+        resolved = urllib.parse.urljoin(req.full_url, newurl)
+        validate_update_url(resolved)
+        return super().redirect_request(req, fp, code, msg, headers, resolved)
+
+
+def _read_bounded_response(response: Any, max_bytes: int) -> bytes:
+    headers = getattr(response, "headers", None)
+    content_length = headers.get("Content-Length") if headers is not None else None
+    if content_length:
+        try:
+            if int(content_length) > max_bytes:
+                raise RuntimeError("Nedladdningen är oväntat stor – avbryter.")
+        except ValueError:
+            pass
+    chunks: List[bytes] = []
+    total = 0
+    while True:
+        chunk = response.read(_STREAM_CHUNK_BYTES)
+        if not chunk:
+            break
+        total += len(chunk)
+        if total > max_bytes:
+            raise RuntimeError("Nedladdningen är oväntat stor – avbryter.")
+        chunks.append(chunk)
+    return b"".join(chunks)
+
+
+def _default_fetcher(url: str, timeout: float) -> Tuple[int, bytes]:
+    """GET via urllib med HTTPS-kontroll, strömbegränsning och 1 automatiskt omförsök."""
+    cleaned = validate_update_url(url)
+    is_api = "api.github.com/" in cleaned and "/zipball/" not in cleaned and "/tarball/" not in cleaned
+    max_bytes = MAX_JSON_BYTES if is_api else MAX_ZIP_BYTES
+    accept = "application/vnd.github+json" if is_api else "application/octet-stream,*/*"
+    opener = urllib.request.build_opener(_SafeHttpsRedirectHandler())
+
+    last_exc: Optional[BaseException] = None
+    for attempt in range(2):
+        request = urllib.request.Request(
+            cleaned,
+            headers={
+                "Accept": accept,
+                "User-Agent": f"E-postofferten/{CURRENT_VERSION} (+https://github.com/{GITHUB_REPO})",
+                "X-GitHub-Api-Version": "2022-11-28",
+            },
+        )
+        try:
+            with opener.open(request, timeout=timeout) as response:
+                final_url = getattr(response, "geturl", lambda: cleaned)() or cleaned
+                validate_update_url(final_url)
+                status = int(getattr(response, "status", 200) or 200)
+                data = _read_bounded_response(response, max_bytes)
+                return status, data
+        except urllib.error.HTTPError as exc:
+            code = int(exc.code or 0)
+            if code in _TRANSIENT_HTTP_CODES and attempt == 0:
+                time.sleep(0.5)
+                continue
+            try:
+                body = exc.read(MAX_JSON_BYTES)
+            except Exception:
+                body = b""
+            return code, body
+        except (urllib.error.URLError, TimeoutError) as exc:
+            last_exc = exc
+            if attempt == 0:
+                time.sleep(0.5)
+                continue
+            raise
+    if last_exc is not None:
+        raise last_exc
+    raise RuntimeError("Nätverksanropet avbröts utan svar.")
+
+
 def _guard_fetcher(fetch: Fetcher) -> Fetcher:
-    """Förhindra att uppdateraren någonsin anropar en main-branch-URL."""
+    """Förhindra att uppdateraren någonsin anropar main-branch eller okrypterad URL."""
     def guarded(url: str, timeout: float) -> Tuple[int, bytes]:
-        if is_forbidden_main_url(url):
-            raise ValueError("Uppdatering mot main-branchen är blockerad (hård regel).")
-        return fetch(url, timeout)
+        cleaned = validate_update_url(url)
+        return fetch(cleaned, timeout)
 
     return guarded
 
@@ -334,21 +464,41 @@ def latest_release_url(repo: str = GITHUB_REPO) -> str:
     return f"{API_BASE}/repos/{repo}/releases/latest"
 
 
-def _pick_download_url(payload: Dict[str, Any]) -> str:
-    """Bifogad .zip-asset först, annars GitHubs zipball för taggen (aldrig main)."""
+def _parse_asset_sha256(raw_digest: Any) -> str:
+    if not isinstance(raw_digest, str):
+        return ""
+    text = raw_digest.strip()
+    if text.lower().startswith("sha256:"):
+        text = text[7:].strip()
+    return text.lower() if _SHA256_RE.fullmatch(text) else ""
+
+
+def _pick_download_asset(payload: Dict[str, Any]) -> Tuple[str, str]:
+    """Returnera ``(url, expected_sha256)`` för bästa ``.zip``-asset eller zipball."""
     assets = payload.get("assets")
     if isinstance(assets, list):
         for asset in assets:
             if not isinstance(asset, dict):
                 continue
             name = str(asset.get("name") or "").lower()
-            url = str(asset.get("browser_download_url") or "")
-            if url and name.endswith(".zip") and not is_forbidden_main_url(url):
-                return url
-    zipball = str(payload.get("zipball_url") or "")
-    if is_forbidden_main_url(zipball):
-        return ""
-    return zipball
+            url = str(asset.get("browser_download_url") or "").strip()
+            if (
+                url
+                and name.endswith(".zip")
+                and not is_forbidden_main_url(url)
+                and url.lower().startswith("https://")
+            ):
+                return url, _parse_asset_sha256(asset.get("digest"))
+    zipball = str(payload.get("zipball_url") or "").strip()
+    if is_forbidden_main_url(zipball) or (zipball and not zipball.lower().startswith("https://")):
+        return "", ""
+    return zipball, ""
+
+
+def _pick_download_url(payload: Dict[str, Any]) -> str:
+    """Bifogad .zip-asset först, annars GitHubs zipball för taggen (aldrig main)."""
+    url, _ = _pick_download_asset(payload)
+    return url
 
 
 def resolve_release_commit(tag: str, repo: str, fetch: Fetcher, timeout: float) -> str:
@@ -388,13 +538,15 @@ def compare_release_files(source: Path, installed: Path) -> list[str]:
     Local-only files are retained, just as during installation. Unsafe local
     symlinks are refused instead of comparing/writing outside the app folder.
     """
-    from core.app_update import SKIP_DIR_NAMES
+    from core.app_update import BLOCKED_BINARY_SUFFIXES, SKIP_DIR_NAMES
     from core.update_protect import is_protected
     source, installed = Path(source).resolve(), Path(installed).resolve()
     changed = []
     for path in sorted(source.rglob("*")):
         rel = path.relative_to(source)
         if any(part in SKIP_DIR_NAMES for part in rel.parts):
+            continue
+        if path.suffix.lower() in BLOCKED_BINARY_SUFFIXES:
             continue
         target = installed / rel
         if is_protected(path, source):
@@ -413,6 +565,56 @@ def compare_release_files(source: Path, installed: Path) -> list[str]:
     return changed
 
 
+def _update_cache_dir(base_dir: Path) -> Path:
+    return Path(base_dir).resolve() / ".data" / "update_cache"
+
+
+def _store_verified_zip_in_cache(
+    base_dir: Path, zip_path: Path, archive_sha256: str
+) -> Optional[Path]:
+    if not _SHA256_RE.fullmatch(archive_sha256 or ""):
+        return None
+    cache_dir = _update_cache_dir(base_dir)
+    try:
+        cache_dir.mkdir(parents=True, exist_ok=True)
+        target = cache_dir / f"{archive_sha256.lower()}.zip"
+        if not target.is_file() or _file_sha256(target) != archive_sha256.lower():
+            fd, tmp_name = tempfile.mkstemp(
+                dir=str(cache_dir), prefix=".upd-cache-", suffix=".tmp"
+            )
+            os.close(fd)
+            tmp_path = Path(tmp_name)
+            try:
+                shutil.copy2(zip_path, tmp_path)
+                os.replace(tmp_path, target)
+            finally:
+                tmp_path.unlink(missing_ok=True)
+        for other in cache_dir.glob("*.zip"):
+            if other != target:
+                other.unlink(missing_ok=True)
+        return target
+    except Exception:
+        log.debug("Kunde inte spara verifierad uppdateringscache", exc_info=True)
+        return None
+
+
+def _load_verified_zip_from_cache(
+    base_dir: Path, expected_sha256: str
+) -> Optional[Path]:
+    if not _SHA256_RE.fullmatch(expected_sha256 or ""):
+        return None
+    candidate = _update_cache_dir(base_dir) / f"{expected_sha256.lower()}.zip"
+    if not candidate.is_file() or candidate.is_symlink():
+        return None
+    try:
+        if _file_sha256(candidate) == expected_sha256.lower():
+            return candidate
+        candidate.unlink(missing_ok=True)
+    except OSError:
+        pass
+    return None
+
+
 def check_for_update(
     current_version: str = CURRENT_VERSION,
     repo: str = GITHUB_REPO,
@@ -422,6 +624,7 @@ def check_for_update(
     installed_fingerprint: str = "",
     base_dir: Optional[Path] = None,
     installed_commit: str = "",
+    on_progress: Optional[Callable[[str], None]] = None,
 ) -> UpdateInfo:
     """Fråga GitHub om senaste release och jämför med installerad version.
 
@@ -431,6 +634,8 @@ def check_for_update(
     info = UpdateInfo()
     fetch = _guard_fetcher(fetcher or _default_fetcher)
     url = latest_release_url(repo)
+    if on_progress:
+        on_progress("Kontrollerar senaste release på GitHub…")
     try:
         status, body = fetch(url, float(timeout))
     except Exception as exc:  # nätverk nere, DNS, timeout …
@@ -455,6 +660,9 @@ def check_for_update(
         info.error = "Oväntat svar från GitHub (inte ett JSON-objekt)."
         return info
 
+    if payload.get("draft") or payload.get("prerelease"):
+        return info
+
     info.raw = payload
     info.tag = str(payload.get("tag_name") or "")
     if is_forbidden_main_ref(info.tag):
@@ -470,7 +678,9 @@ def check_for_update(
     info.name = str(payload.get("name") or info.tag)
     info.notes = str(payload.get("body") or "").strip()
     info.html_url = str(payload.get("html_url") or "")
-    info.download_url = _pick_download_url(payload)
+    dl_url, expected_asset_sha = _pick_download_asset(payload)
+    info.download_url = dl_url
+    info.expected_asset_sha256 = expected_asset_sha
     if not info.download_url and had_main_url:
         info.error = "Uppdatering mot main-branchen är blockerad (hård regel)."
         return info
@@ -512,22 +722,44 @@ def check_for_update(
     # installs with no saved fingerprint. Metadata-only callers remain supported.
     if base_dir is not None and info.download_url and (same_version or newer):
         try:
+            if on_progress:
+                on_progress("Verifierar release-taggens commit och kontrollsumma…")
             info.commit_sha = resolve_release_commit(info.tag, repo, fetch, float(timeout))
             payload["resolved_commit_sha"] = info.commit_sha
             info.fingerprint = release_fingerprint(payload)
             if not any(isinstance(a, dict) and str(a.get("name", "")).lower().endswith(".zip")
                        and a.get("browser_download_url") for a in payload.get("assets", []) or []):
                 info.download_url = f"{API_BASE}/repos/{repo}/zipball/{info.commit_sha}"
+                info.expected_asset_sha256 = ""
             with tempfile.TemporaryDirectory(prefix="mailoffer-check-") as temp:
                 root = Path(temp)
-                archive = download_update_zip(info.download_url, root, timeout=timeout, fetcher=fetch)
+                if on_progress:
+                    on_progress("Hämtar och verifierar release-paket (SHA-256)…")
+                archive = download_update_zip(
+                    info.download_url,
+                    root,
+                    timeout=timeout,
+                    fetcher=fetch,
+                    expected_sha256=info.expected_asset_sha256,
+                )
                 info.archive_sha256 = _file_sha256(archive)
                 content = extract_update_zip(archive, root / "extracted")
+                if on_progress:
+                    on_progress("Jämför release-filer mot din installation…")
                 info.changed_files = compare_release_files(content, Path(base_dir))
-            info.files_compared = True
-            commit_changed = bool(installed_commit and str(installed_commit).lower() != info.commit_sha)
-            info.same_version_files_changed = bool(same_version and (build_changed or commit_changed or info.changed_files))
-            info.available = bool(newer or info.same_version_files_changed)
+                info.files_compared = True
+                commit_changed = bool(installed_commit and str(installed_commit).lower() != info.commit_sha)
+                info.same_version_files_changed = bool(same_version and (build_changed or commit_changed or info.changed_files))
+                info.available = bool(newer or info.same_version_files_changed)
+                if (
+                    info.available
+                    and fetcher is None
+                    and Path(base_dir).is_dir()
+                    and info.archive_sha256
+                ):
+                    _store_verified_zip_in_cache(
+                        Path(base_dir), archive, info.archive_sha256
+                    )
         except Exception as exc:
             # Never claim "up to date" or install unverified/ambiguous contents.
             info.error = f"Kunde inte verifiera releasens commit/filer: {exc}"
@@ -558,43 +790,107 @@ def download_update_zip(
     dest_dir: Path,
     timeout: float = 180.0,
     fetcher: Optional[Fetcher] = None,
+    *,
+    expected_sha256: str = "",
 ) -> Path:
-    """Ladda ner release-zip till ``dest_dir/update.zip``."""
+    """Ladda ner release-zip atomärt till ``dest_dir/update.zip`` och kontrollera den."""
     if not str(url or "").strip():
         raise ValueError("Ingen nedladdningslänk (download_url är tom).")
-    if is_forbidden_main_url(url):
-        raise ValueError("Uppdatering mot main-branchen är blockerad (hård regel).")
+    cleaned_url = validate_update_url(url)
     fetch = _guard_fetcher(fetcher or _default_fetcher)
-    status, body = fetch(str(url), float(timeout))
+    status, body = fetch(cleaned_url, float(timeout))
     if status != 200:
         raise RuntimeError(f"Nedladdningen misslyckades (HTTP {status}).")
     if not body:
         raise RuntimeError("Nedladdningen gav en tom fil.")
     if len(body) > MAX_ZIP_BYTES:
         raise RuntimeError("Nedladdningen är oväntat stor – avbryter.")
+    if expected_sha256:
+        actual_sha = hashlib.sha256(body).hexdigest()
+        if actual_sha.lower() != expected_sha256.strip().lower():
+            raise ValueError(
+                "Release-paketets SHA-256 matchar inte GitHubs officiella kontrollsumma."
+            )
     dest = Path(dest_dir)
     dest.mkdir(parents=True, exist_ok=True)
     zip_path = dest / "update.zip"
-    zip_path.write_bytes(body)
+    fd, tmp_name = tempfile.mkstemp(dir=str(dest), prefix=".dl-update-", suffix=".tmp")
+    tmp_path = Path(tmp_name)
+    try:
+        with os.fdopen(fd, "wb") as fh:
+            fh.write(body)
+            fh.flush()
+            try:
+                os.fsync(fh.fileno())
+            except OSError:
+                pass
+        if not zipfile.is_zipfile(tmp_path):
+            raise ValueError("Nedladdad fil är inte en giltig .zip-fil.")
+        os.replace(tmp_path, zip_path)
+    except Exception:
+        tmp_path.unlink(missing_ok=True)
+        raise
     return zip_path
 
 
+def _validate_zip_member_parts(raw_name: str) -> List[str]:
+    normalized = (raw_name or "").replace("\\", "/")
+    if not normalized or normalized.startswith("/") or "\x00" in normalized:
+        raise ValueError(f"Ogiltig sökväg i zip-filen: {raw_name}")
+    if re.match(r"^[A-Za-z]:", normalized):
+        raise ValueError(f"Ogiltig sökväg i zip-filen: {raw_name}")
+    norm = posixpath.normpath(normalized)
+    if norm in ("", "."):
+        return []
+    if norm.startswith("/") or norm.startswith("../") or norm == "..":
+        raise ValueError(f"Ogiltig sökväg i zip-filen: {raw_name}")
+    parts = [p for p in norm.split("/") if p and p != "."]
+    for part in parts:
+        if part == "..":
+            raise ValueError(f"Ogiltig sökväg i zip-filen: {raw_name}")
+        stem = part.split(".", 1)[0].upper()
+        if stem in _WINDOWS_RESERVED_NAMES:
+            raise ValueError(f"Reserverat enhetsnamn i zip-filen: {raw_name}")
+    return parts
+
+
 def _safe_extract(zip_path: Path, dest_dir: Path) -> None:
-    """Packa upp zip med zip-slip-skydd (avbryter vid ../-poster)."""
+    """Packa upp zip säkert (skydd mot Zip-Slip, symlänkar, kryptering och zip-bomber)."""
     root = Path(dest_dir).resolve()
-    with zipfile.ZipFile(str(zip_path)) as archive:
+    root.mkdir(parents=True, exist_ok=True)
+    total_written = 0
+    with zipfile.ZipFile(str(zip_path), "r") as archive:
         members = archive.infolist()
-        if len(members) > 20000 or sum(m.file_size for m in members) > 400 * 1024 * 1024:
+        if len(members) > MAX_EXTRACT_FILES or sum(max(0, m.file_size) for m in members) > MAX_EXTRACT_BYTES:
             raise ValueError("Zip-filen packas upp till för mycket data.")
         for member in members:
+            if member.flag_bits & 0x1:
+                raise ValueError(f"Krypterade filer tillåts inte i release-zip: {member.filename}")
             if (member.external_attr >> 16) & 0o170000 == 0o120000:
                 raise ValueError("Symboliska länkar tillåts inte i release-zip.")
-            target = (root / member.filename).resolve()
+            parts = _validate_zip_member_parts(member.filename)
+            if not parts:
+                continue
+            target = (root / Path(*parts)).resolve()
             if target != root and root not in target.parents:
                 raise ValueError(
                     f"Ogiltig sökväg i zip-filen: {member.filename}"
                 )
-            archive.extract(member, str(root))
+            if member.is_dir() or member.filename.replace("\\", "/").endswith("/"):
+                target.mkdir(parents=True, exist_ok=True)
+                continue
+            target.parent.mkdir(parents=True, exist_ok=True)
+            entry_written = 0
+            with archive.open(member, "r") as src, target.open("wb") as dst:
+                while True:
+                    chunk = src.read(_STREAM_CHUNK_BYTES)
+                    if not chunk:
+                        break
+                    entry_written += len(chunk)
+                    total_written += len(chunk)
+                    if total_written > MAX_EXTRACT_BYTES or entry_written > MAX_ZIP_BYTES:
+                        raise ValueError("Zip-filen packas upp till för mycket data.")
+                    dst.write(chunk)
 
 
 def find_app_root(extract_dir: Path) -> Path:
@@ -634,36 +930,80 @@ def apply_github_update(
     base_dir: Path,
     timeout: float = 180.0,
     fetcher: Optional[Fetcher] = None,
+    on_progress: Optional[Callable[[str], None]] = None,
 ) -> Dict[str, Any]:
-    """Ladda ner, packa upp och applicera en GitHub-release.
+    """Ladda ner, packa upp och applicera en GitHub-release atomärt med rollback.
 
     Delegerar själva kopieringen till ``apply_update_from_dir`` så att
     exakt samma skydd gäller som vid "Uppdatera från mapp": JSON,
     inställningar, adresslistor, loggar och Mallar/ rörs ALDRIG.
-    Returns: ``{copied, skipped, errors, version}``.
+    Returns: ``{copied, skipped, errors, version, rolled_back, ...}``.
     """
     from core.app_update import apply_update_from_dir
 
     if not info or not info.download_url:
         raise ValueError("Ingen nedladdningslänk – sök efter uppdateringar först.")
-    if is_forbidden_main_ref(getattr(info, "tag", "")) or is_forbidden_main_url(info.download_url):
+    if is_forbidden_main_ref(getattr(info, "tag", "")):
         raise ValueError("Uppdatering mot main-branchen är blockerad (hård regel).")
+    validate_update_url(info.download_url)
+
+    base_dir = Path(base_dir)
     tmp_root = Path(tempfile.mkdtemp(prefix="epostofferten-update-"))
+    used_cached_archive = False
+    cached_zip: Optional[Path] = None
     try:
-        zip_path = download_update_zip(
-            info.download_url, tmp_root, timeout=timeout, fetcher=fetcher
-        )
-        if info.archive_sha256 and _file_sha256(zip_path) != info.archive_sha256:
-            raise ValueError("Releasens arkiv har ändrats sedan kontrollen. Sök efter uppdateringar igen.")
+        expected_asset_sha = str(getattr(info, "expected_asset_sha256", "") or "").strip()
+        if fetcher is None and getattr(info, "archive_sha256", ""):
+            cached_zip = _load_verified_zip_from_cache(base_dir, info.archive_sha256)
+
+        if cached_zip is not None:
+            if on_progress:
+                on_progress("Använder redan verifierat release-paket (SHA-256)…")
+            zip_path = cached_zip
+            used_cached_archive = True
+        else:
+            if on_progress:
+                on_progress("Laddar ner och verifierar release-paket (HTTPS + SHA-256)…")
+            zip_path = download_update_zip(
+                info.download_url,
+                tmp_root,
+                timeout=timeout,
+                fetcher=fetcher,
+                expected_sha256=expected_asset_sha,
+            )
+
+        actual_sha = _file_sha256(zip_path)
+        if expected_asset_sha and actual_sha.lower() != expected_asset_sha.lower():
+            raise ValueError(
+                "Release-paketets SHA-256 matchar inte GitHubs officiella kontrollsumma."
+            )
+        if info.archive_sha256 and actual_sha.lower() != info.archive_sha256.lower():
+            raise ValueError(
+                "Releasens arkiv har ändrats sedan kontrollen. Sök efter uppdateringar igen."
+            )
+
+        if on_progress:
+            on_progress("Packar upp och säkerhetskontrollerar uppdateringspaketet…")
         app_root = extract_update_zip(zip_path, tmp_root / "extracted")
         # Refuse unsafe local links before copying any file.
-        compare_release_files(app_root, Path(base_dir))
-        result = apply_update_from_dir(app_root, Path(base_dir))
+        compare_release_files(app_root, base_dir)
+        result = apply_update_from_dir(
+            app_root,
+            base_dir,
+            require_app_root=True,
+            backup_user_data=True,
+            on_progress=on_progress,
+        )
         result = dict(result)
         if not result.get("errors"):
-            remaining = compare_release_files(app_root, Path(base_dir))
+            if on_progress:
+                on_progress("Verifierar installerade kontrollsummor…")
+            remaining = compare_release_files(app_root, base_dir)
             if remaining:
-                result.setdefault("errors", []).append("Filkontrollen efter installation misslyckades: " + ", ".join(remaining[:8]))
+                result.setdefault("errors", []).append(
+                    "Filkontrollen efter installation misslyckades: "
+                    + ", ".join(remaining[:8])
+                )
         result["commit_sha"] = info.commit_sha
         result["version"] = info.latest_version
         result["build_id"] = str(
@@ -677,6 +1017,9 @@ def apply_github_update(
         result["same_version_files_changed"] = bool(
             getattr(info, "same_version_files_changed", False)
         )
+        result["used_cached_archive"] = used_cached_archive
+        if used_cached_archive and cached_zip is not None and not result.get("errors"):
+            cached_zip.unlink(missing_ok=True)
         return result
     finally:
         shutil.rmtree(tmp_root, ignore_errors=True)
@@ -691,6 +1034,7 @@ __all__ = [
     "compare_release_files",
     "resolve_release_commit",
     "download_update_zip",
+    "extract_latest_release_notes",
     "extract_update_zip",
     "find_app_root",
     "is_forbidden_main_ref",
@@ -703,4 +1047,5 @@ __all__ = [
     "parse_version",
     "release_fingerprint",
     "should_auto_check",
+    "validate_update_url",
 ]

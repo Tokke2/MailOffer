@@ -543,3 +543,296 @@ class TestVerifiedReleaseContents(unittest.TestCase):
         path.write_bytes(payload.getvalue())
         with self.assertRaisesRegex(ValueError, 'Symboliska länkar'):
             extract_update_zip(path, self.base / 'extract')
+
+
+class TestHardenedUpdateSafetyAndUX(unittest.TestCase):
+    """Tests for atomic rollback, syntax validation, HTTPS/digest guards, cache & notes."""
+
+    def test_atomic_rollback_restores_all_files_on_mid_update_failure(self):
+        from unittest import mock
+        import os as _os
+        from core.app_update import apply_update_from_dir
+
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            src = root / 'src'
+            dest = root / 'dest'
+            (src / 'core').mkdir(parents=True)
+            (src / 'ui').mkdir(parents=True)
+            (dest / 'core').mkdir(parents=True)
+            (dest / 'ui').mkdir(parents=True)
+
+            (dest / 'main.pyw').write_text('ORIGINAL_MAIN = 1\n', encoding='utf-8')
+            (dest / 'core' / 'a.py').write_text('ORIGINAL_A = 1\n', encoding='utf-8')
+            (dest / 'ui' / 'z.py').write_text('ORIGINAL_Z = 1\n', encoding='utf-8')
+
+            (src / 'main.pyw').write_text('UPDATED_MAIN = 2\n', encoding='utf-8')
+            (src / 'core' / 'a.py').write_text('UPDATED_A = 2\n', encoding='utf-8')
+            (src / 'core' / 'brand_new.py').write_text('BRAND_NEW = 2\n', encoding='utf-8')
+            (src / 'ui' / 'z.py').write_text('UPDATED_Z = 2\n', encoding='utf-8')
+
+            real_replace = _os.replace
+
+            def fail_on_z(src_p, dst_p):
+                if Path(dst_p).name == 'z.py' and '.mailoffer-rb-' not in Path(src_p).name:
+                    raise PermissionError('filen är låst')
+                return real_replace(src_p, dst_p)
+
+            with mock.patch('core.app_update.os.replace', side_effect=fail_on_z):
+                result = apply_update_from_dir(src, dest, require_app_root=True)
+
+            self.assertTrue(result['errors'])
+            self.assertTrue(result['rolled_back'])
+            self.assertEqual(result['copied'], [])
+            self.assertEqual((dest / 'main.pyw').read_text(encoding='utf-8'), 'ORIGINAL_MAIN = 1\n')
+            self.assertEqual((dest / 'core' / 'a.py').read_text(encoding='utf-8'), 'ORIGINAL_A = 1\n')
+            self.assertEqual((dest / 'ui' / 'z.py').read_text(encoding='utf-8'), 'ORIGINAL_Z = 1\n')
+            self.assertFalse((dest / 'core' / 'brand_new.py').exists())
+            self.assertEqual(list(dest.rglob('*.tmp')), [])
+
+    def test_broken_python_syntax_and_nul_bytes_abort_before_any_write(self):
+        from core.app_update import apply_update_from_dir
+
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            src = root / 'src'
+            dest = root / 'dest'
+            (src / 'core').mkdir(parents=True)
+            (dest / 'core').mkdir(parents=True)
+            (dest / 'main.pyw').write_text('SAFE = True\n', encoding='utf-8')
+            (dest / 'core' / 'mod.py').write_text('SAFE_MOD = 1\n', encoding='utf-8')
+
+            (src / 'main.pyw').write_text('SAFE = False\n', encoding='utf-8')
+            (src / 'core' / 'mod.py').write_text('def broken_syntax(:\n    pass\n', encoding='utf-8')
+
+            res = apply_update_from_dir(src, dest, require_app_root=True)
+            self.assertTrue(res['errors'])
+            self.assertEqual(res['copied'], [])
+            self.assertEqual((dest / 'main.pyw').read_text(encoding='utf-8'), 'SAFE = True\n')
+            self.assertEqual((dest / 'core' / 'mod.py').read_text(encoding='utf-8'), 'SAFE_MOD = 1\n')
+
+            (src / 'core' / 'mod.py').write_bytes(b'X = 1\x00corrupt')
+            res_nul = apply_update_from_dir(src, dest, require_app_root=True)
+            self.assertTrue(res_nul['errors'])
+            self.assertEqual((dest / 'core' / 'mod.py').read_text(encoding='utf-8'), 'SAFE_MOD = 1\n')
+
+    def test_same_folder_nested_folder_and_missing_app_root_are_rejected(self):
+        from core.app_update import apply_update_from_dir
+
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            dest = root / 'app'
+            (dest / 'sub').mkdir(parents=True)
+            (dest / 'main.pyw').write_text('X = 1\n', encoding='utf-8')
+            (dest / 'sub' / 'main.pyw').write_text('X = 2\n', encoding='utf-8')
+
+            same_res = apply_update_from_dir(dest, dest)
+            self.assertTrue(same_res['errors'])
+
+            nested_res = apply_update_from_dir(dest / 'sub', dest)
+            self.assertTrue(nested_res['errors'])
+
+            random_dir = root / 'downloads'
+            random_dir.mkdir()
+            (random_dir / 'notes.txt').write_text('hello', encoding='utf-8')
+            missing_root_res = apply_update_from_dir(random_dir, dest, require_app_root=True)
+            self.assertTrue(missing_root_res['errors'])
+
+    def test_pre_update_backup_redacts_passwords_and_prunes_old_archives(self):
+        import time as _time
+        from core.app_update import create_pre_update_user_backup
+
+        with tempfile.TemporaryDirectory() as folder:
+            dest = Path(folder)
+            (dest / 'Mallar').mkdir()
+            (dest / 'Mallar' / 'offert.txt').write_text('Hej {{namn}}', encoding='utf-8')
+            (dest / 'contacts.json').write_text('[{"email":"a@b.se"}]', encoding='utf-8')
+            (dest / 'email_settings.json').write_text(
+                json.dumps({'smtp_user': 'me@b.se', 'smtp_password': 'TOP_SECRET_PASSWORD'}),
+                encoding='utf-8',
+            )
+
+            created = []
+            for idx in range(5):
+                zp = create_pre_update_user_backup(dest)
+                self.assertIsNotNone(zp)
+                # Ensure distinct names/mtimes when called rapidly in test
+                renamed = zp.with_name(f'pre-update-20261124-12000{idx}.zip')
+                zp.replace(renamed)
+                _os_utime = 1_700_000_000 + idx
+                import os as _os
+                _os.utime(renamed, (_os_utime, _os_utime))
+                created.append(renamed)
+
+            # One final call triggers pruning down to MAX_PRE_UPDATE_BACKUPS (3)
+            latest = create_pre_update_user_backup(dest)
+            self.assertIsNotNone(latest)
+            backups = list((dest / '.data' / 'pre_update_backups').glob('pre-update-*.zip'))
+            self.assertLessEqual(len(backups), 3)
+
+            with zipfile.ZipFile(latest, 'r') as zf:
+                names = set(zf.namelist())
+                self.assertIn('Mallar/offert.txt', names)
+                self.assertIn('contacts.json', names)
+                self.assertIn('email_settings.json', names)
+                raw_settings = zf.read('email_settings.json').decode('utf-8')
+                self.assertNotIn('TOP_SECRET_PASSWORD', raw_settings)
+
+    def test_https_only_and_redirect_validation(self):
+        from core.github_update import _SafeHttpsRedirectHandler, validate_update_url
+        import urllib.request
+
+        self.assertEqual(
+            validate_update_url('https://api.github.com/repos/Tokke2/MailOffer/releases/latest'),
+            'https://api.github.com/repos/Tokke2/MailOffer/releases/latest',
+        )
+        for bad_url in (
+            'http://github.com/Tokke2/MailOffer/releases/download/v1.0.0/app.zip',
+            'file:///etc/passwd',
+            'ftp://github.com/app.zip',
+            'https://github.com/Tokke2/MailOffer/archive/refs/heads/main.zip',
+        ):
+            with self.assertRaises(ValueError):
+                validate_update_url(bad_url)
+
+        handler = _SafeHttpsRedirectHandler()
+        req = urllib.request.Request('https://github.com/Tokke2/MailOffer/releases/download/v1.0.0/app.zip')
+        with self.assertRaises(ValueError):
+            handler.redirect_request(req, None, 302, 'Found', {}, 'http://evil.example/app.zip')
+        with self.assertRaises(ValueError):
+            handler.redirect_request(
+                req, None, 302, 'Found', {}, 'https://github.com/Tokke2/MailOffer/archive/refs/heads/main.zip'
+            )
+
+    def test_official_github_asset_sha256_digest_verification(self):
+        import hashlib as _hashlib
+
+        buf = io.BytesIO()
+        with zipfile.ZipFile(buf, 'w') as zf:
+            zf.writestr('release/main.pyw', '# valid\n')
+        good_bytes = buf.getvalue()
+        good_sha = _hashlib.sha256(good_bytes).hexdigest()
+
+        with tempfile.TemporaryDirectory() as folder:
+            base = Path(folder)
+            (base / 'main.pyw').write_text('# old\n', encoding='utf-8')
+
+            def make_fetcher(digest_str: str):
+                payload = {
+                    'tag_name': 'v1.0.0',
+                    'body': 'build: 200',
+                    'assets': [
+                        {
+                            'name': 'E-postofferten.zip',
+                            'browser_download_url': 'https://github.com/Tokke2/MailOffer/releases/download/v1.0.0/E-postofferten.zip',
+                            'digest': digest_str,
+                        }
+                    ],
+                }
+
+                def _fetch(url, timeout):
+                    if url.endswith('/releases/latest'):
+                        return 200, json.dumps(payload).encode('utf-8')
+                    if '/git/ref/tags/' in url:
+                        return 200, json.dumps({'object': {'type': 'commit', 'sha': 'a' * 40}}).encode('utf-8')
+                    if url.endswith('/E-postofferten.zip'):
+                        return 200, good_bytes
+                    raise AssertionError(url)
+
+                return _fetch
+
+            ok_info = check_for_update(
+                current_version='1.0.0',
+                current_build_id='100',
+                base_dir=base,
+                fetcher=make_fetcher(f'sha256:{good_sha}'),
+            )
+            self.assertTrue(ok_info.available)
+            self.assertEqual(ok_info.expected_asset_sha256, good_sha)
+
+            with self.assertLogs('core.github_update', level='WARNING'):
+                bad_info = check_for_update(
+                    current_version='1.0.0',
+                    current_build_id='100',
+                    base_dir=base,
+                    fetcher=make_fetcher('sha256:' + 'f' * 64),
+                )
+            self.assertFalse(bad_info.available)
+            self.assertIn('SHA-256', bad_info.error)
+
+    def test_safe_extract_blocks_backslash_traversal_reserved_names_and_encryption(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            for idx, bad_member in enumerate(
+                ('..\\..\\evil.py', 'C:\\evil.py', 'release/CON.py', 'release/COM1.txt')
+            ):
+                zp = root / f'bad-{idx}.zip'
+                with zipfile.ZipFile(zp, 'w') as zf:
+                    zf.writestr(bad_member, 'X = 1\n')
+                with self.assertRaises(ValueError):
+                    extract_update_zip(zp, root / f'out-{idx}')
+
+            enc_buf = io.BytesIO()
+            with zipfile.ZipFile(enc_buf, 'w') as zf:
+                zf.writestr('release/main.pyw', b'# secret\n')
+            raw_zip = bytearray(enc_buf.getvalue())
+            cd_idx = raw_zip.index(b'PK\x01\x02')
+            raw_zip[cd_idx + 8] |= 0x1  # Set encrypted general-purpose bit in central directory
+            enc_zip = root / 'encrypted.zip'
+            enc_zip.write_bytes(bytes(raw_zip))
+            with self.assertRaisesRegex(ValueError, 'Krypterade'):
+                extract_update_zip(enc_zip, root / 'out-enc')
+
+    def test_verified_archive_cache_roundtrip_and_tamper_eviction(self):
+        import hashlib as _hashlib
+        from core.github_update import (
+            _load_verified_zip_from_cache,
+            _store_verified_zip_in_cache,
+        )
+
+        with tempfile.TemporaryDirectory() as folder:
+            base = Path(folder)
+            z1 = base / 'one.zip'
+            with zipfile.ZipFile(z1, 'w') as zf:
+                zf.writestr('main.pyw', '# one\n')
+            sha1 = _hashlib.sha256(z1.read_bytes()).hexdigest()
+
+            z2 = base / 'two.zip'
+            with zipfile.ZipFile(z2, 'w') as zf:
+                zf.writestr('main.pyw', '# two\n')
+            sha2 = _hashlib.sha256(z2.read_bytes()).hexdigest()
+
+            cached1 = _store_verified_zip_in_cache(base, z1, sha1)
+            self.assertIsNotNone(cached1)
+            self.assertEqual(_load_verified_zip_from_cache(base, sha1), cached1)
+
+            # Storing a newer archive prunes the older one
+            cached2 = _store_verified_zip_in_cache(base, z2, sha2)
+            self.assertIsNotNone(cached2)
+            self.assertIsNone(_load_verified_zip_from_cache(base, sha1))
+            self.assertEqual(_load_verified_zip_from_cache(base, sha2), cached2)
+
+            # Tampering with the cached file evicts it immediately
+            cached2.write_bytes(b'corrupted')
+            self.assertIsNone(_load_verified_zip_from_cache(base, sha2))
+            self.assertFalse(cached2.exists())
+
+    def test_extract_latest_release_notes_and_newest_build_id(self):
+        from core.github_update import extract_latest_release_notes, parse_build_id
+
+        cumulative_body = (
+            '<!-- build: 2026102364 -->\n'
+            '## E-postofferten v1.0.0\n'
+            + ('Gammal historik från oktober.\n' * 40)
+            + '\n## BUILD2026102363\n- Föregående ändring\n'
+            + '\n## BUILD2026102364\n- Transaktionssäker uppdatering med automatisk rollback\n'
+        )
+        self.assertEqual(
+            parse_build_id('build: 2026102101\nSenare rad build: 2026102364'),
+            '2026102364',
+        )
+        extracted = extract_latest_release_notes(cumulative_body, build_id='2026102364')
+        self.assertIn('BUILD2026102364', extracted)
+        self.assertIn('automatisk rollback', extracted)
+        self.assertNotIn('Gammal historik från oktober', extracted)
+

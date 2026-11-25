@@ -431,9 +431,16 @@ _SV: Dict[str, str] = {
     "update.check_now_btn": "🔄 Sök efter uppdateringar nu",
     "update.from_folder_btn": "⬇️ Uppdatera app från mapp…",
     "update.folder_hint": (
-        "Uppdatering kopierar bara kod. Mallar, JSON, adresslistor och "
-        "inställningar lämnas orörda."
+        "Uppdatering kopierar bara kod atomärt med automatisk återställning vid fel. "
+        "Mallar, JSON, adresslistor och inställningar lämnas alltid orörda."
     ),
+    "update.current_build": "Byggstämpel: {build}",
+    "update.pending_banner": "⬇️ Uppdatering redo att installeras: v{latest}{build_part}",
+    "update.install_pending_btn": "⬇️ Granska & installera nu…",
+    "update.summary_meta": "🛡️ Verifierad med SHA-256 • Atomär installation med automatisk återställning vid fel",
+    "update.changed_count": "📦 {count} appfil(er) uppdateras",
+    "update.rolled_back_note": "\n\nAlla befintliga appfiler återställdes automatiskt så att din installation förblev intakt.",
+    "update.restart_manual_hint": "✅ Uppdateringen är installerad ({count} filer) – starta om appen när du är klar.",
     # Donation
     "donate.title": "❤️ Donera",
     "donate.heading": "Stöd E-postofferten ❤️",
@@ -871,9 +878,16 @@ _EN: Dict[str, str] = {
     "update.check_now_btn": "🔄 Check for updates now",
     "update.from_folder_btn": "⬇️ Update app from folder…",
     "update.folder_hint": (
-        "Updating only copies code. Templates, JSON, address lists and "
-        "settings are left untouched."
+        "Updating copies code atomically with automatic rollback on error. "
+        "Templates, JSON, address lists and settings are always left untouched."
     ),
+    "update.current_build": "Build ID: {build}",
+    "update.pending_banner": "⬇️ Update ready to install: v{latest}{build_part}",
+    "update.install_pending_btn": "⬇️ Review & install now…",
+    "update.summary_meta": "🛡️ SHA-256 verified • Atomic install with automatic rollback on failure",
+    "update.changed_count": "📦 {count} app file(s) will be updated",
+    "update.rolled_back_note": "\n\nAll existing app files were automatically restored so your installation stayed intact.",
+    "update.restart_manual_hint": "✅ Update installed ({count} files) – restart the app when you are ready.",
     # Donate
     "donate.title": "❤️ Donate",
     "donate.heading": "Support E-postofferten ❤️",

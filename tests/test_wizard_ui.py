@@ -493,6 +493,31 @@ class TestUpdateDeferralUi(unittest.TestCase):
         win._on_update_checked(info)
         self.assertEqual(prompted, [info])
 
+    def test_silent_restart_preserves_no_vin_and_pending_banner_updates(self) -> None:
+        win = self._make_window()
+        win._on_no_vin_toggled(True)
+        if win._no_vin_cb is not None:
+            win._no_vin_cb.setChecked(True)
+        path = win._update_session_path()
+        self.addCleanup(lambda: path.unlink(missing_ok=True))
+        with mock.patch.dict(os.environ, {}, clear=False), mock.patch.object(win, "_restart_app") as restart:
+            win._finish_update_restart()
+            restart.assert_called_once()
+        win._on_no_vin_toggled(False)
+        if win._no_vin_cb is not None:
+            win._no_vin_cb.setChecked(False)
+        self.assertFalse(win._is_no_vin_checked())
+        win._restore_update_session()
+        self.assertTrue(win._is_no_vin_checked())
+
+        # Pending update banner shows when silent check finds an update and hides once cleared
+        info = self._info()
+        win._update_check_manual = False
+        win._on_update_checked(info)
+        self.assertFalse(win._pending_update_frame.isHidden())
+        win._on_update_checked(UpdateInfo(available=False, latest_version=__version__))
+        self.assertTrue(win._pending_update_frame.isHidden())
+
 
 if __name__ == "__main__":
     unittest.main()

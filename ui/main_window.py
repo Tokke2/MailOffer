@@ -341,7 +341,7 @@ from core.i18n import tr
 from core.logger import get_log_file_path
 from core.recovery_manager import RecoveryManager
 from core.settings_manager import SettingsManager
-from core.version import GITHUB_REPO_URL
+from core.version import BUILD_ID as APP_BUILD_ID, GITHUB_REPO_URL
 from core.version import __version__ as APP_VERSION
 
 try:
@@ -986,6 +986,7 @@ class UpdateWorker(QThread):
     checked = pyqtSignal(object)    # core.github_update.UpdateInfo
     installed = pyqtSignal(object)  # dict från apply_github_update
     failed = pyqtSignal(str)
+    progress = pyqtSignal(str)
 
     def __init__(
         self,
@@ -1002,23 +1003,42 @@ class UpdateWorker(QThread):
         self._installed_fingerprint = str(installed_fingerprint or "")
         self._installed_commit = str(installed_commit or "")
 
+    @staticmethod
+    def _supports_kwarg(fn: Any, name: str) -> bool:
+        import inspect
+
+        try:
+            sig = inspect.signature(fn)
+        except (TypeError, ValueError):
+            return False
+        for param in sig.parameters.values():
+            if param.kind == inspect.Parameter.VAR_KEYWORD or param.name == name:
+                return True
+        return False
+
     def run(self) -> None:
         try:
             from core.github_update import apply_github_update, check_for_update
 
             if self._mode == "install":
+                install_kwargs: Dict[str, Any] = {}
+                if self._supports_kwarg(apply_github_update, "on_progress"):
+                    install_kwargs["on_progress"] = self.progress.emit
                 result = apply_github_update(
-                    self._info, Path(self._base_dir or _PROJECT_ROOT)
+                    self._info,
+                    Path(self._base_dir or _PROJECT_ROOT),
+                    **install_kwargs,
                 )
                 self.installed.emit(result)
             else:
-                self.checked.emit(
-                    check_for_update(
-                        installed_fingerprint=self._installed_fingerprint,
-                        installed_commit=self._installed_commit,
-                        base_dir=Path(self._base_dir or _PROJECT_ROOT),
-                    )
-                )
+                check_kwargs: Dict[str, Any] = {
+                    "installed_fingerprint": self._installed_fingerprint,
+                    "installed_commit": self._installed_commit,
+                    "base_dir": Path(self._base_dir or _PROJECT_ROOT),
+                }
+                if self._supports_kwarg(check_for_update, "on_progress"):
+                    check_kwargs["on_progress"] = self.progress.emit
+                self.checked.emit(check_for_update(**check_kwargs))
         except Exception as exc:
             log.warning(
                 "UpdateWorker (%s) misslyckades", self._mode, exc_info=True
@@ -1632,8 +1652,10 @@ class MainWindow(QMainWindow):
         reply = QMessageBox.question(
             self,
             "Uppdatera app",
-            "Kopiera kod från:\n%s\n\n"
-            "JSON, adresslistor och inställningar rörs inte."
+            "Uppdatera kod atomärt från:\n%s\n\n"
+            "• Python-filer syntaxkontrolleras före installation\n"
+            "• Automatisk återställning om ett fel uppstår\n"
+            "• JSON, mallar, adresslistor och inställningar rörs aldrig."
             % src,
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             QMessageBox.StandardButton.No,
@@ -1642,24 +1664,42 @@ class MainWindow(QMainWindow):
             return
         try:
             from core.app_update import apply_update_from_dir
+            from core.github_update import find_app_root
 
-            result = apply_update_from_dir(Path(src), self._base_dir())
+            try:
+                source_root = find_app_root(Path(src))
+            except ValueError:
+                source_root = Path(src)
+            result = apply_update_from_dir(
+                source_root,
+                self._base_dir(),
+                require_app_root=True,
+                backup_user_data=True,
+            )
         except Exception as exc:
             QMessageBox.critical(self, "Uppdatering", str(exc))
             return
         copied = len(result.get("copied") or [])
         skipped = len(result.get("skipped") or [])
         errors = result.get("errors") or []
-        msg = "Kopierade %d filer.\nHoppade över %d (JSON/settings/data).\n" % (
-            copied,
-            skipped,
-        )
         if errors:
-            msg += "Fel:\n" + "\n".join(str(e) for e in errors[:8])
+            msg = "Fel vid mappuppdatering:\n" + "\n".join(str(e) for e in errors[:8])
+            if result.get("rolled_back"):
+                msg += tr("update.rolled_back_note")
             QMessageBox.warning(self, "Uppdatering", msg)
-        else:
-            QMessageBox.information(self, "Uppdatering", msg)
+            return
         self._status("⬇️ App-uppdatering klar (%d filer)" % copied, "success")
+        ask_restart = QMessageBox.question(
+            self,
+            tr("update.installed_title"),
+            tr("update.installed", count=copied)
+            + f"\n\n(Skyddade/överhoppade filer: {skipped})",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.Yes,
+        )
+        if ask_restart == QMessageBox.StandardButton.Yes:
+            self._last_installed_file_count = copied
+            self._finish_update_restart()
 
     # ────────────────────────────────────────────────────────────────
     # (v5.4) Mall-wizard
@@ -1865,6 +1905,8 @@ class MainWindow(QMainWindow):
         )
         worker.checked.connect(self._on_update_checked)
         worker.failed.connect(self._on_update_failed)
+        if manual:
+            worker.progress.connect(lambda msg: self._status(f"🔄 {msg}", "info"))
         worker.finished.connect(worker.deleteLater)
         self._update_worker = worker
         worker.start()
@@ -1945,12 +1987,33 @@ class MainWindow(QMainWindow):
             log.debug("Baselinja release-fingeravtryck hoppades över",
                       exc_info=True)
 
+    def _refresh_pending_update_banner(self) -> None:
+        frame = getattr(self, "_pending_update_frame", None)
+        lbl = getattr(self, "_pending_update_label", None)
+        if frame is None or lbl is None:
+            return
+        info = self._pending_update_info
+        if info is None or not getattr(info, "available", False):
+            frame.setVisible(False)
+            return
+        build_id = str(getattr(info, "build_id", "") or "").strip()
+        build_part = f" (bygg {build_id})" if build_id else ""
+        lbl.setText(
+            tr(
+                "update.pending_banner",
+                latest=getattr(info, "latest_version", APP_VERSION),
+                build_part=build_part,
+            )
+        )
+        frame.setVisible(True)
+
     def _on_update_checked(self, info: Any) -> None:
         self._restore_update_cursor()
         self._update_worker = None
         manual = self._update_check_manual
         if getattr(info, "available", False):
             self._pending_update_info = info
+            self._refresh_pending_update_banner()
             self._status(
                 tr(
                     "update.status_files_changed"
@@ -1965,6 +2028,8 @@ class MainWindow(QMainWindow):
             else:
                 log.info("Tyst autosökning: uppdatering finns, bygg=%s", getattr(info, "build_id", ""))
             return
+        self._pending_update_info = None
+        self._refresh_pending_update_banner()
         self._remember_installed_release_fingerprint(info)
         self._status_reset()
         if getattr(info, "no_releases", False):
@@ -1992,13 +2057,24 @@ class MainWindow(QMainWindow):
 
     def _prompt_update_install(self, info: Any) -> None:
         """Fråga om en hittad uppdatering ska installeras nu."""
-        self._pending_update_info = None
-        notes = (info.notes or "").strip() or info.name or info.tag
-        if getattr(info, "files_compared", False):
-            notes = (f"Release-commit: {info.commit_sha[:12]}\n"
-                     f"Avvikande/saknade appfiler: {len(info.changed_files)}\n\n" + notes)
-        if len(notes) > 700:
-            notes = notes[:700] + "…"
+        from core.github_update import extract_latest_release_notes
+
+        raw_notes = (getattr(info, "notes", "") or "").strip()
+        build_id = str(getattr(info, "build_id", "") or "").strip()
+        notes = (
+            extract_latest_release_notes(raw_notes, build_id=build_id, max_chars=750)
+            or getattr(info, "name", "")
+            or getattr(info, "tag", "")
+        )
+        meta_lines: List[str] = []
+        changed_files = list(getattr(info, "changed_files", None) or [])
+        if changed_files:
+            meta_lines.append(tr("update.changed_count", count=len(changed_files)))
+        if getattr(info, "files_compared", False) or getattr(info, "archive_sha256", ""):
+            meta_lines.append(tr("update.summary_meta"))
+        if meta_lines:
+            notes = "\n".join(meta_lines) + "\n\n" + notes
+
         box = QMessageBox(self)
         files_changed = bool(
             getattr(info, "same_version_files_changed", False)
@@ -2020,6 +2096,27 @@ class MainWindow(QMainWindow):
                 notes=notes,
             )
         )
+        details: List[str] = [
+            f"Version: {getattr(info, 'latest_version', '')} ({getattr(info, 'tag', '')})",
+        ]
+        if build_id:
+            details.append(f"Byggstämpel (BUILD_ID): {build_id}")
+        commit_sha = str(getattr(info, "commit_sha", "") or "")
+        if commit_sha:
+            details.append(f"Release-commit: {commit_sha}")
+        archive_sha = str(getattr(info, "archive_sha256", "") or "")
+        if archive_sha:
+            details.append(f"Arkivets SHA-256: {archive_sha}")
+        if changed_files:
+            details.append(f"\nÄndrade/nya appfiler ({len(changed_files)}):")
+            for rel_path in changed_files[:60]:
+                details.append(f"  • {rel_path}")
+            if len(changed_files) > 60:
+                details.append(f"  … och {len(changed_files) - 60} till")
+        if raw_notes:
+            details.append("\nVersionsanteckningar:\n" + raw_notes[:4000])
+        box.setDetailedText("\n".join(details))
+
         btn_install = box.addButton(
             tr("update.install"), QMessageBox.ButtonRole.AcceptRole
         )
@@ -2030,6 +2127,8 @@ class MainWindow(QMainWindow):
         box.exec()
         clicked = box.clickedButton()
         if clicked is btn_install:
+            self._pending_update_info = None
+            self._refresh_pending_update_banner()
             self._install_update(info)
         elif clicked is btn_page:
             self._open_url(info.html_url or f"{GITHUB_REPO_URL}/releases")
@@ -2087,6 +2186,7 @@ class MainWindow(QMainWindow):
         worker = UpdateWorker("install", info=info, base_dir=self._base_dir())
         worker.installed.connect(self._on_update_installed)
         worker.failed.connect(self._on_update_failed)
+        worker.progress.connect(progress.setLabelText)
         worker.finished.connect(worker.deleteLater)
         self._update_worker = worker
         worker.start()
@@ -2108,18 +2208,24 @@ class MainWindow(QMainWindow):
         copied = len(result.get("copied") or [])
         errors = result.get("errors") or []
         if copied == 0 or errors:
+            err_text = "\n".join(str(e) for e in errors[:8])
+            if result.get("rolled_back"):
+                err_text += tr("update.rolled_back_note")
             QMessageBox.warning(
                 self,
                 tr("update.title"),
                 tr(
                     "update.install_failed",
-                    error="\n".join(str(e) for e in errors[:8]),
+                    error=err_text,
                 ),
             )
             return
+        self._pending_update_info = None
+        self._refresh_pending_update_banner()
         # Den nyss installerade releasen är nu baslinjen för framtida
         # filändringar i samma versionsnummer.
         self._save_release_fingerprint(result.get("fingerprint"), str(result.get("commit_sha") or ""))
+        self._last_installed_file_count = copied
         self._status(tr("update.installed_title"), "success")
         self._finish_update_restart()
 
@@ -2146,6 +2252,7 @@ class MainWindow(QMainWindow):
             state = {"template_name": params["template_name"],
                      "subject": params["subject"], "body": params["body_plain"],
                      "free_text": params["free_text"], "replacements": params["replacements"],
+                     "no_vin": bool(params.get("no_vin", self._is_no_vin_checked())),
                      "to": params["recipients_to"], "bcc": params["recipients_bcc"],
                      "to_lang": params["recipients_to_lang"], "bcc_lang": params["recipients_bcc_lang"],
                      "attachment_paths": params["attachments"],
@@ -2153,6 +2260,13 @@ class MainWindow(QMainWindow):
             save_session(self._update_session_path(), state)
         except Exception:
             log.exception("Uppdaterad, men tyst omstart avbruten: kunde inte spara arbetsläget")
+            self._status(
+                tr(
+                    "update.restart_manual_hint",
+                    count=int(getattr(self, "_last_installed_file_count", 0) or 0),
+                ),
+                "warning",
+            )
             return
         os.environ["EMAILAPP_RELAUNCH_BACKGROUND"] = "1" if not self.isVisible() or self.isMinimized() else "0"
         self._restart_app()
@@ -2172,10 +2286,21 @@ class MainWindow(QMainWindow):
                 self._tpl_combo.setCurrentIndex(-1)
             previous_rows = self._history_rows
             try:
+                if "no_vin" in state:
+                    self.settings.set("no_vin_checked", bool(state.get("no_vin", False)))
                 self._history_rows = [state]
                 self._clr_att()
                 self._free_edit.clear()
                 self._open_history_for_edit(0)
+                if "no_vin" in state:
+                    no_vin_val = bool(state.get("no_vin", False))
+                    self.settings.set("no_vin_checked", no_vin_val)
+                    cb = getattr(self, "_no_vin_cb", None)
+                    if cb is not None:
+                        try:
+                            cb.setChecked(no_vin_val)
+                        except RuntimeError:
+                            self._no_vin_cb = None
                 self.tabs.setCurrentIndex(max(0, min(int(state.get("tab", 0)), self.tabs.count() - 1)))
             finally:
                 self._history_rows = previous_rows
@@ -5828,15 +5953,38 @@ class MainWindow(QMainWindow):
         return group
 
     def _build_settings_group_updates(self) -> QGroupBox:
-        """(v5.4) GitHub-uppdateringar: autosökning + manuell knapp."""
+        """(v5.4) GitHub-uppdateringar: autosökning + manuell knapp + väntande banner."""
         group = QGroupBox(tr("update.group"))
         layout = QVBoxLayout(group)
         layout.setSpacing(8)
 
         version_label = QLabel(
             f"<b>{tr('update.current_version', version=APP_VERSION)}</b>"
+            f"  •  <span style='opacity:0.85'>{tr('update.current_build', build=APP_BUILD_ID)}</span>"
         )
         layout.addWidget(version_label)
+
+        pending_frame = QFrame()
+        pending_frame.setProperty("cssClass", "card")
+        pending_row = QHBoxLayout(pending_frame)
+        pending_row.setContentsMargins(10, 8, 10, 8)
+        pending_row.setSpacing(10)
+        pending_lbl = QLabel("")
+        pending_lbl.setWordWrap(True)
+        pending_row.addWidget(pending_lbl, 1)
+        btn_pending = QPushButton(tr("update.install_pending_btn"))
+        btn_pending.setProperty("cssClass", "accent")
+        btn_pending.clicked.connect(
+            lambda: self._prompt_update_install(self._pending_update_info)
+            if self._pending_update_info is not None
+            else self._check_updates(manual=True)
+        )
+        pending_row.addWidget(btn_pending)
+        pending_frame.setVisible(False)
+        self._pending_update_frame = pending_frame
+        self._pending_update_label = pending_lbl
+        layout.addWidget(pending_frame)
+        self._refresh_pending_update_banner()
 
         layout.addWidget(
             self._make_settings_checkbox("auto_update_check", tr("update.auto_check"))
