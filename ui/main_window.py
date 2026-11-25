@@ -285,6 +285,7 @@ from PyQt6.QtWidgets import (
     QGridLayout,
     QGroupBox,
     QHBoxLayout,
+    QHeaderView,
     QInputDialog,
     QLabel,
     QLineEdit,
@@ -1159,6 +1160,7 @@ class MainWindow(QMainWindow):
         # (respekterar auto_update_check, var tolfte timme).
         QTimer.singleShot(4000, self._maybe_auto_check_update)
         self._update_schedule = QTimer(self)
+        self._update_schedule.setTimerType(Qt.TimerType.VeryCoarseTimer)
         self._update_schedule.timeout.connect(self._maybe_auto_check_update)
         self._update_schedule.start(60_000)
         self._cache_cleanup_timer = QTimer(self)
@@ -1169,6 +1171,7 @@ class MainWindow(QMainWindow):
         self._restore_update_session()
         self._setup_draft_autosave()
         self._automatic_backup_timer = QTimer(self)
+        self._automatic_backup_timer.setTimerType(Qt.TimerType.VeryCoarseTimer)
         self._automatic_backup_timer.timeout.connect(self._run_automatic_backup)
         self._automatic_backup_timer.start(60_000)
         QTimer.singleShot(6000, self._run_automatic_backup)
@@ -1281,6 +1284,7 @@ class MainWindow(QMainWindow):
                 "font-size: 16pt; font-weight: bold; background: transparent; "
                 "color: #FFFFFF;"
             )
+        self._last_rendered_dpr = dpr
         self._hero_logo_label = title
         toolbar.addWidget(title)
 
@@ -1328,6 +1332,19 @@ class MainWindow(QMainWindow):
         toolbar.addWidget(btn_settings)
 
         parent.addWidget(toolbar_frame)
+
+    def _refresh_dpi_assets(self) -> None:
+        """Uppdatera logotyp i fysiska enhetspixlar vid byte mellan skärmar med olika DPI."""
+        label = getattr(self, "_hero_logo_label", None)
+        if label is None or not isinstance(self, QWidget):
+            return
+        dpr = max(1.0, float(self.devicePixelRatioF() or 1.0))
+        if abs(dpr - float(getattr(self, "_last_rendered_dpr", 0.0) or 0.0)) < 0.01:
+            return
+        logo_px = get_logo_pixmap(height=40, light_text=True, dpr=dpr)
+        if logo_px is not None and not logo_px.isNull():
+            label.setPixmap(logo_px)
+            self._last_rendered_dpr = dpr
 
     def _build_menubar(self) -> None:
         bar = self.menuBar()
@@ -3964,6 +3981,9 @@ class MainWindow(QMainWindow):
         )
         tree.setRootIsDecorated(False)
         tree.setAlternatingRowColors(True)
+        tree.header().setSectionsMovable(True)
+        tree.header().setSectionsClickable(True)
+        tree.header().setSortIndicatorShown(True)
         for contact in contacts:
             row = QTreeWidgetItem(
                 [
@@ -3975,6 +3995,8 @@ class MainWindow(QMainWindow):
             )
             row.setData(0, Qt.ItemDataRole.UserRole, contact["email"])
             tree.addTopLevelItem(row)
+        tree.setSortingEnabled(True)
+        tree.sortItems(0, Qt.SortOrder.AscendingOrder)
         tree.resizeColumnToContents(0)
         tree.resizeColumnToContents(1)
         layout.addWidget(tree, stretch=1)
@@ -4707,17 +4729,53 @@ class MainWindow(QMainWindow):
             QTableWidget.EditTrigger.NoEditTriggers
         )
         self._contacts_table.setSelectionBehavior(
-            QTableWidget.SelectionBehavior.SelectRows
+            QTableWidget.EditTrigger.SelectRows
+            if hasattr(QTableWidget.EditTrigger, "SelectRows")
+            else QTableWidget.SelectionBehavior.SelectRows
         )
         self._contacts_table.setSelectionMode(
             QAbstractItemView.SelectionMode.SingleSelection
         )
         self._contacts_table.setAlternatingRowColors(True)
+        c_header = self._contacts_table.horizontalHeader()
+        c_header.setSectionsMovable(True)
+        c_header.setSectionsClickable(True)
+        c_header.setSortIndicatorShown(True)
+        c_header.setStretchLastSection(True)
+        c_header.setToolTip(
+            "Klicka på en kolumnrubrik för att sortera – dra en rubrik i sidled för att flytta kolumnen."
+        )
+        self._contacts_table.setSortingEnabled(True)
+        self._restore_header_order(c_header, "contacts_table_col_order")
+        c_header.sectionMoved.connect(
+            lambda *_a, h=c_header: self._save_header_order(h, "contacts_table_col_order")
+        )
         self._contacts_table.itemDoubleClicked.connect(
             lambda *_args: self._edit_contact()
         )
         layout.addWidget(self._contacts_table, stretch=1)
         return widget
+
+    def _save_header_order(self, header: QHeaderView, key: str) -> None:
+        try:
+            order = [header.logicalIndex(v) for v in range(header.count())]
+            self.settings.set(key, order)
+        except Exception:
+            pass
+
+    def _restore_header_order(self, header: QHeaderView, key: str) -> None:
+        try:
+            order = self.settings.get(key)
+            if not isinstance(order, list) or len(order) != header.count():
+                return
+            if sorted(int(x) for x in order) != list(range(header.count())):
+                return
+            for target_visual, logical in enumerate(order):
+                cur_visual = header.visualIndex(int(logical))
+                if cur_visual != target_visual:
+                    header.moveSection(cur_visual, target_visual)
+        except Exception:
+            pass
 
     def _contacts_tab_add_to(self, emails: List[str], target: str) -> None:
         """Callback från ContactsTab för att lägga markerade i To/Bcc."""
@@ -4798,19 +4856,24 @@ class MainWindow(QMainWindow):
         )
 
         table = self._contacts_table
-        table.setRowCount(len(contacts))
-        for row, contact in enumerate(contacts):
-            name = str(getattr(contact, "name", ""))
-            email = str(getattr(contact, "email", ""))
-            company = str(getattr(contact, "company", ""))
-            categories = ", ".join(getattr(contact, "categories", []))
-            values = [name, email, company, categories]
-            for column, value in enumerate(values):
-                item = QTableWidgetItem(value)
-                if column == 1:
-                    item.setData(Qt.ItemDataRole.UserRole, email)
-                table.setItem(row, column, item)
-        table.resizeColumnsToContents()
+        was_sorting = table.isSortingEnabled()
+        table.setSortingEnabled(False)
+        try:
+            table.setRowCount(len(contacts))
+            for row, contact in enumerate(contacts):
+                name = str(getattr(contact, "name", ""))
+                email = str(getattr(contact, "email", ""))
+                company = str(getattr(contact, "company", ""))
+                categories = ", ".join(getattr(contact, "categories", []))
+                values = [name, email, company, categories]
+                for column, value in enumerate(values):
+                    item = QTableWidgetItem(value)
+                    if column == 1:
+                        item.setData(Qt.ItemDataRole.UserRole, email)
+                    table.setItem(row, column, item)
+            table.resizeColumnsToContents()
+        finally:
+            table.setSortingEnabled(was_sorting)
         self._contacts_info.setText(f"📒 {len(contacts)} kontakt(er) visas")
 
     def _selected_contact_email(self) -> Optional[str]:
@@ -4937,9 +5000,22 @@ class MainWindow(QMainWindow):
         )
         self._history_table.setColumnHidden(4, True)
         self._history_table.setAlternatingRowColors(True)
-        self._history_table.horizontalHeader().setStretchLastSection(True)
+        h_header = self._history_table.horizontalHeader()
+        h_header.setStretchLastSection(True)
+        h_header.setSectionsMovable(True)
+        h_header.setSectionsClickable(True)
+        h_header.setSortIndicatorShown(True)
+        h_header.setToolTip(
+            "Klicka på en rubrik för att sortera – dra en rubrik i sidled för att flytta kolumnen."
+        )
+        self._history_table.setSortingEnabled(True)
+        self._restore_header_order(h_header, "history_table_col_order")
+        h_header.sectionMoved.connect(
+            lambda *_a, h=h_header: self._save_header_order(h, "history_table_col_order")
+        )
         self._history_table.setToolTip(
-            "Dubbelklicka en rad för att öppna mailet i Skicka-fliken."
+            "Dubbelklicka en rad för att öppna mailet i Skicka-fliken. "
+            "Kolumnrubriker kan sorteras med klick och flyttas med dra-och-släpp."
         )
         self._history_table.setContextMenuPolicy(
             Qt.ContextMenuPolicy.CustomContextMenu
@@ -5088,26 +5164,37 @@ class MainWindow(QMainWindow):
         if table is None:
             return
         self._history_rows = list(reversed(self._load_history()))
+        was_sorting = table.isSortingEnabled()
+        table.setSortingEnabled(False)
         table.setUpdatesEnabled(False)
         try:
             table.setRowCount(len(self._history_rows))
             for row_idx, item in enumerate(self._history_rows):
+                to_count = len(item.get("to", []) or [])
+                bcc_count = len(item.get("bcc", []) or [])
+                att_count = int(
+                    item.get(
+                        "attachments_count",
+                        len(item.get("attachments", []) or []),
+                    )
+                    or 0
+                )
                 values = [
                     str(item.get("timestamp", "")).replace("T", " "),
                     str(item.get("subject", "")),
                     str(item.get("template", "")),
-                    str(len(item.get("to", []) or [])),
-                    str(len(item.get("bcc", []) or [])),
-                    str(
-                        item.get(
-                            "attachments_count",
-                            len(item.get("attachments", []) or []),
-                        )
-                    ),
+                    str(to_count),
+                    str(bcc_count),
+                    str(att_count),
                     "✅ Skickat" if item.get("success", False) else "❌ Fel",
                 ]
                 for col, value in enumerate(values):
-                    cell = QTableWidgetItem(value)
+                    cell = QTableWidgetItem()
+                    if col in (3, 4, 5):
+                        cell.setData(Qt.ItemDataRole.DisplayRole, int(value or 0))
+                    else:
+                        cell.setText(value)
+                    cell.setData(Qt.ItemDataRole.UserRole, row_idx)
                     if value:
                         cell.setToolTip(value)
                     table.setItem(row_idx, col, cell)
@@ -5116,16 +5203,28 @@ class MainWindow(QMainWindow):
                 if table.columnWidth(col_idx) > max_w:
                     table.setColumnWidth(col_idx, max_w)
         finally:
+            table.setSortingEnabled(was_sorting)
             table.setUpdatesEnabled(True)
         self._update_history_open_button()
+
+    def _history_index_for_visual_row(self, visual_row: int) -> int:
+        table = getattr(self, "_history_table", None)
+        total = len(getattr(self, "_history_rows", []) or [])
+        if table is None or visual_row < 0 or visual_row >= table.rowCount():
+            return -1
+        for col in range(table.columnCount()):
+            cell = table.item(visual_row, col)
+            if cell is not None:
+                raw_idx = cell.data(Qt.ItemDataRole.UserRole)
+                if isinstance(raw_idx, int):
+                    return history_selected_row(raw_idx, total)
+        return history_selected_row(visual_row, total)
 
     def _history_current_row(self) -> int:
         table = getattr(self, "_history_table", None)
         if table is None:
             return -1
-        return history_selected_row(
-            table.currentRow(), len(getattr(self, "_history_rows", []) or [])
-        )
+        return self._history_index_for_visual_row(table.currentRow())
 
     def _update_history_open_button(self) -> None:
         btn = getattr(self, "_btn_open_history_mail", None)
@@ -5136,7 +5235,14 @@ class MainWindow(QMainWindow):
     def _on_history_double_clicked(self, item: QTableWidgetItem) -> None:
         if item is None:
             return
-        self._open_history_for_edit(item.row())
+        raw_idx = item.data(Qt.ItemDataRole.UserRole)
+        target_idx = (
+            history_selected_row(raw_idx, len(getattr(self, "_history_rows", []) or []))
+            if isinstance(raw_idx, int)
+            else self._history_index_for_visual_row(item.row())
+        )
+        if target_idx >= 0:
+            self._open_history_for_edit(target_idx)
 
     def _open_selected_history(self) -> None:
         row = self._history_current_row()
@@ -5383,6 +5489,12 @@ class MainWindow(QMainWindow):
         btn_open_errors = QPushButton("⚠ Öppna fel / markera åtgärdade")
         btn_open_errors.clicked.connect(self._manage_open_errors)
         buttons.addWidget(btn_open_errors)
+        self._btn_clear_resolved_errors = QPushButton("✅ Rensa åtgärdade fel")
+        self._btn_clear_resolved_errors.setToolTip(
+            "Arkivera och ta bort åtgärdade fel från den aktiva felloggen (errors.log)"
+        )
+        self._btn_clear_resolved_errors.clicked.connect(self._resolve_all_open_errors)
+        buttons.addWidget(self._btn_clear_resolved_errors)
         export_report = QPushButton("Exportera senaste felsökningsrapport…")
         export_report.clicked.connect(self._export_support_report)
         buttons.addWidget(export_report)
@@ -5530,6 +5642,14 @@ class MainWindow(QMainWindow):
         open_file = QPushButton("Öppna hela felloggen")
         open_file.clicked.connect(lambda: self._explorer(directory / "errors.log"))
         layout.addWidget(open_file)
+        select_all_btn = QPushButton("Markera alla fel i listan")
+        select_all_btn.clicked.connect(
+            lambda: [
+                choices.item(i).setCheckState(Qt.CheckState.Checked)
+                for i in range(choices.count())
+            ]
+        )
+        layout.addWidget(select_all_btn)
         button = QPushButton("Arkivera valda som lösta")
         button.clicked.connect(resolve)
         layout.addWidget(button)
@@ -5542,6 +5662,34 @@ class MainWindow(QMainWindow):
         except Exception:
             log.exception("Kunde inte läsa öppna fel")
             self._status("Kunde inte läsa öppna fel – se loggen.", "error")
+
+    def _resolve_all_open_errors(self, *, confirm: bool = True) -> int:
+        """Arkivera och ta bort åtgärdade fel från den aktiva felloggen (errors.log)."""
+        from core.open_errors import open_issues, resolve_issues
+
+        self._ensure_logs_archived_and_cleaned()
+        directory = self._base_dir() / "logs"
+        issues = open_issues(directory)
+        if not issues:
+            self._set_log_view_mode("errors")
+            self._status("✅ Inga aktiva fel att rensa – felloggen är redan tom.", "info")
+            return 0
+        keys = [row[0] for row in issues]
+        if confirm:
+            ans = QMessageBox.question(
+                self,
+                "Rensa åtgärdade fel",
+                f"Markera alla {len(keys)} aktiva fel som åtgärdade och ta bort dem från felloggen (errors.log)?\n\n"
+                "Om ett fel inträffar på nytt öppnas det automatiskt i felloggen igen.",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.Yes,
+            )
+            if ans != QMessageBox.StandardButton.Yes:
+                return 0
+        resolve_issues(directory, keys)
+        self._set_log_view_mode("errors")
+        self._status(f"✅ {len(keys)} åtgärdade fel borttagna från felloggen.", "success")
+        return len(keys)
 
     def _open_combined_errors(self) -> None:
         try:

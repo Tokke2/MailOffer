@@ -21,6 +21,13 @@ def update_polling(window):
                 timer.setInterval(interval)
         except RuntimeError:
             continue
+    if not active:
+        try:
+            from ui.vector_icons import trim_vector_icon_caches
+
+            trim_vector_icon_caches()
+        except Exception:
+            pass
 
 
 class IdlePollingController(QObject):

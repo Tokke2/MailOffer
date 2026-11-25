@@ -57,7 +57,7 @@ def adapt_form_rows(window):
 
 
 def adapt_tables(window):
-    """Bound auto-measure work, recalculate row/column metrics on DPI/font changes."""
+    """Bound auto-measure work, enable column reorder/sort indicators, recalculate metrics on DPI/font changes."""
     for table in window.findChildren(QTableView):
         if not table.property('mailofferReadableTable'):
             table.setProperty('mailofferReadableTable', True)
@@ -68,6 +68,10 @@ def adapt_tables(window):
             table.setVerticalScrollMode(QAbstractItemView.ScrollMode.ScrollPerPixel)
             header = table.horizontalHeader()
             header.setResizeContentsPrecision(200)
+            if header.count() > 1:
+                header.setSectionsMovable(True)
+                header.setSectionsClickable(True)
+                header.setSortIndicatorShown(True)
         fm = table.fontMetrics()
         font_h = fm.height()
         if table.property('mailofferFontHeight') != font_h:
@@ -80,7 +84,7 @@ def adapt_tables(window):
 
 
 def adapt_trees(window):
-    """Uniform row heights, bounded header auto-measure and smooth HiDPI scrolling."""
+    """Uniform row heights, movable/clickable multi-column headers and smooth HiDPI scrolling."""
     for tree in window.findChildren(QTreeView):
         if not tree.property('mailofferReadableTree'):
             tree.setProperty('mailofferReadableTree', True)
@@ -92,6 +96,10 @@ def adapt_trees(window):
             tree.setVerticalScrollMode(QAbstractItemView.ScrollMode.ScrollPerPixel)
             header = tree.header()
             header.setResizeContentsPrecision(200)
+            if header.count() > 1:
+                header.setSectionsMovable(True)
+                header.setSectionsClickable(True)
+                header.setSortIndicatorShown(True)
         fm = tree.fontMetrics()
         font_h = fm.height()
         if tree.property('mailofferTreeFontHeight') != font_h:
@@ -119,6 +127,12 @@ def adapt_combos(window):
 def fit_window(window, available=None):
     if not isinstance(window, (QDialog, QMainWindow)) or not window.isWindow():
         return
+    refresh_dpi = getattr(window, '_refresh_dpi_assets', None)
+    if callable(refresh_dpi):
+        try:
+            refresh_dpi()
+        except Exception:
+            pass
     adapt_form_rows(window)
     adapt_tables(window)
     adapt_trees(window)

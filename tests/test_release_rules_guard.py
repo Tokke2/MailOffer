@@ -24,21 +24,31 @@ class ReleaseAndPersistentRulesTests(unittest.TestCase):
 
         agents_text = (ROOT / "AGENTS.md").read_text(encoding="utf-8")
         for required_phrase in (
+            "- hård regel",
             "make_latest",
             "/releases/latest",
             "compare_release_files",
             "sync_latest_release.py",
-            "Aldrig merga",
+            "ALDRIG merga",
+            "REQ-K4",
             "Inga tysta beroende- eller gränssnittsbrott",
             "Testkrav innan klar",
+            "CREATE_NO_WINDOW",
+            "startar alltid minimerat",
             "cleanup_pre_update_backups",
             "RETENTION_DAYS = 7",
+            "errors.log",
             "Avsändarprofiler",
             "::ruta::",
+            "setSectionsMovable",
             "docs/forslagslogg.md",
             "10 helt nya förbättringsförslag",
         ):
             self.assertIn(required_phrase, agents_text)
+
+        forslag_25 = (ROOT / "docs/25-produktforslag.md").read_text(encoding="utf-8")
+        self.assertIn("N01", forslag_25)
+        self.assertIn("N25", forslag_25)
 
         vad_saknas = (ROOT / "docs/VAD-SAKNAS.md").read_text(encoding="utf-8")
         self.assertNotIn("mergats till `main`", vad_saknas)

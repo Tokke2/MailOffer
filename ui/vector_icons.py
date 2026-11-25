@@ -14,7 +14,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Tuple
 
-DPR_LEVELS: Tuple[float, ...] = (1.0, 1.25, 1.5, 2.0, 3.0)
+DPR_LEVELS: Tuple[float, ...] = (1.0, 1.25, 1.5, 1.75, 2.0, 2.25, 2.5, 3.0)
 IMAGE_SUFFIXES = frozenset({
     ".png", ".jpg", ".jpeg", ".webp", ".bmp", ".gif", ".tif", ".tiff",
 })
@@ -671,6 +671,12 @@ def clear_vector_icon_caches() -> None:
     _cached_attachment_icon.cache_clear()
 
 
+def trim_vector_icon_caches() -> None:
+    """Frigör bilageminiatyrer i bakgrundsläge utan att tömma aktiva flikikoner."""
+    if _cached_attachment_icon.cache_info().currsize > 16:
+        _cached_attachment_icon.cache_clear()
+
+
 __all__ = [
     "DPR_LEVELS",
     "SUPPORTED_ICON_KINDS",
@@ -679,4 +685,5 @@ __all__ = [
     "clear_vector_icon_caches",
     "color_swatch_icon",
     "tab_icon",
+    "trim_vector_icon_caches",
 ]

@@ -1,51 +1,59 @@
 # AGENTS.md – Permanenta hårda projektregler för E-postofferten (MailOffer)
 
-Denna fil ligger permanent i repots rot så att **varje ny chatt och varje kodagent** omedelbart läser och följer samtliga stående regler i **E-postofferten (`Tokke2/MailOffer`)**.
+Denna fil ligger i repots rot som gemensam sanningskälla för alla kodagenter och nya chattsessioner i **E-postofferten (`Tokke2/MailOffer`)**. Reglerna är anpassade specifikt efter E-postoffertens arkitektur och flöden.
 
 ---
 
-## 1. HÅRD REGEL – Uppdatera ALLTID GitHub Release + markera som `Latest` vid kodförändring
-- Appens inbyggda uppdaterare (`core/github_update.py`) hämtar alltid `https://api.github.com/repos/Tokke2/MailOffer/releases/latest` över HTTPS och **jämför både `BUILD_ID` och varenda appfils SHA-256 (`compare_release_files`)** mot den taggade releasens commit/zipball.
+## 0. HÅRD REGEL – Skriv alltid in nya regler på GitHub vid `- hård regel` eller `regel`
+- Varje gång användaren skriver **`- hård regel`** eller **`regel`** i chatten ska den nya regeln **alltid skrivas in i `AGENTS.md`** (och synkas till `CLAUDE.md` samt `.github/copilot-instructions.md`), committas och pushas till den aktiva branchen på GitHub.
+
+## 1. HÅRD REGEL – Endast EN aktiv branch kvar & jobba ALDRIG mot `main`/`master`
+- Arbeta, committa, pusha och publicera releaser **endast** mot sessionens enda aktiva arbetsbranch (`arena/447b9635-mailoffer`). Skapa eller lämna aldrig kvar sidobrancher.
+- **Jobba aldrig mot `main` eller `master`**, särskilt inte vid appuppdateringar: både `core/github_update.py` och `tools/sync_latest_release.py` ska hårt avvisa referenser till `main` och `master`.
+
+## 2. HÅRD REGEL – ALDRIG merga (`never merge`)
+- Kör **aldrig** `git merge` eller `gh pr merge` under några omständigheter.
+
+## 3. HÅRD REGEL – Uppdatera ALLTID GitHub Release + markera som `Latest` vid kodförändring (filjämförelse i appen)
+- Appens inbyggda uppdaterare (`core/github_update.py`) hämtar `https://api.github.com/repos/Tokke2/MailOffer/releases/latest` över HTTPS och **jämför både `BUILD_ID` och varje appfils SHA-256 (`compare_release_files`)** mot installerade filer på disken.
 - Vid **varje kodförändring**:
-  1. Räkna upp `BUILD_ID` i `core/version.py` (behåll `__version__ = "1.0.0"` tills användaren uttryckligen begär ett annat versionsnummer).
-  2. Kör enhetstester och verifiera att CI går grönt.
-  3. Flytta release-taggen (`v1.0.0`) till den nya commit-SHA:n och uppdatera GitHub-releasen med **`make_latest="true"`**, `draft=false`, `prerelease=false` samt uppdaterad `<!-- build: ... -->`-markering via:
+  1. Räkna upp `BUILD_ID` i `core/version.py` (behåll `__version__ = "1.0.0"` tills användaren uttryckligen begär ändrat versionsnummer).
+  2. Verifiera att samtliga tester och CI-jobb är gröna.
+  3. Flytta release-taggen (`v1.0.0`) till den nya commit-SHA:n och publicera releasen med **`make_latest="true"`**, `draft=false`, `prerelease=false` via:
      ```bash
      python tools/sync_latest_release.py --note "- Kort sammanfattning av ändringen"
      ```
-  4. GitHub Actions-jobbet `sync-latest-release` i `.github/workflows/tests.yml` kör dessutom `tools/sync_latest_release.py` automatiskt efter varje grön push.
+  4. GitHub Actions-jobbet `sync-latest-release` i `.github/workflows/tests.yml` kör dessutom synkningen automatiskt efter varje grön push.
 
-## 2. HÅRD REGEL – ALDRIG merga & arbeta ENDAST mot sessionens enda aktiva branch (aldrig `main`/`master`)
-- **Aldrig merga** (`never merge`): kör aldrig `gh pr merge` eller `git merge` mot `main`/`master` eller andra brancher.
-- Arbeta, committa, pusha och publicera releaser **endast** mot den aktiva arbetsbranchen (inga extra sidobrancher får skapas eller lämnas kvar).
-- Appens uppdaterare och `tools/sync_latest_release.py` blockerar hårt alla referenser till `main` och `master`.
+## 4. HÅRD REGEL – REQ-K4, inga tysta beroende-/gränssnittsbrott & testkrav innan klar
+- **REQ-K4 (kompatibilitets-, dataskydds- och kvalitetskontrakt anpassat för E-postofferten)**:
+  - Användardata (`Mallar/`, `email_settings.json`, `contacts.json`, `.data/sent_history.json`, utkast och signaturbilder) får **aldrig** skrivas över eller raderas vid uppdatering eller kodändring.
+  - **Inga tysta beroende- eller gränssnittsbrott**: ändra aldrig publika funktionssignaturer, sparade JSON-format eller paket i `requirements.txt` utan explicit bakåtkompatibilitet.
+  - **Testkrav innan klar**: alla Python-källfiler ska kompilera (`validate_python_sources`), samtliga enhetstester ska passera lokalt och samtliga GitHub Actions-jobb (`unittest`, `windows-startup-syntax`, `desktop-portability`, `sync-latest-release`) ska vara verifierat gröna innan uppgiften rapporteras klar.
 
-## 3. HÅRD REGEL – Inga tysta beroende- eller gränssnittsbrott & testkrav innan klar
-- Ändra **aldrig** publika funktionssignaturer, sparade JSON-/inställningsformat (`email_settings.json`, `contacts.json`, `send_history.json`, utkast/uppdateringssession) eller beroenden i `requirements.txt` i smyg.
-- **Testkrav innan klar**: alla Python-filer ska kompilera utan fel (`validate_python_sources` / `python -m compileall`), alla enhetstester ska passera lokalt, och **samtliga GitHub Actions-jobb** (`unittest`, `windows-startup-syntax`, `desktop-portability`, `sync-latest-release`) ska verifieras gröna innan arbetet rapporteras klart.
+## 5. HÅRD REGEL – Inget terminalfönster (varken vid start eller skanning) & starta alltid minimerat
+- På Windows startas appen via `Starta EmailApp.vbs` med datorns befintliga system-Python (`pythonw.exe`) utan konsolfönster (`shell.Run(..., 0, True)`), och **inga medföljande `.exe`/`.dll`/`.msi`-binärer** får finnas.
+- Samtliga underprocesser vid paketkontroll, sändnings-/DNS-kontroll och Thunderbird-skanning ska köras med `CREATE_NO_WINDOW` / `SW_HIDE` (`core/process_utils.py:quiet_process_options`) så att **inget terminalfönster blinkar till** varken vid start eller skanning.
+- Appen **startar alltid minimerat** (`main.pyw`: dold till systemfältet när brickan finns, annars `showMinimized()` i aktivitetsfältet).
 
-## 4. HÅRD REGEL – Ingen medföljande `.exe` eller binär körfil
-- På Windows startas appen via `Starta EmailApp.vbs` med datorns befintliga system-Python (`pythonw`), utan konsolfönster.
-- Inga `.exe`-, `.dll`- eller `.msi`-filer får läggas till i repot eller kopieras vid uppdatering (`_DISALLOWED_BINARY_SUFFIXES` i `core/app_update.py`).
+## 6. HÅRD REGEL – Ta bort uppdateringsbackup vid lyckad uppdatering
+- Före filkopiering skapas en lösenordsfri rollback-backup i `.data/pre_update_backups/pre-update-*.zip`.
+- När uppdateringen **och** efterkontrollen (`compare_release_files`) lyckas helt utan fel raderas `.data/pre_update_backups/` och `.data/update_cache/` automatiskt (`cleanup_pre_update_backups`).
 
-## 5. HÅRD REGEL – Ta bort uppdateringsbackup vid lyckad uppdatering
-- En lösenordsfri säkerhetsbackup skapas i `.data/pre_update_backups/pre-update-*.zip` före filkopiering så att installationen alltid kan rullas tillbaka vid fel.
-- Så snart installationen **och** efterkontrollen (`compare_release_files`) lyckas helt utan fel ska både `.data/pre_update_backups/` och `.data/update_cache/` tas bort automatiskt (`cleanup_pre_update_backups`).
+## 7. HÅRD REGEL – Dagsarkivering, 7-dagars loggrensning + app-logg & aktiv fellogg där åtgärdade fel tas bort
+- **App-logg**: i `logs/` och vyn *Dagens logg* visas endast dagens aktiva loggposter. Gårdagens och äldre loggar komprimeras och arkiveras verifierat i `logs/archive/YYYY-MM-DD/` och **raderas automatiskt efter 7 dagar** (`RETENTION_DAYS = 7` via `prune_archived_logs`).
+- **Komplett aktiv fellogg (`logs/errors.log`)**: samlar alla aktiva, ej åtgärdade fel. När ett fel blir åtgärdat (automatiskt verifierat eller markerat via `✅ Rensa åtgärdade fel` / `resolve_issues`) **tas det bort från den aktiva felloggen `logs/errors.log`**.
 
-## 6. HÅRD REGEL – Endast dagens logg synlig & rensa arkiverade loggar efter 7 dagar
-- I `logs/` och i fliken *Loggar* ska endast dagens aktiva loggar visas.
-- Äldre loggdagar komprimeras och arkiveras verifierat i `logs/archive/YYYY-MM-DD/` och **rensas automatiskt efter 7 dagar** (`RETENTION_DAYS = 7` via `prune_archived_logs`).
-- Aktiva ofixade fel sparas i `logs/errors.log` / `unresolved-errors.log` tills de är åtgärdade och rensas därefter automatiskt.
-
-## 7. HÅRD REGEL – Skärmanpassning, maxhöjd vid start, minimera scroll, egen Profil-underflik, ruta-val & HiDPI-skärpa
-- **Start i maxhöjd & anpassad bredd**: utan tidigare sparad fönsterstorlek startar huvudfönstret i skärmens fulla tillgängliga höjd (`availableGeometry().height()`) med skärmanpassad bredd för att visa maximalt innehåll och minimera skrollning.
-- **Egen underflik för avsändarprofiler**: *Inställningar* har en dedikerad första underflik (*Avsändarprofiler*) för att skapa, färgsätta och konfigurera profiler och signaturer, samt alltid synlig sparaknapprad längst ned.
-- **Val av ruta (`::ruta::` / 13 glastyper)**: rullmeny för glastyp ska finnas både i sändflödets Steg 1 och i Mall-wizarden (`ui/template_wizard.py`).
-- **Mushjulsskydd (`ui/wheel_guard.py`)**: alla omarkerade textfält och rullmenyer ignoreras vid mushjulsskrollning så att sidan skrollar vidare; först vid aktiv markering/öppen meny skrollar kontrollen.
-- **Skarpa vektororiginal & tryckfiler**: logotyp och ikoner ska vara skarpa i `100 %–300 %` DPI (`core/app_icon.py`, `ui/vector_icons.py`). Alla original i `icons/*.svg` och `tryck/*.svg` ska vara rena konturbanor (`<path>`) i namngivna lager utan `<text>`/`<image>` (`tryck/E-postofferten-farg.svg` i 100 % plana färger). Kör `python tools/make_icon.py` och `python tools/build_thunderbird.py` vid grafikändring.
+## 8. HÅRD REGEL – Skärmanpassning, HiDPI-skärpa, minnes-/energisnål drift, profil-underflik, ruta-val & sorterbara/flyttbara kolumner
+- **Start i maxhöjd & anpassad bredd, minimera scroll**: utan tidigare sparad fönstergeometri startar fönstret i skärmens fulla tillgängliga höjd (`availableGeometry().height()`) med skärmanpassad bredd och kompakta marginaler.
+- **Knivskarp HiDPI (`100 %–300 %`)**: `PassThrough`-skalning utan mellanskalningsoskärpa, skarp typsnitts-hinting, vektorikoner i fysiska enhetspixlar (`1.0x–3.0x` DPR i `ui/vector_icons.py`) och omritning av logotyp vid byte mellan skärmar med olika DPI (`_refresh_dpi_assets`).
+- **Skarp vektorlogotyp överallt + redigerbara tryckoriginal**: används konsekvent på fönster, taskbar, bricka och dialoger (`core/app_icon.py`); rena konturkonverterade lager i `icons/*.svg` och `tryck/*.svg` (`tryck/E-postofferten-farg.svg` i 100 % plana färger).
+- **Egen underflik för profiler**: *Inställningar → Avsändarprofiler* är en egen underflik med fast knapprad längst ned.
+- **Val av ruta (`::ruta::` – 13 glastyper)**: finns både i sändflödets Steg 1 och i Mall-wizarden (`ui/template_wizard.py` Steg 2 & Steg 4).
+- **Sortera och flytta kolumner**: alla flerkolumnstabeller och trädvyer (*Skicka-historik*, *Kontakter/Adressbok*, kontaktväljare) har klickbar kolumnsortering (`setSortingEnabled` / `sectionClicked`) och flyttbara kolumner med dra-och-släpp (`setSectionsMovable(True)`).
+- **Minnes- och energisnål drift**: grova bakgrundstimers (`VeryCoarseTimer`), nedsaktad bakgrundspollning när fönstret är dolt/minimerat (`ui/idle_polling.py`) och begränsade LRU-ikoncachar med automatisk bakgrundstrimning.
 - **Upphovsrätt & donation**: `Skapad av Rickard Längkvist` / `© 2026 Rickard Längkvist` samt låsta donationsmottagare i `core/donate.py` får aldrig ändras.
 
-## 8. HÅRD REGEL – 10-meddelanderegeln (10 helt nya, ej återbrukade förslag var 10:e chattmeddelande)
-- Efter **var 10:e chattmeddelande** från användaren ska en ny förslagslista med **10 helt nya förbättringsförslag** visas.
-- Inget förslag får återbrukas från tidigare omgångar i `docs/forslagslogg.md`, de 50 punkterna i `docs/25-produktforslag.md` eller `docs/VAD-SAKNAS.md`.
-- Varje visad 10-lista ska samtidigt loggas med löpnummer (`#F01`–`#F10`, `#F11`–`#F20`, osv.) i `docs/forslagslogg.md`.
+## 9. HÅRD REGEL – Förslagslistor skrivs ALLTID ut i chatten (10 nya var 10:e meddelande + 25 unika konkurrentförslag)
+- Efter **var 10:e chattmeddelande** ska en ny lista på **10 helt nya förbättringsförslag** (aldrig återbrukade från tidigare omgångar i `docs/forslagslogg.md`, `docs/25-produktforslag.md` eller `docs/VAD-SAKNAS.md`) **alltid skrivas ut direkt i chatten** och loggas i `docs/forslagslogg.md`.
+- Likaså ska begärda 25-listor med nya funktioner som konkurrenter saknar och användare efterfrågar **alltid skrivas ut i chatten** och bokföras så att de aldrig återbrukas senare.

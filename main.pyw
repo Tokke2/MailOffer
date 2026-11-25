@@ -621,10 +621,33 @@ def main() -> None:
         )
         log.debug("CacheManager initierad: %s", cache)
 
-        # QApplication
+        # QApplication – exakt fraktionell HiDPI-skalning (125 %, 150 %, 175 %,
+        # 200 %, 300 %) utan mellanskalningsoskärpa samt skarp typsnitts-hinting.
+        from PyQt6.QtCore import Qt
+        from PyQt6.QtGui import QFont, QGuiApplication
         from core.app_icon import set_windows_app_id
         set_windows_app_id()
+        if QApplication.instance() is None:
+            try:
+                QGuiApplication.setHighDpiScaleFactorRoundingPolicy(
+                    Qt.HighDpiScaleFactorRoundingPolicy.PassThrough
+                )
+            except Exception:
+                pass
         app = QApplication.instance() or QApplication(sys.argv)
+        try:
+            base_font = app.font()
+            base_font.setStyleStrategy(
+                QFont.StyleStrategy.PreferAntialias | QFont.StyleStrategy.PreferQuality
+            )
+            base_font.setHintingPreference(
+                QFont.HintingPreference.PreferFullHinting
+                if IS_WINDOWS
+                else QFont.HintingPreference.PreferVerticalHinting
+            )
+            app.setFont(base_font)
+        except Exception:
+            pass
         app.setApplicationName(APP_NAME)
         app.setApplicationVersion(APP_VERSION)
         app.setQuitOnLastWindowClosed(False)

@@ -1181,16 +1181,17 @@ class ContactsTab(QWidget):
         self._tree.customContextMenuRequested.connect(
             self._show_context_menu
         )
-        # (v4.5) Klick på kolumnrubrik → sortera (stigande/fallande)
+        # (v4.5+) Klick på kolumnrubrik → sortera; dra rubrik i sidled → flytta kolumn
         self._tree.header().setStretchLastSection(True)
         self._tree.header().setMinimumSectionSize(84)
         self._tree.header().setResizeContentsPrecision(200)
+        self._tree.header().setSectionsMovable(True)
         self._tree.header().setSectionsClickable(True)
         self._tree.header().setSortIndicatorShown(True)
         self._tree.header().sectionClicked.connect(self._on_header_clicked)
         self._tree.header().setToolTip(
-            "Klicka på en rubrik för att sortera – klicka igen för "
-            "fallande ordning"
+            "Klicka på en rubrik för att sortera – dra en rubrik i sidled "
+            "för att flytta kolumnen"
         )
         self._tree.itemDoubleClicked.connect(
             lambda item, col: self._edit_selected()

@@ -89,3 +89,38 @@ och noll-moln-integritet.
 | 24 | Valbar läs-endast IMAP-studs- och autosvarsdetektor kopplad till utskickets `Message-ID` | Ser direkt i ärendet om en kontakt studsat eller är på semester utan att spara inkorgen | Senare – kräver uttryckligt opt-in för IMAP |
 | 25 | Begriplig svensk SPF/DKIM/DMARC-hälsopanel med guide för svenska webbhotell | Hjälper småföretag fixa DNS en gång för alla så offertförfrågningar når inkorgen | Hög – bygger vidare på befintlig DNS-kontroll |
 
+---
+
+## Omgång 3 (`#N01`–`#N25`): 25 helt nya funktioner som konkurrenter saknar och användare efterfrågar
+
+Dessa 25 helt nya punkter återbrukar ingen av de 50 punkterna ovan eller `#F01`–`#F10` i `docs/forslagslogg.md`, utan adresserar praktiska luckor gentemot Outlook, Thunderbird, nyhetsbrevstjänster och tunga verkstads-/affärssystem.
+
+| # | Nytt förslag | Varför konkurrenter saknar det & användarnytta | Prioritet |
+|---|---|---|---|
+| N01 | **Eurocode-/glaskodsdekoder i realtid (`::eurocode::`, t.ex. `8596AGNGYMV1B`)** | Vanliga mejlklienter förstår inte bilglas-Eurocodes – översätter koden direkt till klartext (märke, kaross, ton, solband, sensorfäste) på SV + EN i utskicket | Hög |
+| N02 | **Tidsstyrd schemaläggning för morgonsändning (t.ex. kl. 07:05 lokalt i leverantörens tidszon)** | Förbered förfrågningar sent på kvällen så att de hamnar överst i inkorgen när inköp/lager öppnar – helt lokalt utan molnkö | Hög |
+| N03 | **Inbyggd bildjämförare (*Skadad ruta / Före* bredvid *OEM-stämpel / Efter*) som ett samlat bildkort** | Monterar 2–4 bilagor till en tydlig etiketterad översiktsbild med ett klick så mottagaren slipper öppna fyra lösa JPG-filer | Hög |
+| N04 | **Streckkods- och QR-läsare från webbkamera eller inklistrad etikettbild** | Läser av rutans eller kartongens streckkod/DataMatrix direkt in i platshållarfälten utan handskanner eller manuell inmatning | Medel |
+| N05 | **Automatisk kontroll av helg-/röda-dagar-leverans vid angivet önskat leveransdatum** | Varnar direkt om valt leveransdatum råkar vara helgdag eller klämdag i Sverige eller mottagarlandet | Medel |
+| N06 | **Snabbväxling mellan ”Prisförfrågan till leverantör” och ”Färdigt prisförslag till kund” i samma ärende** | Återanvänder regnr, bilmodell och glastyp direkt från leverantörsförfrågan till kundens svarsmejl utan dubbelinmatning | Hög |
+| N07 | **Lokal röstanteckning-till-fritext (offline diktering för verkstadsgolvet)** | Tala in skadebeskrivning med smutsiga händer vid bilen och få färdig strukturerad fritext i Steg 1 utan molntjänst | Medel |
+| N08 | ** Valbar vattenstämpel med eget företagsnamn/ärendenummer på utgående skadefoton** | Förhindrar att egna dokumentationsbilder sprids fel eller blandas ihop hos leverantörer som hanterar hundra ärenden per dag | Medel |
+| N09 | **Leverantörsspecifika kundnummer per kontakt (`::kundnr::` per mottagare i individuell sändning)** | Varje leverantör ser automatiskt *sitt eget* kund-/kontonummer för avsändaren i sitt individuella mejl – omöjligt vid vanlig Bcc-sändning | Hög |
+| N10 | **Smart bilagekomprimering specifikt för PDF-ritningar och skannade skadeanmälningar** | Krymper tunga skannade PDF-bilagor 5–10× lokalt utan att texten blir suddig innan SMTP-sändning | Medel |
+| N11 | **Snabbknapp ”Skicka testkopia bara till mig själv exakt som mottagare X ser den”** | Låter avsändaren verifiera exakt layout, CID-logotyp och språk för en specifik utländsk eller svensk mottagare i sin egen mobil på 3 sekunder | Hög |
+| N12 | **Färgkodade statusbrickor i systemfältsmenyn (Tray) för senaste 5 utskicken** | Högerklicka på brickikonen nere vid klockan för att direkt se status på senaste utskicken eller repetera ett misslyckat utan att ens öppna huvudfönstret | Medel |
+| N13 | **Automatisk detektering av felaktigt valt språk per landdomän (`.de`, `.pl`, `.lt`, `.uk`, `.se`)** | Varnar före sändning om en `.de`/`.pl`/`.com`-leverantör av misstag står som `SV` i stället för `EN` | Hög |
+| N14 | **Lokal frakt- och emballageprofil per glastyp (*Trähäck / Pall / Samfrakt / Hämtas på depå*)** | Ett klick infogar tydliga leveransvillkor på både svenska och engelska så att fraktkostnad alltid specificeras rätt från start | Hög |
+| N15 | ** Dra-och-släpp av hel `.msg`- eller `.eml`-fil från Outlook/Thunderbird till Steg 1** | Plockar automatiskt ut kundens bilagor, regnummer ur ämnesraden och avsändarinfo till en ny leverantörsförfrågan | Hög |
+| N16 | **Lokal dubblettbildsdetektor (perceptuell hash) vid bilageval** | Varnar direkt om man råkar dra in samma foto två gånger under olika filnamn eller i olika upplösning | Medel |
+| N17 | **Anpassningsbara kortkommandon (egen snabbtangentprofil i Inställningar)** | Låter vana kontors- och verkstadsanvändare binda egna tangenter för favoritmallar, kontaktgrupper och direktutskick | Medel |
+| N18 | **Valbar sammanfattningsrad (preheader-text) högst upp i HTML-utskick** | Styr exakt de första 90 tecknen som syns i mottagarens mobilnotis och inkorgslista i Outlook/Gmail (t.ex. `XC60 · ABC123 · Vindruta m. kamera`) | Hög |
+| N19 | **Offline-validering av svenskt organisationsnummer och momsregistreringsnummer (VAT/Luhn)** | Säkerställer att företagskundens org.nr/EU-VAT i faktura- och offertmallar är matematiskt giltigt före sändning | Medel |
+| N20 | ** ”Frys fält vid rensning” (nål-ikon bredvid valfritt platshållarfält i Steg 1)** | Behåller t.ex. bilmärke eller leveransort låst när man skickar 5 separata rutor/delar för samma fordon efter varandra | Hög |
+| N21 | **Portabelt USB-/flyttläge med krypterat profilpaket för byte av verkstadsdator** | Flytta hela E-postofferten inklusive profiler, mallar, kolumnordning och kontakter till ny Windows-dator på 30 sekunder | Hög |
+| N22 | **Visuell tecken- och radlängdsindikator för ämnesrader i mobilvy** | Visar direkt om ämnesraden klipps av på iPhone/Android så att regnummer och glastyp alltid hamnar före brytpunkten | Medel |
+| N23 | **Snabbfilter för ”Senast använda kontakter senaste 14 dagarna” överst i kontaktväljaren** | Lyfter fram aktiva leverantörer direkt utan att behöva söka i en adressbok med hundratals rader | Hög |
+| N24 | **Lokal SLA-varning för obesvarade utskick (t.ex. ”4 timmar utan markering”)** | Diskret Brick-/statuspåminnelse om att följa upp en tidskritisk expressförfrågan innan leverantörens eftermiddagsbil går | Medel |
+| N25 | **Självtestande ”Hälsokontroll vid start” (SMTP, DNS, diskutrymme, skrivbehörighet, mallintegritet)** | En tydlig grön/gul statusindikator i statusfältet som fångar utgånget app-lösenord eller full disk *innan* man skriver ett långt utskick | Hög |
+
+

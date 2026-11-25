@@ -551,6 +551,46 @@ class TestUpdateDeferralUi(unittest.TestCase):
             wiz._test_inputs["ruta"].setText("Bakruta")
             self.assertIn("Bakruta", wiz._preview_sv.toPlainText())
 
+    def test_tables_support_column_sorting_and_moving_and_preserve_history_index(self) -> None:
+        from PyQt6.QtCore import Qt
+
+        win = self._make_window()
+        table = win._history_table
+        self.assertTrue(table.isSortingEnabled())
+        self.assertTrue(table.horizontalHeader().sectionsMovable())
+
+        if getattr(win, "_contacts_tab", None) is not None and hasattr(win._contacts_tab, "_tree"):
+            self.assertTrue(win._contacts_tab._tree.header().sectionsMovable())
+
+        rows = [
+            {"timestamp": "2026-11-24T08:00:00", "subject": "Zebra", "template": "A.txt", "to": ["a@example.com"], "bcc": [], "attachments": [], "success": True},
+            {"timestamp": "2026-11-24T09:00:00", "subject": "Alfa", "template": "B.txt", "to": ["b@example.com", "c@example.com"], "bcc": [], "attachments": ["x.jpg"], "success": True},
+        ]
+        win._save_history(rows)
+        win._refresh_history()
+        # Sort ascending by Ämne (col 1): "Alfa" (row_idx 0 in reversed list) vs "Zebra" (row_idx 1)
+        table.sortItems(1, Qt.SortOrder.DescendingOrder)
+        # Visual row 0 is now "Zebra", which is index 1 in self._history_rows
+        table.horizontalHeader().moveSection(1, 0)
+        table.selectRow(0)
+        table.setCurrentCell(0, 0)
+        resolved_idx = win._history_current_row()
+        self.assertEqual(win._history_rows[resolved_idx]["subject"], "Zebra")
+
+    def test_resolve_all_open_errors_removes_from_active_error_log(self) -> None:
+        from core.open_errors import open_issues, record_error
+
+        win = self._make_window()
+        logs_dir = win._base_dir() / "logs"
+        record_error(logs_dir, "app.log", "2026-11-24 10:00:00 | ERROR | Testfel som sedan fixats")
+        self.assertGreaterEqual(len(open_issues(logs_dir)), 1)
+        self.assertTrue((logs_dir / "errors.log").read_text(encoding="utf-8").strip())
+
+        cleared = win._resolve_all_open_errors(confirm=False)
+        self.assertGreaterEqual(cleared, 1)
+        self.assertEqual(open_issues(logs_dir), [])
+        self.assertEqual((logs_dir / "errors.log").read_text(encoding="utf-8").strip(), "")
+
 
 if __name__ == "__main__":
     unittest.main()
