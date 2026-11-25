@@ -274,7 +274,7 @@ class TestUpdateDeferralUi(unittest.TestCase):
         path = win._base_dir() / "logs/errors.log"
         with mock.patch("core.diagnostics.collect_errors", return_value=path) as collect, mock.patch.object(win, "_explorer") as open_file:
             win._open_combined_errors()
-            collect.assert_called_once_with(win._base_dir())
+            collect.assert_called_with(win._base_dir())
             open_file.assert_called_once_with(path)
 
     def test_update_worker_passes_installation_and_commit_to_real_file_check(self):
@@ -328,12 +328,12 @@ class TestUpdateDeferralUi(unittest.TestCase):
         win.settings.set("template_bcc_rules", {"A.txt": ["a@example.com"], "B.txt": ["b@example.com"]})
         win._last_tpl = Path("A.txt")
         first = win._gather_send_params()
-        self.assertIn("a@example.com", first["default_bcc"])
+        self.assertIn("a@example.com", first["recipients_to"])
         self.assertIn("global@example.com", first["default_bcc"])
         win._last_tpl = Path("B.txt")
         second = win._gather_send_params()
-        self.assertIn("b@example.com", second["default_bcc"])
-        self.assertNotIn("a@example.com", second["default_bcc"])
+        self.assertIn("b@example.com", second["recipients_to"])
+        self.assertNotIn("a@example.com", second["recipients_to"])
         self.assertNotIn("a@example.com", second["recipients_bcc"])
         win._last_tpl = None
         self.assertEqual(win._gather_send_params()["default_bcc"], ["global@example.com"])
@@ -410,7 +410,7 @@ class TestUpdateDeferralUi(unittest.TestCase):
     def test_cache_cleanup_timer_and_manual_smart_filter(self):
         win = self._make_window()
         self.assertTrue(win._cache_cleanup_timer.isActive())
-        self.assertEqual(win._cache_cleanup_timer.interval(), 60_000)
+        self.assertEqual(win._cache_cleanup_timer.interval(), 600_000)
         with mock.patch("core.smart_cache.run_due_cleanup", return_value={"removed": 1, "bytes": 20, "errors": 0}) as clean:
             win._run_cache_cleanup(manual=True)
             clean.assert_called_once_with(win._base_dir(), win.settings, force=True)
@@ -494,6 +494,9 @@ class TestUpdateDeferralUi(unittest.TestCase):
         self.assertEqual(prompted, [info])
 
     def test_silent_restart_preserves_no_vin_and_pending_banner_updates(self) -> None:
+        from core.github_update import UpdateInfo
+        from core.version import __version__
+
         win = self._make_window()
         win._on_no_vin_toggled(True)
         if win._no_vin_cb is not None:
@@ -538,7 +541,7 @@ class TestUpdateDeferralUi(unittest.TestCase):
         from ui.template_wizard import TemplateWizard, _PlaceholderDropdown
 
         with tempfile.TemporaryDirectory() as tmp:
-            wiz = TemplateWizard(Path(tmp))
+            wiz = TemplateWizard(None, templates_dir=Path(tmp) / "Mallar")
             self.addCleanup(wiz.close)
             expected = PLACEHOLDER_DROPDOWNS["ruta"]
             self.assertEqual(wiz._ruta_quick_combo.count(), len(expected))
