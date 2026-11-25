@@ -939,7 +939,7 @@ def apply_github_update(
     inställningar, adresslistor, loggar och Mallar/ rörs ALDRIG.
     Returns: ``{copied, skipped, errors, version, rolled_back, ...}``.
     """
-    from core.app_update import apply_update_from_dir
+    from core.app_update import apply_update_from_dir, cleanup_pre_update_backups
 
     if not info or not info.download_url:
         raise ValueError("Ingen nedladdningslänk – sök efter uppdateringar först.")
@@ -992,6 +992,7 @@ def apply_github_update(
             base_dir,
             require_app_root=True,
             backup_user_data=True,
+            cleanup_backup_on_success=False,
             on_progress=on_progress,
         )
         result = dict(result)
@@ -1004,6 +1005,19 @@ def apply_github_update(
                     "Filkontrollen efter installation misslyckades: "
                     + ", ".join(remaining[:8])
                 )
+        if not result.get("errors"):
+            cleanup_pre_update_backups(base_dir)
+            result["backup_path"] = ""
+            result["backup_cleaned"] = True
+            cache_dir = _update_cache_dir(base_dir)
+            if cache_dir.is_dir() and not cache_dir.is_symlink():
+                for item in list(cache_dir.glob("*.zip")) + list(cache_dir.glob("*.tmp")):
+                    item.unlink(missing_ok=True)
+                try:
+                    if not any(cache_dir.iterdir()):
+                        cache_dir.rmdir()
+                except OSError:
+                    pass
         result["commit_sha"] = info.commit_sha
         result["version"] = info.latest_version
         result["build_id"] = str(

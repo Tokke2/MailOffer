@@ -347,7 +347,9 @@ class ErrorLogCollector:
                             continue
                         if path:
                             archived.append(path)
-            return archived
+                from core.log_archive import prune_archived_logs
+                prune_archived_logs(self.directory, today=today)
+            return [p for p in archived if p.exists()]
 
     def start(self):
         if self._thread is not None:

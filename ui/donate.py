@@ -264,18 +264,21 @@ class DonateDialog(QDialog):
         if label is None:
             return
         try:
-            from core.app_icon import get_app_icon
-            from PyQt6.QtCore import QSize
+            from core.app_icon import get_brand_mark_pixmap, get_logo_pixmap
 
-            icon = get_app_icon()
             dpr = max(1.0, float(self.devicePixelRatioF() or 1.0))
-            pixmap = icon.pixmap(QSize(84, 84), dpr) if icon is not None else QPixmap()
-            if not pixmap.isNull():
+            logo_px = get_logo_pixmap(height=50, light_text=True, dpr=dpr)
+            if not logo_px.isNull():
                 label.setStyleSheet("")
-                label.setPixmap(pixmap)
+                label.setPixmap(logo_px)
+                return
+            mark_px = get_brand_mark_pixmap(size=84, dpr=dpr)
+            if not mark_px.isNull():
+                label.setStyleSheet("")
+                label.setPixmap(mark_px)
                 return
         except Exception:
-            log.debug("Kunde inte ladda app-ikonen till donationen", exc_info=True)
+            log.debug("Kunde inte ladda logotypen till donationen", exc_info=True)
         label.setText("❤️☕")
         label.setStyleSheet("font-size: 40pt; background: transparent;")
 

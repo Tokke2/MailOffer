@@ -836,3 +836,94 @@ class TestHardenedUpdateSafetyAndUX(unittest.TestCase):
         self.assertIn('automatisk rollback', extracted)
         self.assertNotIn('Gammal historik från oktober', extracted)
 
+    def test_successful_update_deletes_pre_update_backup_and_cache(self):
+        import hashlib as _hashlib
+        from core.github_update import UpdateInfo, apply_github_update
+
+        with tempfile.TemporaryDirectory() as folder:
+            dest = Path(folder) / 'app'
+            dest.mkdir()
+            (dest / 'main.pyw').write_text("print('old')\n", encoding='utf-8')
+            (dest / 'core').mkdir()
+            (dest / 'core' / 'version.py').write_text(
+                '__version__ = "1.0.0"\nBUILD_ID = "2026102364"\n', encoding='utf-8'
+            )
+            (dest / 'Mallar').mkdir()
+            (dest / 'Mallar' / 'egen.txt').write_text('Kundmall', encoding='utf-8')
+            (dest / 'contacts.json').write_text('[{"email":"kund@exempel.se"}]', encoding='utf-8')
+
+            zip_buf = Path(folder) / 'release.zip'
+            with zipfile.ZipFile(zip_buf, 'w') as zf:
+                zf.writestr('Tokke2-MailOffer-abc1234/main.pyw', "print('new')\n")
+                zf.writestr(
+                    'Tokke2-MailOffer-abc1234/core/version.py',
+                    '__version__ = "1.0.0"\nBUILD_ID = "2026102365"\n',
+                )
+            raw_bytes = zip_buf.read_bytes()
+            sha = _hashlib.sha256(raw_bytes).hexdigest()
+
+            info = UpdateInfo(
+                available=True,
+                latest_version='1.0.0',
+                tag='v1.0.0',
+                download_url='https://api.github.com/repos/Tokke2/MailOffer/zipball/v1.0.0',
+                html_url='https://github.com/Tokke2/MailOffer/releases/tag/v1.0.0',
+                notes=f'<!-- build: 2026102365 -->\n<!-- sha256: {sha} -->\n## BUILD2026102365\n- Nyheter\n',
+                build_id='2026102365',
+                expected_asset_sha256=sha,
+            )
+
+            res = apply_github_update(info, dest, fetcher=lambda url, timeout: (200, raw_bytes))
+            self.assertEqual(res.get('errors'), [])
+            self.assertTrue(res.get('backup_cleaned'))
+            self.assertFalse(res.get('backup_path'))
+            self.assertEqual(
+                list((dest / '.data' / 'pre_update_backups').glob('pre-update-*.zip')),
+                [],
+            )
+            self.assertEqual(
+                list((dest / '.data' / 'update_cache').glob('*.zip')),
+                [],
+            )
+            self.assertEqual((dest / 'Mallar' / 'egen.txt').read_text(encoding='utf-8'), 'Kundmall')
+            self.assertIn('2026102365', (dest / 'core' / 'version.py').read_text(encoding='utf-8'))
+
+    def test_failed_update_preserves_pre_update_backup(self):
+        import hashlib as _hashlib
+        from unittest import mock
+        from core.github_update import UpdateInfo, apply_github_update
+
+        with tempfile.TemporaryDirectory() as folder:
+            dest = Path(folder) / 'app'
+            dest.mkdir()
+            (dest / 'main.pyw').write_text("print('old')\n", encoding='utf-8')
+            (dest / 'contacts.json').write_text('[{"email":"safe@exempel.se"}]', encoding='utf-8')
+
+            zip_buf = Path(folder) / 'release.zip'
+            with zipfile.ZipFile(zip_buf, 'w') as zf:
+                zf.writestr('Tokke2-MailOffer-abc1234/main.pyw', "print('new')\n")
+                zf.writestr('Tokke2-MailOffer-abc1234/core/extra.py', "X = 1\n")
+            raw_bytes = zip_buf.read_bytes()
+            sha = _hashlib.sha256(raw_bytes).hexdigest()
+
+            info = UpdateInfo(
+                available=True,
+                latest_version='1.0.0',
+                tag='v1.0.0',
+                download_url='https://api.github.com/repos/Tokke2/MailOffer/zipball/v1.0.0',
+                html_url='https://github.com/Tokke2/MailOffer/releases/tag/v1.0.0',
+                notes=f'<!-- sha256: {sha} -->',
+                build_id='2026102365',
+                expected_asset_sha256=sha,
+            )
+
+            with mock.patch('core.app_update.shutil.copy2', side_effect=OSError('Disk full')):
+                res = apply_github_update(info, dest, fetcher=lambda url, timeout: (200, raw_bytes))
+
+            self.assertTrue(res.get('errors'))
+            self.assertFalse(res.get('backup_cleaned'))
+            backups = list((dest / '.data' / 'pre_update_backups').glob('pre-update-*.zip'))
+            self.assertEqual(len(backups), 1)
+            self.assertEqual((dest / 'main.pyw').read_text(encoding='utf-8'), "print('old')\n")
+
+

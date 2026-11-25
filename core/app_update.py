@@ -181,6 +181,32 @@ def create_pre_update_user_backup(dest: Path) -> Optional[Path]:
         return None
 
 
+def cleanup_pre_update_backups(dest: Path) -> int:
+    """Ta bort temporära förhandsbackuper när uppdateringen lyckats."""
+    backup_dir = Path(dest).resolve() / ".data" / "pre_update_backups"
+    if not backup_dir.exists() or _is_unsafe_link(backup_dir):
+        return 0
+    removed = 0
+    try:
+        for item in list(backup_dir.iterdir()):
+            if _is_unsafe_link(item) or not item.is_file():
+                continue
+            if (
+                item.name.startswith("pre-update-")
+                and item.suffix.lower() in (".zip", ".tmp")
+            ):
+                try:
+                    item.unlink(missing_ok=True)
+                    removed += 1
+                except OSError:
+                    pass
+        if not any(backup_dir.iterdir()):
+            backup_dir.rmdir()
+    except OSError:
+        log.debug("Kunde inte städa förhandsbackupmapp helt", exc_info=True)
+    return removed
+
+
 def validate_python_sources(
     src: Path, *, strict_pyw: Optional[bool] = None
 ) -> List[str]:
@@ -248,6 +274,7 @@ def apply_update_from_dir(
     require_app_root: bool = False,
     strict_syntax: Optional[bool] = None,
     backup_user_data: bool = False,
+    cleanup_backup_on_success: bool = True,
     on_progress: Optional[Callable[[str], None]] = None,
 ) -> Dict[str, Any]:
     """Kopiera kod från ``src`` → ``dest`` atomärt med automatisk återställning.
@@ -458,6 +485,12 @@ def apply_update_from_dir(
     finally:
         shutil.rmtree(rollback_root, ignore_errors=True)
 
+    backup_cleaned = False
+    if not errors and backup_user_data and cleanup_backup_on_success:
+        cleanup_pre_update_backups(dest)
+        backup_file = None
+        backup_cleaned = True
+
     log.info(
         "App-uppdatering: %d kopierade, %d hoppade över, %d fel, återställd=%s",
         len(copied),
@@ -471,6 +504,7 @@ def apply_update_from_dir(
         "errors": errors,
         "rolled_back": rolled_back,
         "backup_path": str(backup_file) if backup_file else "",
+        "backup_cleaned": backup_cleaned,
     }
 
 
@@ -478,6 +512,7 @@ __all__ = [
     "BLOCKED_BINARY_SUFFIXES",
     "SKIP_DIR_NAMES",
     "apply_update_from_dir",
+    "cleanup_pre_update_backups",
     "create_pre_update_user_backup",
     "validate_python_sources",
 ]

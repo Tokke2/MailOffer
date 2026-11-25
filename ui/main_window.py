@@ -1247,6 +1247,16 @@ class MainWindow(QMainWindow):
         self._load_tabs()
 
     def _build_toolbar(self, parent: QVBoxLayout) -> None:
+        from PyQt6.QtCore import QSize
+        from core.app_icon import get_logo_pixmap
+        from ui.vector_icons import action_icon
+
+        def _clean_caption(raw: str) -> str:
+            txt = str(raw or "")
+            while txt and not txt[0].isalnum():
+                txt = txt[1:]
+            return txt.strip() or str(raw or "")
+
         toolbar_frame = QFrame()
         toolbar_frame.setProperty("cssClass", "hero")
         from ui.responsive import WrapLayout
@@ -1254,11 +1264,24 @@ class MainWindow(QMainWindow):
         toolbar.setContentsMargins(16, 12, 16, 12)
         toolbar.setSpacing(10)
 
-        title = QLabel("📧 E-postofferten")
-        title.setStyleSheet(
-            "font-size: 16pt; font-weight: bold; background: transparent; "
-            "color: #FFFFFF;"
+        dpr = (
+            max(1.0, float(self.devicePixelRatioF() or 1.0))
+            if isinstance(self, QWidget)
+            else 1.0
         )
+        title = QLabel()
+        title.setAccessibleName("E-postofferten")
+        logo_px = get_logo_pixmap(height=40, light_text=True, dpr=dpr)
+        if not logo_px.isNull():
+            title.setStyleSheet("background: transparent;")
+            title.setPixmap(logo_px)
+        else:
+            title.setText("📧 E-postofferten")
+            title.setStyleSheet(
+                "font-size: 16pt; font-weight: bold; background: transparent; "
+                "color: #FFFFFF;"
+            )
+        self._hero_logo_label = title
         toolbar.addWidget(title)
 
         subtitle = QLabel(tr("app.tagline_steps"))
@@ -1268,29 +1291,38 @@ class MainWindow(QMainWindow):
         subtitle.setWordWrap(True)
         toolbar.addWidget(subtitle)
 
-        self.btn_send = QPushButton(tr("toolbar.send"))
+        self.btn_send = QPushButton(_clean_caption(tr("toolbar.send")))
+        self.btn_send.setIcon(action_icon("send", "#FFFFFF", 18))
+        self.btn_send.setIconSize(QSize(18, 18))
         self.btn_send.setProperty("cssClass", "send")
         self.btn_send.clicked.connect(self._send)
         toolbar.addWidget(self.btn_send)
 
         # (v5.4) Mall-wizard + donation direkt i verktygsraden
-        btn_wizard = QPushButton(tr("toolbar.new_template"))
+        btn_wizard = QPushButton(_clean_caption(tr("toolbar.new_template")))
+        btn_wizard.setIcon(action_icon("wizard", "#FFFFFF", 18))
+        btn_wizard.setIconSize(QSize(18, 18))
         btn_wizard.setProperty("cssClass", "back")
         btn_wizard.clicked.connect(self._open_template_wizard)
         toolbar.addWidget(btn_wizard)
 
-        btn_donate = QPushButton(tr("toolbar.donate"))
+        btn_donate = QPushButton(_clean_caption(tr("toolbar.donate")))
+        btn_donate.setIcon(action_icon("donate", "#FFFFFF", 18))
+        btn_donate.setIconSize(QSize(18, 18))
         btn_donate.setProperty("cssClass", "back")
         btn_donate.clicked.connect(self._open_donate)
         toolbar.addWidget(btn_donate)
 
         self.btn_theme = QPushButton()
+        self.btn_theme.setIconSize(QSize(18, 18))
         self.btn_theme.setProperty("cssClass", "back")
         self.btn_theme.clicked.connect(self._on_theme_button_clicked)
         self._update_theme_button()
         toolbar.addWidget(self.btn_theme)
 
-        btn_settings = QPushButton(tr("toolbar.settings"))
+        btn_settings = QPushButton(_clean_caption(tr("toolbar.settings")))
+        btn_settings.setIcon(action_icon("settings", "#FFFFFF", 18))
+        btn_settings.setIconSize(QSize(18, 18))
         btn_settings.setProperty("cssClass", "back")
         btn_settings.clicked.connect(self._open_settings)
         toolbar.addWidget(btn_settings)
@@ -1299,41 +1331,48 @@ class MainWindow(QMainWindow):
 
     def _build_menubar(self) -> None:
         bar = self.menuBar()
+        self._themed_menu_icons: List[Tuple[QAction, str]] = []
+
+        def _bind_icon(act: QAction, kind: str) -> QAction:
+            self._themed_menu_icons.append((act, kind))
+            return act
 
         file_menu = bar.addMenu(tr("menu.file"))
-        act_send = file_menu.addAction(tr("menu.send_mail"))
+        act_send = _bind_icon(file_menu.addAction(tr("menu.send_mail")), "send")
         act_send.setShortcut(QKeySequence("Ctrl+Return"))
         act_send.triggered.connect(self._send)
         # (v5.4) Skapa ny mall steg för steg
-        file_menu.addAction(
-            tr("menu.new_template_wizard")
+        _bind_icon(
+            file_menu.addAction(tr("menu.new_template_wizard")), "wizard"
         ).triggered.connect(self._open_template_wizard)
-        file_menu.addAction(tr("menu.save_template")).triggered.connect(self._save_tpl)
-        file_menu.addAction(
-            tr("menu.backup_lists")
+        _bind_icon(
+            file_menu.addAction(tr("menu.save_template")), "backup"
+        ).triggered.connect(self._save_tpl)
+        _bind_icon(
+            file_menu.addAction(tr("menu.backup_lists")), "archive"
         ).triggered.connect(self._backup_lists_dialog)
         file_menu.addSeparator()
         # (v5.4) Manuell uppdateringssökning mot GitHub Releases
-        file_menu.addAction(
-            tr("menu.check_updates")
+        _bind_icon(
+            file_menu.addAction(tr("menu.check_updates")), "update"
         ).triggered.connect(lambda: self._check_updates(manual=True))
-        file_menu.addAction(
-            tr("menu.update_from_folder")
+        _bind_icon(
+            file_menu.addAction(tr("menu.update_from_folder")), "folder"
         ).triggered.connect(self._update_from_folder_dialog)
         file_menu.addSeparator()
-        act_quit = file_menu.addAction(tr("menu.quit"))
+        act_quit = _bind_icon(file_menu.addAction(tr("menu.quit")), "quit")
         act_quit.setShortcut(QKeySequence("Ctrl+Q"))
         act_quit.triggered.connect(self._quit_app)
 
         self._view_menu = bar.addMenu(tr("menu.view"))
 
         theme_menu = bar.addMenu(tr("menu.theme"))
-        for label, mode in (
-            (tr("menu.theme_dark"), "dark"),
-            (tr("menu.theme_light"), "light"),
-            (tr("menu.theme_system"), "system"),
+        for label, mode, icon_kind in (
+            (tr("menu.theme_dark"), "dark", "theme_dark"),
+            (tr("menu.theme_light"), "light", "theme_light"),
+            (tr("menu.theme_system"), "system", "theme_system"),
         ):
-            action = theme_menu.addAction(label)
+            action = _bind_icon(theme_menu.addAction(label), icon_kind)
             action.triggered.connect(
                 lambda checked=False, selected=mode: self._set_theme(selected)
             )
@@ -1352,17 +1391,25 @@ class MainWindow(QMainWindow):
             )
 
         help_menu = bar.addMenu(tr("menu.help"))
-        help_menu.addAction(tr("keys.title")).triggered.connect(self._show_keyboard_help)
-        help_menu.addAction(tr("menu.deliverability")).triggered.connect(
-            self._open_deliverability_guide
-        )
-        help_menu.addAction(tr("menu.check_updates")).triggered.connect(
-            lambda: self._check_updates(manual=True)
-        )
-        help_menu.addAction(tr("menu.donate")).triggered.connect(self._open_donate)
-        help_menu.addAction("Licens – privat och kommersiell användning").triggered.connect(self._open_usage_license)
+        _bind_icon(
+            help_menu.addAction(tr("keys.title")), "keyboard"
+        ).triggered.connect(self._show_keyboard_help)
+        _bind_icon(
+            help_menu.addAction(tr("menu.deliverability")), "shield"
+        ).triggered.connect(self._open_deliverability_guide)
+        _bind_icon(
+            help_menu.addAction(tr("menu.check_updates")), "update"
+        ).triggered.connect(lambda: self._check_updates(manual=True))
+        _bind_icon(
+            help_menu.addAction(tr("menu.donate")), "donate"
+        ).triggered.connect(self._open_donate)
+        _bind_icon(
+            help_menu.addAction("Licens – privat och kommersiell användning"), "check"
+        ).triggered.connect(self._open_usage_license)
         help_menu.addSeparator()
-        help_menu.addAction(tr("menu.about")).triggered.connect(self._show_about)
+        _bind_icon(
+            help_menu.addAction(tr("menu.about")), "info"
+        ).triggered.connect(self._show_about)
 
     def _build_statusbar(self) -> None:
         self._sb = QStatusBar()
@@ -1432,10 +1479,26 @@ class MainWindow(QMainWindow):
     def _refresh_tab_icons(self) -> None:
         if not hasattr(self, "tabs") or not hasattr(self, "_tab_keys"):
             return
-        from ui.vector_icons import tab_icon
+        from ui.vector_icons import action_icon, tab_icon
         color = self._c().get("text", "#334155")
         for index, key in enumerate(self._tab_keys):
             self.tabs.setTabIcon(index, tab_icon(key, color_hex=color, size=20))
+        for act, kind in getattr(self, "_themed_menu_icons", ()):
+            try:
+                act.setIcon(action_icon(kind, color_hex=color, size=16))
+            except Exception:
+                pass
+        hero_lbl = getattr(self, "_hero_logo_label", None)
+        if isinstance(hero_lbl, QLabel):
+            try:
+                from core.app_icon import get_logo_pixmap
+
+                dpr = max(1.0, float(self.devicePixelRatioF() or 1.0))
+                px = get_logo_pixmap(height=40, light_text=True, dpr=dpr)
+                if not px.isNull():
+                    hero_lbl.setPixmap(px)
+            except Exception:
+                pass
 
     def _build_view_menu(self) -> None:
         self._view_menu.clear()
@@ -2527,9 +2590,18 @@ class MainWindow(QMainWindow):
         app.exit(0)
 
     def _show_about(self) -> None:
-        """Om-dialog med version + genvägar till GitHub och donation."""
+        """Om-dialog med version + skarp logotyp + genvägar till GitHub och donation."""
         box = QMessageBox(self)
         box.setWindowTitle(tr("about.title"))
+        try:
+            from core.app_icon import get_brand_mark_pixmap
+
+            dpr = max(1.0, float(self.devicePixelRatioF() or 1.0))
+            mark = get_brand_mark_pixmap(size=72, dpr=dpr)
+            if not mark.isNull():
+                box.setIconPixmap(mark)
+        except Exception:
+            pass
         box.setText(
             tr("about.text", version=APP_VERSION, repo_url=GITHUB_REPO_URL)
         )
@@ -5277,7 +5349,7 @@ class MainWindow(QMainWindow):
         view_row.addWidget(self._log_mode_errors_btn)
 
         self._log_archive_info = QLabel(
-            "📦 Äldre dagar arkiveras automatiskt i logs/archive/ · Fixade fel rensas automatiskt"
+            "📦 Äldre dagar arkiveras automatiskt i logs/archive/ (rensas efter 7 dagar) · Fixade fel rensas automatiskt"
         )
         self._log_archive_info.setStyleSheet(
             f"color: {self._c().get('text_secondary', '')}; font-size: 9pt;"
@@ -5402,7 +5474,12 @@ class MainWindow(QMainWindow):
 
     def _open_log_archive(self):
         try:
-            path = self._base_dir() / "logs" / "archive"
+            from core.log_archive import prune_archived_logs
+
+            self._ensure_logs_archived_and_cleaned()
+            logs_dir = self._base_dir() / "logs"
+            prune_archived_logs(logs_dir)
+            path = logs_dir / "archive"
             path.mkdir(parents=True, exist_ok=True)
             self._explorer(path)
         except Exception:
@@ -7275,6 +7352,13 @@ class MainWindow(QMainWindow):
         text, tip = theme_button_caption(mode)
         btn.setText(text)
         btn.setToolTip(tip)
+        try:
+            from ui.vector_icons import action_icon
+
+            icon_kind = "theme_light" if str(mode).strip().lower() == "dark" else "theme_dark"
+            btn.setIcon(action_icon(icon_kind, "#FFFFFF", 18))
+        except Exception:
+            pass
 
     def _on_theme_button_clicked(self) -> None:
         """Ett klick: växla ljust ↔ mörkt (StyleEngine.toggle)."""

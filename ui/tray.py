@@ -388,6 +388,17 @@ class SystemTray:
         act_quit = self._menu.addAction("❌ Avsluta helt")
         act_quit.triggered.connect(self._do_quit)
 
+        try:
+            from ui.vector_icons import action_icon
+
+            act_show.setIcon(action_icon("preview", "#2563EB", 16))
+            act_settings.setIcon(action_icon("settings", "#334155", 16))
+            act_updates.setIcon(action_icon("update", "#2563EB", 16))
+            act_smtp.setIcon(action_icon("shield", "#16A34A", 16))
+            act_quit.setIcon(action_icon("quit", "#DC2626", 16))
+        except Exception:
+            pass
+
         # Håll starka Python-referenser så att PyQt6 aldrig kan frigöra QAction-wrappers
         self._menu_actions = (
             act_show,

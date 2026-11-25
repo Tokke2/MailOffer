@@ -1,4 +1,8 @@
-# 📧 E-postofferten (MailOffer)
+<p align="center">
+  <img src="icons/mailoffer-logo.svg" alt="E-postofferten (MailOffer)" width="460">
+</p>
+
+# E-postofferten (MailOffer)
 
 **Skapad av Rickard Längkvist**
 

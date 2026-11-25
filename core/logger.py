@@ -280,17 +280,27 @@ def _register_atexit() -> None:
 
 
 def cleanup_old_logs(log_dir: Path, days: int = 7) -> int:
-    """Compatibility entry point: verified archives, never blind age deletion.
-
-    Retention is the central seven-day policy; the old days argument is ignored.
-    """
+    """Compatibility entry point: verified archives + 7-day archive retention."""
     folder = Path(log_dir)
     if folder.name != 'logs' or not folder.is_dir():
         return 0
     from core.error_log import ErrorLogCollector
-    before = set(folder.glob('*.log*'))
+    from core.log_archive import prune_archived_logs
+    before_logs = set(folder.glob('*.log*'))
+    archive_dir = folder / 'archive'
+    before_archives = (
+        {p for p in archive_dir.rglob('*') if p.is_file()}
+        if archive_dir.is_dir()
+        else set()
+    )
     ErrorLogCollector(folder.parent, canonical_layout=True).archive_completed_logs()
-    return len(before - set(folder.glob('*.log*')))
+    prune_archived_logs(folder, retention_days=max(1, int(days)))
+    after_archives = (
+        {p for p in archive_dir.rglob('*') if p.is_file()}
+        if archive_dir.is_dir()
+        else set()
+    )
+    return len(before_logs - set(folder.glob('*.log*'))) + len(before_archives - after_archives)
 
 
 def shutdown_logging() -> None:

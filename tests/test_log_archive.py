@@ -103,3 +103,40 @@ class LogArchiveTests(unittest.TestCase):
         archive_logs(self.logs, date(2026, 11, 4))
         self.assertEqual(sorted(p.name for p in folder.iterdir()), ['manual.zip', 'notes.txt'])
         self.assertTrue(target.exists())
+
+    def test_error_log_collector_prunes_retired_legacy_archives_after_seven_days(self):
+        from core.error_log import ErrorLogCollector
+        from core.logger import cleanup_old_logs
+
+        app_root = self.logs / 'app_root'
+        logs_dir = app_root / 'logs'
+        logs_dir.mkdir(parents=True)
+
+        # Legacy log from >7 days ago retired during archive_completed_logs must also be pruned!
+        legacy = logs_dir / 'crash_report.log'
+        legacy.write_text('2026-10-15 09:00:00 | INFO | legacy retired line\n', encoding='utf-8')
+        expired_dir = logs_dir / 'archive' / '2026-10-20'
+        expired_dir.mkdir(parents=True)
+        (expired_dir / ('email_app.log-' + 'c' * 16 + '.zip')).write_text('old', encoding='utf-8')
+        recent_dir = logs_dir / 'archive' / '2026-11-01'
+        recent_dir.mkdir(parents=True)
+        (recent_dir / ('email_app.log-' + 'd' * 16 + '.zip')).write_text('recent', encoding='utf-8')
+        flat_old = logs_dir / 'archive' / '2026-10-18-email_app.log.zip'
+        flat_old.write_text('flat-old', encoding='utf-8')
+
+        collector = ErrorLogCollector(app_root, canonical_layout=True)
+        collector.archive_completed_logs(today=date(2026, 11, 4))
+
+        self.assertFalse(legacy.exists())
+        self.assertFalse((logs_dir / 'archive' / '2026-10-15').exists())
+        self.assertFalse(expired_dir.exists())
+        self.assertFalse(flat_old.exists())
+        self.assertTrue(recent_dir.exists())
+
+        very_old = logs_dir / 'archive' / '2000-01-01'
+        very_old.mkdir(parents=True)
+        (very_old / 'app.log.zip').write_text('ancient', encoding='utf-8')
+        removed = cleanup_old_logs(logs_dir, days=7)
+        self.assertGreaterEqual(removed, 1)
+        self.assertFalse(very_old.exists())
+

@@ -16,7 +16,15 @@ import tempfile
 import zipfile
 
 RETENTION_DAYS = 7
-_ARCHIVE_NAME = re.compile(r'.+\.log(?:\.\d+)?-[0-9a-f]{16}\.zip')
+_ARCHIVE_NAME = re.compile(
+    r'.+\.log(?:\.\d+)?(?:-[0-9a-f]{16})?\.(?:zip|gz)|.+\.log(?:\.\d+)?',
+    re.IGNORECASE,
+)
+_FLAT_DATED_ARCHIVE_RE = re.compile(
+    r'(?:^|[^0-9])(\d{4}-\d{2}-\d{2})(?:[^0-9]|$).*\.log.*\.(?:zip|gz)$'
+    r'|^.+\.log.*(?:^|[^0-9])(\d{4}-\d{2}-\d{2})(?:[^0-9]|$)\.(?:zip|gz)$',
+    re.IGNORECASE,
+)
 _reported_skips = set()
 _DATE_ISO = re.compile(r'^(?:=== Collected )?\[?(\d{4}-\d{2}-\d{2})(?:[ T\]|]|$)')
 _DATE_EU = re.compile(r'^\[?(\d{2})/(\d{2})/(\d{4})(?:[ T\]|]|$)')
@@ -235,20 +243,59 @@ def archive_logs(directory, today=None, *, eligible=None, prepared=None, rewritt
     return [path for path in archived if path.exists()]
 
 
-def _prune_archives(root, cutoff):
-    if not root.exists():
-        return
-    for folder in root.iterdir():
-        if folder.is_symlink() or not folder.is_dir():
+def _prune_archives(root, cutoff) -> int:
+    if not root.exists() or root.is_symlink():
+        return 0
+    removed = 0
+    for entry in list(root.iterdir()):
+        if entry.is_symlink():
+            continue
+        if entry.is_file():
+            m = _FLAT_DATED_ARCHIVE_RE.search(entry.name)
+            iso_str = (m.group(1) or m.group(2)) if m else None
+            if iso_str:
+                try:
+                    file_day = date.fromisoformat(iso_str)
+                except ValueError:
+                    continue
+                if file_day < cutoff:
+                    try:
+                        entry.unlink()
+                        removed += 1
+                    except OSError:
+                        pass
+            continue
+        if not entry.is_dir():
             continue
         try:
-            day = date.fromisoformat(folder.name)
+            day = date.fromisoformat(entry.name)
         except ValueError:
             continue
-        if folder.name != day.isoformat() or day >= cutoff:
+        if entry.name != day.isoformat() or day >= cutoff:
             continue
-        for path in folder.iterdir():
-            if _ARCHIVE_NAME.fullmatch(path.name) and not path.is_symlink() and path.is_file():
-                path.unlink()
-        if not any(folder.iterdir()):
-            folder.rmdir()
+        for path in list(entry.iterdir()):
+            if (
+                (_ARCHIVE_NAME.fullmatch(path.name) or path.name.startswith('.archive-'))
+                and not path.is_symlink()
+                and path.is_file()
+            ):
+                try:
+                    path.unlink()
+                    removed += 1
+                except OSError:
+                    pass
+        try:
+            if not any(entry.iterdir()):
+                entry.rmdir()
+        except OSError:
+            pass
+    return removed
+
+
+def prune_archived_logs(directory, today=None, *, retention_days: int = RETENTION_DAYS) -> int:
+    """Rensa arkiverade loggar äldre än ``retention_days`` (standard: 7 dagar)."""
+    path = Path(directory)
+    root = path if path.name == 'archive' else (path / 'archive')
+    today_date = today or date.today()
+    days = max(1, int(retention_days))
+    return _prune_archives(root, today_date - timedelta(days=days))
