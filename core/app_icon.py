@@ -154,8 +154,10 @@ def get_app_icon() -> object:
 def get_brand_mark_pixmap(size: int = 72, dpr: float = 1.0) -> object:
     """Returnera knivskarp HiDPI-QPixmap av den kvadratiska app-symbolen."""
     from PyQt6.QtCore import QSize, Qt
-    from PyQt6.QtGui import QPixmap
+    from PyQt6.QtGui import QGuiApplication, QPixmap
 
+    if QGuiApplication.instance() is None:
+        return None
     ratio = max(1.0, float(dpr or 1.0))
     logical = max(16, int(size))
     svg = icon_svg_path()
@@ -210,8 +212,10 @@ def get_logo_pixmap(
 ) -> object:
     """Returnera knivskarp HiDPI-QPixmap av horisontella logotypen (4:1)."""
     from PyQt6.QtCore import QSize, Qt
-    from PyQt6.QtGui import QColor, QIcon, QPainter, QPixmap
+    from PyQt6.QtGui import QColor, QGuiApplication, QIcon, QPainter, QPixmap
 
+    if QGuiApplication.instance() is None:
+        return None
     ratio = max(1.0, float(dpr or 1.0))
     logical_h = max(18, int(height))
     logical_w = int(round(logical_h * 4.0))

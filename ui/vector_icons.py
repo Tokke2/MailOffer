@@ -517,8 +517,10 @@ def _cached_vector_icon(kind: str, color_hex: str, size: int) -> object:
 
 def tab_icon(kind: str, color_hex: str = "#334155", size: int = 20) -> object:
     """Returnera skarp, temafärgad vektorikon för flik, meny eller knapp."""
-    from PyQt6.QtGui import QIcon
+    from PyQt6.QtGui import QGuiApplication, QIcon
 
+    if QGuiApplication.instance() is None:
+        return QIcon()
     return QIcon(_cached_vector_icon(str(kind or ""), str(color_hex or "#334155").lower(), max(12, int(size))))
 
 
@@ -560,8 +562,10 @@ def _cached_color_swatch(color_hex: str, border_hex: str, size: int) -> object:
 
 def color_swatch_icon(color_hex: str, border_hex: str = "#64748B", size: int = 16) -> object:
     """Skarp HiDPI-färgbricka för profildropdowns (begränsad LRU-cache)."""
-    from PyQt6.QtGui import QIcon
+    from PyQt6.QtGui import QGuiApplication, QIcon
 
+    if QGuiApplication.instance() is None:
+        return QIcon()
     return QIcon(
         _cached_color_swatch(
             str(color_hex or "#2563EB").lower(),
@@ -643,8 +647,10 @@ def _cached_attachment_icon(resolved: str, mtime_ns: int, file_size: int, size: 
 
 def attachment_icon(path: object, size: int = 28) -> object:
     """Skarp och minnessnål miniatyrikon för bild- och dokumentbilagor."""
-    from PyQt6.QtGui import QIcon
+    from PyQt6.QtGui import QGuiApplication, QIcon
 
+    if QGuiApplication.instance() is None:
+        return QIcon()
     candidate = Path(str(path or ""))
     try:
         stat = candidate.stat()

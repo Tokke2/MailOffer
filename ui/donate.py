@@ -268,12 +268,12 @@ class DonateDialog(QDialog):
 
             dpr = max(1.0, float(self.devicePixelRatioF() or 1.0))
             logo_px = get_logo_pixmap(height=50, light_text=True, dpr=dpr)
-            if not logo_px.isNull():
+            if logo_px is not None and not logo_px.isNull():
                 label.setStyleSheet("")
                 label.setPixmap(logo_px)
                 return
             mark_px = get_brand_mark_pixmap(size=84, dpr=dpr)
-            if not mark_px.isNull():
+            if mark_px is not None and not mark_px.isNull():
                 label.setStyleSheet("")
                 label.setPixmap(mark_px)
                 return

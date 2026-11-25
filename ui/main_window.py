@@ -1272,7 +1272,7 @@ class MainWindow(QMainWindow):
         title = QLabel()
         title.setAccessibleName("E-postofferten")
         logo_px = get_logo_pixmap(height=40, light_text=True, dpr=dpr)
-        if not logo_px.isNull():
+        if logo_px is not None and not logo_px.isNull():
             title.setStyleSheet("background: transparent;")
             title.setPixmap(logo_px)
         else:
@@ -1495,7 +1495,7 @@ class MainWindow(QMainWindow):
 
                 dpr = max(1.0, float(self.devicePixelRatioF() or 1.0))
                 px = get_logo_pixmap(height=40, light_text=True, dpr=dpr)
-                if not px.isNull():
+                if px is not None and not px.isNull():
                     hero_lbl.setPixmap(px)
             except Exception:
                 pass
@@ -2598,7 +2598,7 @@ class MainWindow(QMainWindow):
 
             dpr = max(1.0, float(self.devicePixelRatioF() or 1.0))
             mark = get_brand_mark_pixmap(size=72, dpr=dpr)
-            if not mark.isNull():
+            if mark is not None and not mark.isNull():
                 box.setIconPixmap(mark)
         except Exception:
             pass
