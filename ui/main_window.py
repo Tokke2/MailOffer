@@ -5470,7 +5470,12 @@ class MainWindow(QMainWindow):
 
         self._log_edit = QPlainTextEdit()
         self._log_edit.setReadOnly(True)
-        self._log_edit.setFont(QFont("Consolas", 9))
+        log_font = QFont("Consolas" if IS_WINDOWS else "Monospace", 10)
+        log_font.setStyleHint(QFont.StyleHint.Monospace)
+        log_font.setStyleStrategy(
+            QFont.StyleStrategy.PreferAntialias | QFont.StyleStrategy.PreferQuality
+        )
+        self._log_edit.setFont(log_font)
         layout.addWidget(self._log_edit, stretch=1)
 
         from ui.responsive import WrapLayout

@@ -48,7 +48,7 @@ class ReleaseAndPersistentRulesTests(unittest.TestCase):
 
         forslag_25 = (ROOT / "docs/25-produktforslag.md").read_text(encoding="utf-8")
         self.assertIn("N01", forslag_25)
-        self.assertIn("N25", forslag_25)
+        self.assertIn("N50", forslag_25)
 
         vad_saknas = (ROOT / "docs/VAD-SAKNAS.md").read_text(encoding="utf-8")
         self.assertNotIn("mergats till `main`", vad_saknas)

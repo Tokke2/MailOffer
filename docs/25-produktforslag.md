@@ -123,4 +123,38 @@ Dessa 25 helt nya punkter återbrukar ingen av de 50 punkterna ovan eller `#F01`
 | N24 | **Lokal SLA-varning för obesvarade utskick (t.ex. ”4 timmar utan markering”)** | Diskret Brick-/statuspåminnelse om att följa upp en tidskritisk expressförfrågan innan leverantörens eftermiddagsbil går | Medel |
 | N25 | **Självtestande ”Hälsokontroll vid start” (SMTP, DNS, diskutrymme, skrivbehörighet, mallintegritet)** | En tydlig grön/gul statusindikator i statusfältet som fångar utgånget app-lösenord eller full disk *innan* man skriver ett långt utskick | Hög |
 
+---
+
+## Omgång 4 (`#N26`–`#N50`): 25 helt nya funktioner som konkurrenter saknar och användare efterfrågar
+
+Helt nya förslag utan återbruk från Omgång 1–3 ovan eller `#F01`–`#F10` i `docs/forslagslogg.md`.
+
+| # | Nytt förslag | Varför konkurrenter saknar det & användarnytta | Prioritet |
+|---|---|---|---|
+| N26 | **Fordonsgeneration & årsmodellsvakt mot angiven modell (`::modell::` + `::ar::`)** | Varnar direkt om angivet årtal ligger utanför karossgenerationens faktiska tillverkningsår (t.ex. brytår vid facelift där vindruta/sensorfäste skiljer sig) | Hög |
+| N27 | **Snabbknapp ”Begär kompletterande foto från kund” (färdigt svars-SMS/mejl-utkast)** | När kundens insända bild saknar regskylt eller regnsensor skapas med ett klick en vänlig fotoguide som kunden kan svara på direkt | Hög |
+| N28 | **Inbyggd bildrotation, automatisk rätning och kontrastlyft av mörka garagefoton** | Gör mörka eller sneda verkstadsbilder på chassinummer och glasstämplar knivskarpa på 1 sekund utan externt bildprogram | Hög |
+| N29 | **Separata bilagepaket per mottagartyp i samma ärende (*Tekniska närbilder → Leverantör*, *Översiktsbild → Försäkring*)** | Slipper skicka kundkänsliga helbilder till grossister samtidigt som rätt närbild på fästet alltid följer med | Medel |
+| N30 | **Lokal prisminnesbank per ruta och bilmodell från tidigare avslutade ärenden** | Visar diskret i sidopanelen vad liknande ruta kostade vid senaste inköp så du direkt ser om ett nytt prisförslag avviker kraftigt | Hög |
+| N31 | **Växelkurslåsning vid utskickstillfället för utländska leverantörer (EUR/PLN/DKK/NOK → SEK)** | Sparar aktuell kurs på ärendet så marginalen kan kontrollräknas rätt även om fakturan kommer tre veckor senare | Medel |
+| N32 | **Automatisk kontroll av trasiga platshållare med stavfelsförslag (`::regn::` → menade du `::reg::`?)** | Fångar felstavade taggar direkt medan man redigerar mallen eller mejlet i stället för att först varna om okänd tagg vid sändning | Hög |
+| N33 | **Klickbara snabbchip för standardfraser i fritextfältet (*”Endast originalglas”*, *”Brådskande – bil på lyft”*, *”Inkl. list & lim”*)** | Infogar vanliga tillägg på både svenska och engelska med ett klick utan att behöva skapa en ny mall för varje kombination | Hög |
+| N34 | **Lokal kontroll av mottagarens maximala bilagestorlek per känd mailleverantör (t.ex. 10 MB / 20 MB / 25 MB)** | Anpassar varningsgränsen i förkontrollen efter den striktaste mottagardomänen i mottagarlistan så inget enskilt mejl studsar | Hög |
+| N35 | **”Spegla utskick som ren kopia till lokal ärendemapp” (`Ärenden/2026-11/ABC123-XC60/`)** | Sparar skickat `.eml`-original + bilagor i en prydlig datum-/regnummermapp på disken för verkstadens egen dokumentation eller bokföring | Hög |
+| N36 | **Snabbval av vänster-/högerstyrd bil (`Vänsterstyrd LHD` / `Högerstyrd RHD`) vid utlandsförfrågningar** | Kritiskt vid beställning från UK/utland där vindrutans torkarfält och kameravinkel annars blir spegelvända | Medel |
+| N37 | **Visuell förhandsgranskning av hur mejlet ser ut i smal mobilskärm (375 px) vs bred datorskärm** | Växla mellan *Mobilvy* och *Datorvy* i Förhandsgranska-fliken så breda tabeller och signaturlogotyper alltid ser proffsiga ut i telefonen | Hög |
+| N38 | ** Engångsläge ”Dölj avsändarens direktnummer” vid reservdelsförfrågan till nya utländska kontakter** | Växlar signaturvariant med ett klick så man slipper oönskade säljuppringningar och får alla svar skriftligt på mejl | Medel |
+| N39 | **Automatisk sammanställning av ”Veckans obesvarade eller misslyckade utskick” i en ren måndagsvy** | Ger full överblick på måndag morgon över vilka förfrågningar från förra veckan som behöver följas upp | Medel |
+| N40 | ** Dra-och-släpp av ZIP-arkiv i bilageytan med urval av vilka filer inuti arkivet som ska bifogas** | Packar upp och låter användaren bocka för t.ex. 2 relevanta bilder ur kundens ZIP-fil utan att packa upp manuellt i Utforskaren | Medel |
+| N41 | **Färdig ”Reklamations-/transportskademall” kopplad direkt till ett tidigare utskick i Skicka-historik** | Om en levererad ruta anländer sprucken skapas reklamationsmejlet färdigt med ursprungligt datum, ämne, regnummer och orderreferens | Hög |
+| N42 | **Kontroll av läsbarhet på bifogade foton (oskärpe-/mörkerdetektor lokalt före sändning)** | Varnar direkt vid bilageval om ett mobilfoto är kraftigt suddigt eller kolsvart innan leverantören ber om ny bild dagen efter | Medel |
+| N43 | **Stöd för dubbla referensfält (`Er referens` / `Vårt arbetsordernr`) med automatisk nummerserie** | Kan räkna upp internt förfrågningsnummer (`FO-2026-0142`) automatiskt så leverantörens svar alltid kan matchas mot rätt arbetsorder | Hög |
+| N44 | **Lokal import av kontakter direkt från vCard (`.vcf`) och urklippstabeller från Excel** | Klistra in en kolumn med namn, e-post, företag och språk direkt från ett kalkylblad till Adressboken på 5 sekunder | Hög |
+| N45 | ** Valbar ”Tyst arbetstid” för bakgrundsnotiser i systemfältet** | Under kundmöten eller skärmdelning hålls alla popup-notiser nere vid klockan tysta medan appen fortsätter arbeta i bakgrunden | Låg |
+| N46 | **Snabbfilter i Skicka-historik på datumintervall, avsändarprofil, glastyp och endast misslyckade (`❌ Fel`)** | Kombinera kolumnsortering med snabba filterknappar för att hitta ett specifikt utskick bland 500 historikrader direkt | Hög |
+| N47 | **Inbyggd kontroll av att HTML- och klartextversionen av ett mejl innehåller exakt samma fakta/siffror** | Förhindrar att en manuell ändring bara hamnar i ena versionen och ökar samtidigt leveransbarheten i strikta spamfilter | Medel |
+| N48 | ** Karosstypväljare (*Sedan / Kombi / SUV / Coupé / Cab / Skåpbil / Husbil*) kopplad till `::ruta::`** | Eliminerar klassiska missförstånd kring bakrutor och bakre sidorutor där kombi och sedan har helt olika glas på samma modellnamn | Hög |
+| N49 | **Säkerhetskopiering av enskild mall eller hel mallmapp före massredigering med ett klick** | Skapar en namngiven ögonblickspunkt i `.data/` precis innan man gör om företagets alla malltexter eller villkor | Medel |
+| N50 | **Tangentbordsstyrt ”Snabbläge” (fyll i Mall → Modell → Regnr → Ruta → Enter → Förhandsgranska)** | Låter vana mottagare/inköpare mata in en komplett förfrågan på under 15 sekunder helt utan att flytta handen till musen | Hög |
+
 

@@ -729,10 +729,20 @@ def build_qss(c: Dict[str, str]) -> str:
         color: {c['text']};
         font-weight: 700;
         font-size: 10pt;
-        padding: 8px 10px;
+        padding: 7px 22px 7px 10px;
         border: none;
         border-right: 1px solid {c['border']};
         border-bottom: 2px solid {c['border']};
+    }}
+
+    QHeaderView::section:hover {{
+        background-color: {c['hover_bg']};
+        color: {c['accent']};
+        border-bottom: 2px solid {c['accent']};
+    }}
+
+    QHeaderView::section:pressed {{
+        background-color: {c['surface_alt']};
     }}
 
     /* ══════════════════════════════════════════════
