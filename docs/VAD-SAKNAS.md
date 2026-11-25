@@ -1,86 +1,27 @@
-# Vad saknas? – lägesanalys 2026-10-19 (efter 5.4)
+# Status & kvarvarande förbättringspunkter – E-postofferten 1.0.0
 
-## ✅ Gjort i 5.4 (denna omgång)
+Detta dokument ersätter den äldre förhandsanalysen från den interna `5.4`-tiden och speglar aktuellt läge i **E-postofferten `1.0.0`**.
 
-- **Mall-wizard** (`ui/template_wizard.py`) – skapa TXT/HTML/DOCX-mallar
-  steg för steg i appen; Mall-fliken har nu wizard-knapp + klickbar lista.
-  Tidigare fanns *ingen* möjlighet att skapa mallar i appen (fliken var en stub).
-- **Appen på svenska/engelska** (`core/i18n.py`) – verktygsrad, menyer,
-  flikar, stegrubriker, wizard, uppdatering, donation och Om-dialog går via
-  `tr()`. Språkmeny + omstartserbjudande. (Se lucka P1-5 nedan.)
-- **Autouppdatering från GitHub Releases** (`core/github_update.py`) –
-  tyst sökning vid start (max 1/dygn, avstängbar) + manuell knapp i
-  Arkiv-menyn, Hjälp-menyn och Inställningar. Zip-slip-skydd,
-  `main.pyw`-validering av nedladdningen, och `Mallar/` + JSON +
-  inställningar är skyddade användardata.
-- **Donation via Ko-fi** (`core/donate.py`, `ui/donate.py`) –
-  ❤️-knapp + dialog med kopiera-länk; länken redigeras i
-  *Inställningar → ❤️ Stöd & om* och normaliseras automatiskt
-  (”användarnamn” → `https://ko-fi.com/användarnamn`).
-- **Versionen samlad** i `core/version.py` (5.4.0) + exempelmall i
-  `Mallar/`, README på sv/en, CI-workflow som kör testerna, och 69
-  enhetstester (tidigare 13).
+## ✅ Redan levererat i 1.0.0 (stängda punkter)
+- **GitHub Releases med fil- och SHA-256-jämförelse (`core/github_update.py`)**: aktiv `v1.0.0`-release markerad som `Latest`, atomär transaktionsinstallation med rollback, automatisk borttagning av förhandsbackup vid lyckad uppdatering samt CI-synk (`tools/sync_latest_release.py`).
+- **Start utan egen binär (`Starta EmailApp.vbs`)**: använder datorns befintliga system-Python (`pythonw`) utan konsolfönster och med veckovis paketkontroll – inga `.exe`-byggen används.
+- **Avsändarprofiler i egen underflik**: stöd för flera konton, profilfärger, signatur med logotyp och förhandsvisning i *Inställningar → Avsändarprofiler*.
+- **Mall-wizard med versionshistorik, mallpaket & val av ruta (`::ruta::`)**: 5-stegswizard med både SV/EN, versionsåterställning, färdiga mallpaket och rullmeny för alla 13 glastyper.
+- **Daglig loggrotation & 7-dagars arkivrensning**: endast dagens logg visas aktivt i `logs/`, äldre dagar i `logs/archive/` rensas efter 7 dagar och åtgärdade fel rensas automatiskt ur `errors.log`.
+- **Skärmanpassning, HiDPI-vektorikoner, skarp vektorlogotyp & redigerbara tryckoriginal (`icons/` + `tryck/`)** samt mushjulsskydd (`ui/wheel_guard.py`).
+- **Låsta donationslänkar & Swish-QR** (`core/donate.py`, `ui/donate.py`).
 
-## 🔴 P0 – gör snart (annars fungerar 5.4 inte fullt ut)
+---
 
-1. **Publicera första GitHub-releasen.** Det finns inga releases än, så
-   autouppdateraren svarar korrekt ”ingen publicerad release”.
-   Steg finns i `README.md` (”Uppdateringar & att publicera en release”):
-   `gh release create v5.4.0 --title "E-postofferten 5.4.0" --generate-notes`
-   – gör det när 5.4-koden mergats till `main`.
-2. ~~**Fyll i Ko-fi-länken**~~ ✅ KLAR (5.4-uppföljning):
-   ko-fi.com/tokke2 + paypal.me/Rickard3dPrint är inbyggda
-   standardlänkar (kan bytas i *Inställningar → ❤️ Stöd & om*) och
-   står i `README.md` + `.github/FUNDING.yml`. Kvar för ägaren:
-   fyll i **Swish-numret** i inställningarna så dyker QR-koden upp
-   på appens Stöd projektet-sida.
-3. **LICENSE saknas.** Utan licens får andra juridiskt inte använda eller
-   bidra till koden. Välj t.ex. MIT (tillåtande) eller GPL (copyleft) och
-   lägg till filen `LICENSE`.
-4. **SMTP-lösenordet sparas i klartext** i `email_settings.json`
-   (”password”). Flytta till OS-nyckelring (`keyring`) eller krypterad
-   lagring (Fernet) – punkten finns redan i specens backlog.
+## 🟡 Aktuella öppna förbättringsområden (framtida arbete)
 
-## 🟡 P1 – viktigt för kvalitet/skala
+1. **Krypterad lagring av SMTP-lösenord via OS-nyckelring**:
+   - Flytta SMTP-lösenord från `email_settings.json` till Windows Credential Manager / macOS Keychain / SecretService med smidig migrering för befintliga profiler.
+2. **Fullständig engelsk översättning (`core/i18n.py`) i samtliga detaljdialoger**:
+   - Slutför migrering av kvarvarande svenska strängar i `ui/dialogs.py`, `ui/preview.py`, `script/contacts_ui.py` och Thunderbird-tilläggets popup.
+3. **Utökade SMTP-integrationstester mot lokal mock-server**:
+   - Komplettera sändningsdiagnostiktesterna med fullständiga end-to-end-tester för STARTTLS/SSL-felkoder, rate-limits och återupptagning vid nätverksavbrott.
+4. **Konsolidera delade konstanttabeller**:
+   - Samla `PLACEHOLDER_DROPDOWNS` till en enda gemensam modul som importeras av både `script/templates.py`, `ui/template_wizard.py` och `ui/main_window.py`.
 
-5. **Resten av UI:t är fortfarande hårdkodad svenska**: `ui/dialogs.py`,
-   `ui/editors.py`, `ui/preview.py`, `script/contacts_ui.py` och de flesta
-   formulär-/statusmeddelanden i `ui/main_window.py` (bl.a. sänddialogen,
-   kontakttabellen, historik/logg). Infrastrukturen finns nu – migrera
-   fil för fil till `tr()`-nycklar i `core/i18n.py`.
-   Även Thunderbird-tilläggets `popup.html` är på svenska.
-6. **Testtäckning för kärnflöden saknas**: `core/email_sender.py`
-   (sändning, batchning, kvitton) och `script/recipients.py` saknar
-   tester. En fake-SMTP-server i test vore högst värdefull. Autostartens
-   registry-logik är otestad utanför Windows.
-7. **Ingen paketering**: slutanvändare behöver Python + pip. Lägg till
-   PyInstaller-bygge (`.spec` är gitignorerad i dag) och gärna
-   NSIS-installer med signering för Windows.
-8. **Release-integritet**: uppdateraren verifierar att zip:en innehåller
-   `main.pyw`, men ingen checksumma/signatur kontrolleras. Publicera
-   SHA256 per release och verifiera i `github_update.py`.
-9. ~~**HTML-mallar escapas inte**~~ ✅ ÅTGÄRDAD (5.4-uppföljning):
-   `create_template` escaper nu ämne + brödtext och `_parse_html`
-   unescaper vid inläsning – roundtrip-test finns i testsuite.
-10. **Dokumentations-/koddrift**: `spec.md` säger version 6.2 medan appen
-    är 5.4.0; `SendConfirmDialog` finns i två kopior (`ui/dialogs.py`
-    kanonisk, `ui/editors.py` för API-kompatibilitet) och
-    `PLACEHOLDER_DROPDOWNS` dupliceras i `script/templates.py` och
-    `ui/main_window.py`. Samla till en källa per begrepp.
-11. **`E-postofferten-kontakter.xpi` i repo-roten** är en byggd binär utan
-    bygginstruktion – dokumentera hur den byggs ur `thunderbird/` eller
-    flytta den till Releases.
-
-## 🟢 P2 – önskelista (från specens backlog §/§47, fortfarande öppen)
-
-12. Schemalagd sändning; flera SMTP-konton; OAuth2 för Gmail/Outlook;
-    signaturhantering per avsändare; kontaktimport `.vcf`/Google CSV;
-    WYSIWYG-redigerare för HTML-mallar; loggfiltrering per nivå;
-    avbryt-knapp för batch-sändning; global sök; PDF-rapporter;
-    plugin-system med hot reload; To↔Bcc-dubblettvarning och
-    bild-thumbnails (valda §47-punkter).
-13. Tillgänglighet: skärmläsaretiketter, genomtänkt tabbordning och
-    genvägar till de nya funktionerna (wizard/uppdatering/donation).
-14. Vid språkbyte: i dag krävs omstart för redan byggda vyer (nya
-    dialoger får rätt språk direkt). Äkta live-översättning kräver att
-    vyerna byggs om – större jobb, bör vänta tills P1-5 är klar.
+För vidare produktidéer se `docs/25-produktforslag.md` (Omgång 1 & 2) samt den löpande icke-återbrukade loggen i `docs/forslagslogg.md`.

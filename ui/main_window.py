@@ -1225,8 +1225,8 @@ class MainWindow(QMainWindow):
         self.setCentralWidget(central)
 
         layout = QVBoxLayout(central)
-        layout.setContentsMargins(10, 10, 10, 10)
-        layout.setSpacing(8)
+        layout.setContentsMargins(8, 6, 8, 6)
+        layout.setSpacing(6)
 
         self._build_toolbar(layout)
 
@@ -1261,8 +1261,8 @@ class MainWindow(QMainWindow):
         toolbar_frame.setProperty("cssClass", "hero")
         from ui.responsive import WrapLayout
         toolbar = WrapLayout(toolbar_frame)
-        toolbar.setContentsMargins(16, 12, 16, 12)
-        toolbar.setSpacing(10)
+        toolbar.setContentsMargins(14, 8, 14, 8)
+        toolbar.setSpacing(8)
 
         dpr = (
             max(1.0, float(self.devicePixelRatioF() or 1.0))
@@ -1483,6 +1483,10 @@ class MainWindow(QMainWindow):
         color = self._c().get("text", "#334155")
         for index, key in enumerate(self._tab_keys):
             self.tabs.setTabIcon(index, tab_icon(key, color_hex=color, size=20))
+        subtabs = getattr(self, "_settings_subtabs", None)
+        if isinstance(subtabs, QTabWidget):
+            for sub_idx, icon_kind in getattr(self, "_settings_subtab_icon_specs", ()):
+                subtabs.setTabIcon(sub_idx, tab_icon(icon_kind, color_hex=color, size=18))
         for act, kind in getattr(self, "_themed_menu_icons", ()):
             try:
                 act.setIcon(action_icon(kind, color_hex=color, size=16))
@@ -5570,59 +5574,132 @@ class MainWindow(QMainWindow):
     # ────────────────────────────────────────────────────────────────
 
     def _build_settings_tab(self) -> QWidget:
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
+        from PyQt6.QtCore import QSize
+        from ui.vector_icons import action_icon, tab_icon
 
-        inner = QWidget()
-        layout = QVBoxLayout(inner)
-        layout.setContentsMargins(12, 12, 12, 12)
-        layout.setSpacing(12)
-
-        intro = QLabel(
-            "⚙️ Här visas en sammanställning av centrala inställningar. "
-            "Du kan redigera och spara dem direkt här."
-        )
-        intro.setWordWrap(True)
-        intro.setProperty("cssClass", "subtext")
-        layout.addWidget(intro)
+        outer = QWidget()
+        outer_layout = QVBoxLayout(outer)
+        outer_layout.setContentsMargins(8, 6, 8, 6)
+        outer_layout.setSpacing(8)
 
         self._settings_widgets = {}
-        layout.addWidget(self._build_settings_group_smtp())
-        layout.addWidget(self._build_thunderbird_group())
-        layout.addWidget(self._build_settings_group_paths())
-        layout.addWidget(self._build_settings_group_templates())
-        layout.addWidget(self._build_settings_group_ui())
-        layout.addWidget(self._build_settings_group_sending())
-        layout.addWidget(self._build_settings_group_images())
-        layout.addWidget(self._build_settings_group_deliverability())
-        layout.addWidget(self._build_settings_group_logging())
-        layout.addWidget(self._build_settings_group_updates())
-        layout.addWidget(self._build_settings_group_support())
-        layout.addWidget(self._build_settings_group_backup())
+        self._settings_subtabs = QTabWidget()
+        self._settings_subtabs.setDocumentMode(True)
+        self._settings_subtabs.setIconSize(QSize(18, 18))
+        self._settings_subtab_icon_specs: List[Tuple[int, str]] = []
 
+        def _wrap_scroll(widgets_list: Sequence[QWidget], two_col: bool = False) -> QScrollArea:
+            sc = QScrollArea()
+            sc.setWidgetResizable(True)
+            sc.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+            page = QWidget()
+            if two_col and len(widgets_list) == 2:
+                page_layout = QHBoxLayout(page)
+                page_layout.setContentsMargins(8, 8, 8, 8)
+                page_layout.setSpacing(10)
+                for w in widgets_list:
+                    col = QVBoxLayout()
+                    col.setContentsMargins(0, 0, 0, 0)
+                    col.addWidget(w)
+                    col.addStretch(1)
+                    page_layout.addLayout(col, stretch=1)
+            else:
+                page_layout = QVBoxLayout(page)
+                page_layout.setContentsMargins(8, 8, 8, 8)
+                page_layout.setSpacing(10)
+                for w in widgets_list:
+                    page_layout.addWidget(w)
+                page_layout.addStretch(1)
+            sc.setWidget(page)
+            return sc
+
+        # 1. Egen underflik för att skapa & hantera avsändarprofiler (+ profilens SMTP)
+        profiles_card, smtp_card = self._build_settings_profiles_and_smtp_cards()
+        idx_prof = self._settings_subtabs.addTab(
+            _wrap_scroll([profiles_card, smtp_card], two_col=True),
+            "Avsändarprofiler",
+        )
+        self._settings_subtab_icon_specs.append((idx_prof, "contacts"))
+
+        # 2. Sändning, leveransbarhet (SPF/DKIM/DMARC) & Thunderbird
+        idx_send = self._settings_subtabs.addTab(
+            _wrap_scroll([
+                self._build_settings_group_sending(),
+                self._build_settings_group_deliverability(),
+                self._build_thunderbird_group(),
+            ]),
+            "Sändning, DNS & Thunderbird",
+        )
+        self._settings_subtab_icon_specs.append((idx_send, "shield"))
+
+        # 3. Mallar, sökvägar & bildoptimering
+        idx_tpl = self._settings_subtabs.addTab(
+            _wrap_scroll([
+                self._build_settings_group_templates(),
+                self._build_settings_group_paths(),
+                self._build_settings_group_images(),
+            ]),
+            "Mallar, Sökvägar & Bilder",
+        )
+        self._settings_subtab_icon_specs.append((idx_tpl, "templates"))
+
+        # 4. Utseende, loggar, uppdateringar, säkerhetskopiering & stöd
+        idx_sys = self._settings_subtabs.addTab(
+            _wrap_scroll([
+                self._build_settings_group_ui(),
+                self._build_settings_group_logging(),
+                self._build_settings_group_updates(),
+                self._build_settings_group_backup(),
+                self._build_settings_group_support(),
+            ]),
+            "Utseende, Drift & Backup",
+        )
+        self._settings_subtab_icon_specs.append((idx_sys, "settings"))
+
+        color = self._c().get("text", "#334155")
+        for sub_idx, icon_kind in self._settings_subtab_icon_specs:
+            self._settings_subtabs.setTabIcon(
+                sub_idx, tab_icon(icon_kind, color_hex=color, size=18)
+            )
+
+        outer_layout.addWidget(self._settings_subtabs, stretch=1)
+
+        # Alltid synlig knapprad längst ned (inget skrollande krävs för att spara/skapa profil)
         buttons = QHBoxLayout()
-        btn_reload = QPushButton("🔄 Läs om")
+        buttons.setContentsMargins(4, 2, 4, 2)
+        btn_reload = QPushButton("Läs om")
+        btn_reload.setIcon(action_icon("refresh", color, 16))
         btn_reload.clicked.connect(self._reload_settings_form)
         buttons.addWidget(btn_reload)
 
-        btn_test = QPushButton("🔌 Testa SMTP")
+        btn_new_prof = QPushButton(tr("profile.new_btn"))
+        btn_new_prof.setIcon(action_icon("plus", color, 16))
+        btn_new_prof.clicked.connect(self._new_sender_profile_and_focus_tab)
+        buttons.addWidget(btn_new_prof)
+
+        btn_test = QPushButton("Testa SMTP")
+        btn_test.setIcon(action_icon("shield", "#FFFFFF", 16))
         btn_test.setProperty("cssClass", "purple")
         btn_test.clicked.connect(self._test_smtp_from_settings)
         buttons.addWidget(btn_test)
 
         buttons.addStretch()
 
-        btn_save = QPushButton("💾 Spara inställningar")
+        btn_save = QPushButton("Spara inställningar")
+        btn_save.setIcon(action_icon("backup", "#FFFFFF", 16))
         btn_save.setProperty("cssClass", "success")
         btn_save.clicked.connect(self._save_settings_form)
         buttons.addWidget(btn_save)
-        layout.addLayout(buttons)
-
-        layout.addStretch()
-        scroll.setWidget(inner)
+        outer_layout.addLayout(buttons)
 
         self._reload_settings_form()
-        return scroll
+        return outer
+
+    def _new_sender_profile_and_focus_tab(self) -> None:
+        subtabs = getattr(self, "_settings_subtabs", None)
+        if isinstance(subtabs, QTabWidget):
+            subtabs.setCurrentIndex(0)
+        self._new_sender_profile()
 
     def _make_settings_line(
         self, key: str, label_text: str, password: bool = False
@@ -5645,32 +5722,79 @@ class MainWindow(QMainWindow):
         self._settings_widgets[key] = combo
         return combo
 
-    def _build_settings_group_smtp(self) -> QGroupBox:
-        group = QGroupBox("📡 SMTP & Avsändare")
-        form = QFormLayout(group)
+    def _build_settings_profiles_and_smtp_cards(self) -> Tuple[QGroupBox, QGroupBox]:
+        prof_group = QGroupBox("👤 Skapa & hantera avsändarprofiler")
+        prof_form = QFormLayout(prof_group)
 
         self._settings_profile_combo = QComboBox()
         self._settings_profile_combo.currentIndexChanged.connect(
             self._on_settings_profile_changed
         )
-        form.addRow(tr("profile.label"), self._settings_profile_combo)
+        prof_form.addRow(tr("profile.label"), self._settings_profile_combo)
 
         profile_buttons_widget = QWidget()
-        profile_buttons = QHBoxLayout(profile_buttons_widget)
+        from ui.responsive import WrapLayout
+        profile_buttons = WrapLayout(profile_buttons_widget)
         profile_buttons.setContentsMargins(0, 0, 0, 0)
+        btn_profile_new = QPushButton(tr("profile.new_btn"))
+        btn_profile_new.clicked.connect(self._new_sender_profile)
+        profile_buttons.addWidget(btn_profile_new)
         btn_profile_save = QPushButton(tr("profile.save_btn"))
         btn_profile_save.setProperty("cssClass", "success")
         btn_profile_save.clicked.connect(self._save_sender_profile_from_form)
         profile_buttons.addWidget(btn_profile_save)
-        btn_profile_new = QPushButton(tr("profile.new_btn"))
-        btn_profile_new.clicked.connect(self._new_sender_profile)
-        profile_buttons.addWidget(btn_profile_new)
         btn_profile_delete = QPushButton(tr("profile.delete_btn"))
         btn_profile_delete.setProperty("cssClass", "danger")
         btn_profile_delete.clicked.connect(self._delete_sender_profile)
         profile_buttons.addWidget(btn_profile_delete)
-        profile_buttons.addStretch()
-        form.addRow("", profile_buttons_widget)
+        prof_form.addRow("", profile_buttons_widget)
+
+        prof_form.addRow("Avsändarnamn", self._make_settings_line("sender_name", "Avsändarnamn"))
+        prof_form.addRow("Avsändaradress", self._make_settings_line("sender_email", "Avsändaradress"))
+
+        color_row = QHBoxLayout()
+        color_line = self._make_settings_line("profile_color", "#4f78b8")
+        color_line.setAccessibleName(tr("profile.color"))
+        color_row.addWidget(color_line)
+        color_button = QPushButton(tr("profile.choose_color"))
+        color_button.clicked.connect(self._choose_profile_color)
+        color_row.addWidget(color_button)
+        prof_form.addRow(tr("profile.color"), color_row)
+
+        prof_form.addRow("Reply-To", self._make_settings_line("reply_to", "Reply-To"))
+        prof_form.addRow("Own email (To)", self._make_settings_line("own_email", "Own email"))
+        prof_form.addRow(
+            "Arkivkopia (alltid kopia)",
+            self._make_settings_line("archive_copy_email", "Arkivkopia"),
+        )
+
+        signature = QTextEdit()
+        signature.setPlainText(str(self.settings.get("signature_text", "") or ""))
+        signature.setMaximumHeight(96)
+        self._settings_widgets["signature_text"] = signature
+        prof_form.addRow("Signatur (text)", signature)
+        prof_form.addRow(
+            "Kontaktinformation",
+            self._make_settings_line("signature_contact", "Telefon, webbplats …"),
+        )
+        logo_row = QHBoxLayout()
+        logo_row.addWidget(self._make_settings_line("signature_logo", "PNG/JPG/GIF, max 2 MB"))
+        logo_button = QPushButton("Välj logotyp …")
+        logo_button.clicked.connect(self._choose_signature_logo)
+        logo_row.addWidget(logo_button)
+        prof_form.addRow("Logotyp", logo_row)
+
+        self._signature_preview = QTextBrowser()
+        self._signature_preview.setOpenExternalLinks(False)
+        self._signature_preview.setMaximumHeight(140)
+        prof_form.addRow(tr("signature.preview"), self._signature_preview)
+        signature.textChanged.connect(self._refresh_signature_preview)
+        for key in ("signature_contact", "signature_logo"):
+            self._settings_widgets[key].textChanged.connect(self._refresh_signature_preview)
+        self._refresh_signature_preview()
+
+        smtp_group = QGroupBox("📡 SMTP-konto för vald profil")
+        smtp_form = QFormLayout(smtp_group)
 
         self._smtp_provider_combo = QComboBox()
         self._smtp_provider_combo.addItem(tr("smtp.provider_manual"), "")
@@ -5679,65 +5803,39 @@ class MainWindow(QMainWindow):
         self._smtp_provider_combo.currentIndexChanged.connect(
             self._on_smtp_provider_changed
         )
-        form.addRow(tr("smtp.provider_label"), self._smtp_provider_combo)
+        smtp_form.addRow(tr("smtp.provider_label"), self._smtp_provider_combo)
 
         self._smtp_provider_help = QLabel("")
         self._smtp_provider_help.setProperty("cssClass", "muted")
         self._smtp_provider_help.setWordWrap(True)
-        form.addRow("", self._smtp_provider_help)
+        smtp_form.addRow("", self._smtp_provider_help)
 
         self._btn_app_password = QPushButton(tr("smtp.app_password_btn"))
         self._btn_app_password.clicked.connect(self._open_app_password_page)
         self._btn_app_password.setVisible(False)
-        form.addRow("", self._btn_app_password)
+        smtp_form.addRow("", self._btn_app_password)
 
-        form.addRow("SMTP-server", self._make_settings_line("smtp_server", "SMTP-server"))
-        form.addRow("SMTP-port", self._make_settings_line("smtp_port", "SMTP-port"))
-        form.addRow("Avsändaradress", self._make_settings_line("sender_email", "Avsändaradress"))
-        form.addRow("Avsändarnamn", self._make_settings_line("sender_name", "Avsändarnamn"))
-        color_row = QHBoxLayout()
-        color_line = self._make_settings_line("profile_color", "#4f78b8")
-        color_line.setAccessibleName(tr("profile.color"))
-        color_row.addWidget(color_line)
-        color_button = QPushButton(tr("profile.choose_color"))
-        color_button.clicked.connect(self._choose_profile_color)
-        color_row.addWidget(color_button)
-        form.addRow(tr("profile.color"), color_row)
-        signature = QTextEdit()
-        signature.setPlainText(str(self.settings.get("signature_text", "") or ""))
-        signature.setMaximumHeight(110)
-        self._settings_widgets["signature_text"] = signature
-        form.addRow("Signatur (text)", signature)
-        form.addRow("Kontaktinformation", self._make_settings_line("signature_contact", "Telefon, webbplats …"))
-        logo_row = QHBoxLayout()
-        logo_row.addWidget(self._make_settings_line("signature_logo", "PNG/JPG/GIF, max 2 MB"))
-        logo_button = QPushButton("Välj logotyp …")
-        logo_button.clicked.connect(self._choose_signature_logo)
-        logo_row.addWidget(logo_button)
-        form.addRow("Logotyp", logo_row)
-        self._signature_preview = QTextBrowser()
-        self._signature_preview.setOpenExternalLinks(False)
-        self._signature_preview.setMaximumHeight(180)
-        form.addRow(tr("signature.preview"), self._signature_preview)
-        signature.textChanged.connect(self._refresh_signature_preview)
-        for key in ("signature_contact", "signature_logo"):
-            self._settings_widgets[key].textChanged.connect(self._refresh_signature_preview)
-        self._refresh_signature_preview()
-        form.addRow("Användarnamn", self._make_settings_line("username", "Användarnamn"))
-        form.addRow("Lösenord", self._make_settings_line("password", "Lösenord", password=True))
-        form.addRow("Reply-To", self._make_settings_line("reply_to", "Reply-To"))
-        form.addRow("Own email (To)", self._make_settings_line("own_email", "Own email"))
-        form.addRow(
-            "Arkivkopia (alltid kopia)",
-            self._make_settings_line("archive_copy_email", "Arkivkopia"),
-        )
-        form.addRow("SSL", self._make_settings_checkbox("use_ssl", "Använd SSL"))
+        smtp_form.addRow("SMTP-server", self._make_settings_line("smtp_server", "SMTP-server"))
+        smtp_form.addRow("SMTP-port", self._make_settings_line("smtp_port", "SMTP-port"))
+        smtp_form.addRow("Användarnamn", self._make_settings_line("username", "Användarnamn"))
+        smtp_form.addRow("Lösenord", self._make_settings_line("password", "Lösenord", password=True))
+        smtp_form.addRow("SSL", self._make_settings_checkbox("use_ssl", "Använd SSL"))
+
         sender_widget = self._settings_widgets.get("sender_email")
         if isinstance(sender_widget, QLineEdit):
             sender_widget.editingFinished.connect(
                 self._autodetect_smtp_provider
             )
-        return group
+        return prof_group, smtp_group
+
+    def _build_settings_group_smtp(self) -> QGroupBox:
+        """Bakåtkompatibel wrapper om anropad separat i test."""
+        prof_group, smtp_group = self._build_settings_profiles_and_smtp_cards()
+        wrapper = QGroupBox("📡 SMTP & Avsändare")
+        lay = QVBoxLayout(wrapper)
+        lay.addWidget(prof_group)
+        lay.addWidget(smtp_group)
+        return wrapper
 
     def _contact_file_stamp(self):
         try:
@@ -8246,17 +8344,21 @@ class MainWindow(QMainWindow):
         screen = self.screen() or QGuiApplication.primaryScreen()
         area = screen.availableGeometry() if screen is not None else None
         if area is not None:
-            w = min(1440, int(area.width() * 0.92))
-            h = min(960, int(area.height() * 0.88))
+            # Starta i max tillgänglig skärmhöjd (ovanför aktivitetsfältet) med skärmanpassad bredd
+            w = min(
+                area.width(),
+                max(min(1040, area.width()), min(1600, int(area.width() * 0.94))),
+            )
+            h = area.height()
             self.resize(w, h)
             self.move(
                 QPoint(
                     area.x() + max(0, (area.width() - w) // 2),
-                    area.y() + max(0, (area.height() - h) // 2),
+                    area.y(),
                 )
             )
         else:
-            self.resize(1200, 820)
+            self.resize(1280, 920)
         self._reflow_step2_attachments(self.width())
 
     def save_geometry(self) -> None:

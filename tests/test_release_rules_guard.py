@@ -28,12 +28,21 @@ class ReleaseAndPersistentRulesTests(unittest.TestCase):
             "/releases/latest",
             "compare_release_files",
             "sync_latest_release.py",
+            "Aldrig merga",
+            "Inga tysta beroende- eller gränssnittsbrott",
+            "Testkrav innan klar",
             "cleanup_pre_update_backups",
             "RETENTION_DAYS = 7",
+            "Avsändarprofiler",
+            "::ruta::",
             "docs/forslagslogg.md",
             "10 helt nya förbättringsförslag",
         ):
             self.assertIn(required_phrase, agents_text)
+
+        vad_saknas = (ROOT / "docs/VAD-SAKNAS.md").read_text(encoding="utf-8")
+        self.assertNotIn("mergats till `main`", vad_saknas)
+        self.assertNotIn("PyInstaller", vad_saknas)
 
     def test_ci_workflow_automatically_syncs_and_marks_latest_release_on_push(self) -> None:
         wf = (ROOT / ".github/workflows/tests.yml").read_text(encoding="utf-8")

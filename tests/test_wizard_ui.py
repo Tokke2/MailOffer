@@ -518,6 +518,36 @@ class TestUpdateDeferralUi(unittest.TestCase):
         win._on_update_checked(UpdateInfo(available=False, latest_version=__version__))
         self.assertTrue(win._pending_update_frame.isHidden())
 
+    def test_settings_has_dedicated_profiles_subtab_and_max_height_startup(self) -> None:
+        from PyQt6.QtGui import QGuiApplication
+
+        win = self._make_window()
+        self.assertEqual(win._settings_subtabs.count(), 4)
+        self.assertEqual(win._settings_subtabs.tabText(0), "Avsändarprofiler")
+
+        win.settings.set("window_geometry", "")
+        win._restore_geo()
+        screen = win.screen() or QGuiApplication.primaryScreen()
+        if screen is not None:
+            self.assertEqual(win.height(), screen.availableGeometry().height())
+
+    def test_template_wizard_has_ruta_glass_type_dropdown(self) -> None:
+        import tempfile
+        from pathlib import Path
+        from script.templates import PLACEHOLDER_DROPDOWNS
+        from ui.template_wizard import TemplateWizard, _PlaceholderDropdown
+
+        with tempfile.TemporaryDirectory() as tmp:
+            wiz = TemplateWizard(Path(tmp))
+            self.addCleanup(wiz.close)
+            expected = PLACEHOLDER_DROPDOWNS["ruta"]
+            self.assertEqual(wiz._ruta_quick_combo.count(), len(expected))
+            wiz._subject_edit.setText("Offert ::ruta::")
+            wiz._refresh_preview_page()
+            self.assertIsInstance(wiz._test_inputs.get("ruta"), _PlaceholderDropdown)
+            wiz._test_inputs["ruta"].setText("Bakruta")
+            self.assertIn("Bakruta", wiz._preview_sv.toPlainText())
+
 
 if __name__ == "__main__":
     unittest.main()

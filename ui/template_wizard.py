@@ -66,6 +66,7 @@ from PyQt6.QtWidgets import (
 
 from core.i18n import get_language, tr
 from script.templates import (
+    PLACEHOLDER_DROPDOWNS,
     apply_placeholders,
     build_template_body,
     clear_scan_cache,
@@ -97,7 +98,31 @@ INSERT_PLACEHOLDER_KEYS: List[str] = [
     "name", "company", "price", "date",
 ]
 
-# Testvärden som förifylls i förhandsgranskningen (steg 4).
+class _PlaceholderDropdown(QComboBox):
+    """Redigerbar rullmeny för glastyp (`::ruta::` m.fl.) med QLineEdit-kompatibelt API."""
+
+    def __init__(self, options: Sequence[str], initial: str = "", parent: Optional[QWidget] = None) -> None:
+        super().__init__(parent)
+        self.setEditable(True)
+        self.addItems(list(options))
+        if initial:
+            idx = self.findText(initial)
+            if idx >= 0:
+                self.setCurrentIndex(idx)
+            else:
+                self.setEditText(initial)
+
+    def text(self) -> str:
+        return self.currentText()
+
+    def setText(self, value: str) -> None:  # noqa: N802
+        val = str(value or "")
+        idx = self.findText(val)
+        if idx >= 0:
+            self.setCurrentIndex(idx)
+        else:
+            self.setEditText(val)
+
 _EXAMPLE_TEST_VALUES: Dict[str, str] = {
     "modell": "Volvo XC60",
     "reg": "ABC 123",
@@ -306,7 +331,8 @@ class TemplateWizard(QWizard):
         self._sv_body_edit.setMinimumHeight(200)
         layout.addWidget(self._sv_body_edit)
 
-        insert_row = QHBoxLayout()
+        from ui.responsive import WrapLayout
+        insert_row = WrapLayout()
         insert_row.addWidget(QLabel(tr("wizard.insert.label")))
         for key in INSERT_PLACEHOLDER_KEYS:
             btn = QPushButton(f"::{key}::")
@@ -317,9 +343,36 @@ class TemplateWizard(QWizard):
         btn_custom = QPushButton(tr("wizard.insert.custom_btn"))
         btn_custom.clicked.connect(self._insert_custom_placeholder)
         insert_row.addWidget(btn_custom)
-        insert_row.addStretch()
         layout.addLayout(insert_row)
+
+        # Snabbval av ruta / glastyp direkt i mallskaparen (som i äldre ttk-version)
+        ruta_options = PLACEHOLDER_DROPDOWNS.get("ruta", [])
+        if ruta_options:
+            ruta_row = QHBoxLayout()
+            ruta_row.addWidget(QLabel("🪟 Val av ruta / glastyp:"))
+            self._ruta_quick_combo = QComboBox()
+            self._ruta_quick_combo.addItems(list(ruta_options))
+            ruta_row.addWidget(self._ruta_quick_combo, stretch=1)
+            btn_ins_ruta_ph = QPushButton("Infoga ::ruta::")
+            btn_ins_ruta_ph.clicked.connect(lambda: self._insert_placeholder("ruta"))
+            ruta_row.addWidget(btn_ins_ruta_ph)
+            btn_ins_ruta_val = QPushButton("Infoga vald ruta")
+            btn_ins_ruta_val.clicked.connect(self._insert_selected_ruta_literal)
+            ruta_row.addWidget(btn_ins_ruta_val)
+            layout.addLayout(ruta_row)
         return page
+
+    def _insert_selected_ruta_literal(self) -> None:
+        combo = getattr(self, "_ruta_quick_combo", None)
+        chosen = combo.currentText().strip() if isinstance(combo, QComboBox) else ""
+        if not chosen:
+            return
+        if self._subject_edit.hasFocus():
+            self._subject_edit.insert(chosen)
+            self._subject_edit.setFocus()
+        else:
+            self._sv_body_edit.insertPlainText(chosen)
+            self._sv_body_edit.setFocus()
 
     def _insert_placeholder(self, key: str) -> None:
         token = f"::{key}::"
@@ -454,13 +507,22 @@ class TemplateWizard(QWizard):
         for key in keys:
             row = QHBoxLayout()
             row.addWidget(QLabel(f"::{key}::"))
-            line = QLineEdit(old_values.get(key, _EXAMPLE_TEST_VALUES.get(key.lower(), "")))
-            line.textChanged.connect(self._render_preview)
-            row.addWidget(line, stretch=1)
+            default_val = old_values.get(key, _EXAMPLE_TEST_VALUES.get(key.lower(), ""))
+            dropdown_opts = PLACEHOLDER_DROPDOWNS.get(key.lower())
+            if dropdown_opts:
+                field_widget: QWidget = _PlaceholderDropdown(
+                    dropdown_opts, initial=default_val
+                )
+                field_widget.currentTextChanged.connect(self._render_preview)  # type: ignore[attr-defined]
+            else:
+                line = QLineEdit(default_val)
+                line.textChanged.connect(self._render_preview)
+                field_widget = line
+            row.addWidget(field_widget, stretch=1)
             container = QWidget()
             container.setLayout(row)
             self._test_area.addWidget(container)
-            self._test_inputs[key] = line
+            self._test_inputs[key] = field_widget  # type: ignore[assignment]
 
         show_en = self._include_en.isChecked()
         self._preview_en_label.setVisible(show_en)
