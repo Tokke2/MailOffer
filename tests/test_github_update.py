@@ -31,6 +31,7 @@ from core.github_update import (  # noqa: E402
     parse_version,
     release_fingerprint,
     should_auto_check,
+    should_midnight_auto_update,
 )
 
 
@@ -117,6 +118,34 @@ class TestShouldAutoCheck(unittest.TestCase):
     def test_future_timestamp_runs(self) -> None:
         future = now_iso(self.NOW + dt.timedelta(days=2))
         self.assertTrue(should_auto_check(future, now=self.NOW))
+
+
+class TestShouldMidnightAutoUpdate(unittest.TestCase):
+    NOW = dt.datetime(2026, 10, 19, 0, 0, 5)
+
+    def test_never_run_today_triggers(self) -> None:
+        self.assertTrue(should_midnight_auto_update("", now=self.NOW))
+        self.assertTrue(should_midnight_auto_update(None, now=self.NOW))
+        self.assertTrue(should_midnight_auto_update("skräp", now=self.NOW))
+
+    def test_previous_day_triggers(self) -> None:
+        self.assertTrue(
+            should_midnight_auto_update("2026-10-18", now=self.NOW)
+        )
+
+    def test_same_day_is_skipped(self) -> None:
+        self.assertFalse(
+            should_midnight_auto_update("2026-10-19", now=self.NOW)
+        )
+        self.assertFalse(
+            should_midnight_auto_update("2026-10-19T00:00:03", now=self.NOW)
+        )
+
+    def test_midnight_boundary_runs_once_per_day(self) -> None:
+        before = dt.datetime(2026, 10, 19, 23, 59, 59)
+        after = dt.datetime(2026, 10, 20, 0, 0, 1)
+        self.assertTrue(should_midnight_auto_update("2026-10-19", now=before) is False)
+        self.assertTrue(should_midnight_auto_update("2026-10-19", now=after))
 
 
 class TestCheckForUpdate(unittest.TestCase):

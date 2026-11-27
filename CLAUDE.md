@@ -11,4 +11,8 @@ Sammanfattning av stående hårda regler för **E-postofferten (`MailOffer`)**:
 5. **Inget terminalfönster varken vid start eller skanning & starta alltid minimerat**.
 6. **Ta bort uppdateringsbackup vid lyckad uppdatering** och **arkivera gårdagens loggar + rensa efter 7 dagar**; håll aktiv `logs/errors.log` där åtgärdade fel tas bort.
 7. **Skärmanpassning, maxhöjd vid start, HiDPI-skärpa, egen underflik för profiler, `::ruta::`-val i mall-wizarden samt sorterbara/flyttbara kolumner**.
-8. **10-meddelanderegeln**: skriv alltid ut 10 helt nya, ej återbrukade förslag direkt i chatten var 10:e chattmeddelande och spara i `docs/forslagslogg.md`.
+8. **ALDRIG merga eller skapa PR (`gh pr merge` / `gh pr create`)** – arbetet sker direkt på den aktiva branchen.
+9. **EN standardbranch även efter chattbyte** (`arena/447b9635-mailoffer`) – aldrig ny sidobranch per chatt, aldrig `main`.
+10. **Autouppdatering kl. 00:00 varje dag**: hittas en ny release installeras den tyst (ingen dialog), backupen tas bort vid lyckad installation och appen startar om tyst; kan stängas av med `auto_midnight_update`.
+11. **`::ruta::`-väljaren endast i appar som hade den i `ttk`-versionen** (E-postofferten hade den).
+12. **10-meddelanderegeln**: skriv alltid ut 10 helt nya, ej återbrukade förslag direkt i chatten var 10:e chattmeddelande och spara i `docs/forslagslogg.md`.

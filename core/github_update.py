@@ -292,6 +292,28 @@ def should_auto_check(
     return age >= _dt.timedelta(hours=float(interval_hours))
 
 
+def should_midnight_auto_update(
+    last_midnight_date: object,
+    now: Optional[_dt.datetime] = None,
+) -> bool:
+    """True om dagens 00:00-autouppdatering ännu inte körts.
+
+    Jämför sparat datum (``YYYY-MM-DD``, lokal tid) mot dagens datum:
+    annat datum, tomt eller ogiltigt värde → True (kör nu). Samma datum
+    → False (redan kört i natt). Ren logik – testbar utan nät/Qt.
+    """
+    moment = now or _dt.datetime.now()
+    today = moment.date().isoformat()
+    text = str(last_midnight_date or "").strip()[:10]
+    if not text:
+        return True
+    try:
+        _dt.date.fromisoformat(text)
+    except ValueError:
+        return True
+    return text != today
+
+
 # ───────────────────────────────────────────────────────────────────────
 # GitHub API & transportskydd
 # ───────────────────────────────────────────────────────────────────────
@@ -1061,5 +1083,6 @@ __all__ = [
     "parse_version",
     "release_fingerprint",
     "should_auto_check",
+    "should_midnight_auto_update",
     "validate_update_url",
 ]

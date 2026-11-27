@@ -1107,6 +1107,9 @@ class MainWindow(QMainWindow):
         # (v5.4) GitHub-uppdatering (bakgrundstråd + pending-info)
         self._update_worker: Optional[UpdateWorker] = None
         self._update_check_manual = False
+        # 00:00-autouppdatering: installera tyst utan dialoger om ny finns.
+        self._update_check_auto_install = False
+        self._update_install_silent = False
         self._pending_update_info: Any = None
         self._update_progress: Optional[QProgressDialog] = None
 
@@ -1954,12 +1957,40 @@ class MainWindow(QMainWindow):
     # ────────────────────────────────────────────────────────────────
 
     def _maybe_auto_check_update(self) -> None:
-        """Tyst autosökning var tolfte timme medan appen körs, om aktiverad."""
+        """Tyst autosökning var tolfte timme + 00:00-autouppdatering dagligen.
+
+        Kl. 00:00 (första ticken efter midnatt, en gång per dygn) söks
+        efter uppdateringar och en hittad uppdatering installeras
+        automatiskt och tyst (utan dialoger) om ``auto_midnight_update``
+        är aktiverad. Övriga tider gäller 12-timmarsregeln som bara
+        anmäler – aldrig installerar.
+        """
         try:
             if not bool(self.settings.get("auto_update_check", True)):
                 return
-            from core.github_update import should_auto_check
+            from core.github_update import (
+                should_auto_check,
+                should_midnight_auto_update,
+            )
 
+            worker = self._update_worker
+            if worker is not None and worker.isRunning():
+                return  # pågående sökning/installation – vänta till nästa tick
+            if bool(self.settings.get("auto_midnight_update", True)) and (
+                should_midnight_auto_update(
+                    self.settings.get("last_midnight_auto_update_date", "")
+                )
+            ):
+                import datetime as _dt
+
+                self.settings.set(
+                    "last_midnight_auto_update_date",
+                    _dt.datetime.now().date().isoformat(),
+                )
+                self.settings.save()
+                log.info("00:00-autouppdatering: söker efter ny release")
+                self._check_updates(manual=False, auto_install=True)
+                return
             if not should_auto_check(self.settings.get("last_update_check", "")):
                 return
         except Exception:
@@ -1967,14 +1998,21 @@ class MainWindow(QMainWindow):
             return
         self._check_updates(manual=False)
 
-    def _check_updates(self, manual: bool = True) -> None:
-        """Starta uppdateringssökning i bakgrunden (knapp/meny = manual)."""
+    def _check_updates(
+        self, manual: bool = True, auto_install: bool = False
+    ) -> None:
+        """Starta uppdateringssökning i bakgrunden (knapp/meny = manual).
+
+        ``auto_install=True`` (00:00-regeln): en hittad uppdatering
+        installeras direkt och tyst i stället för att bara anmälas.
+        """
         if self._update_worker is not None and self._update_worker.isRunning():
             if manual and getattr(self._update_worker, "_mode", "") == "check":
                 self._update_check_manual = True
                 self._status(tr("update.checking"), "info")
             return
         self._update_check_manual = bool(manual)
+        self._update_check_auto_install = bool(auto_install)
         self._set_last_update_check_now()
         if manual:
             QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
@@ -2095,6 +2133,8 @@ class MainWindow(QMainWindow):
         self._restore_update_cursor()
         self._update_worker = None
         manual = self._update_check_manual
+        auto_install = bool(getattr(self, "_update_check_auto_install", False))
+        self._update_check_auto_install = False
         if getattr(info, "available", False):
             self._pending_update_info = info
             self._refresh_pending_update_banner()
@@ -2107,7 +2147,14 @@ class MainWindow(QMainWindow):
                 ),
                 "success",
             )
-            if manual:
+            if auto_install:
+                # 00:00-regeln: installera direkt och tyst, utan dialoger.
+                log.info(
+                    "00:00-autouppdatering: installerar bygg=%s",
+                    getattr(info, "build_id", ""),
+                )
+                self._install_update(info, silent=True)
+            elif manual:
                 self._prompt_update_install(info)
             else:
                 log.info("Tyst autosökning: uppdatering finns, bygg=%s", getattr(info, "build_id", ""))
@@ -2245,18 +2292,45 @@ class MainWindow(QMainWindow):
     def _maybe_prompt_pending_update(self) -> None:
         """Visa uppskjuten installationsfråga när fönstret blivit synligt."""
         info = self._pending_update_info
-        if info is not None and self.isVisible() and self._update_check_manual:
+        if (
+            info is not None
+            and self.isVisible()
+            and self._update_check_manual
+            and not getattr(self, "_update_check_auto_install", False)
+        ):
             self._prompt_update_install(info)
 
-    def _install_update(self, info: Any) -> None:
-        """Ladda ner + installerad vald release i bakgrunden."""
+    def _install_update(self, info: Any, silent: bool = False) -> None:
+        """Ladda ner + installera vald release i bakgrunden.
+
+        ``silent=True`` (00:00-regeln): ingen förladdningsdialog, inga
+        varningsrutor – lyckad installation tar bort backupen, sparar
+        arbetsläget och startar om tyst; fel loggas bara.
+        """
         if self._update_worker is not None and self._update_worker.isRunning():
             return
         if self._worker is not None and self._worker.isRunning():
             log.info("Godkänd uppdatering väntar tills sändningen är klar")
-            QTimer.singleShot(5000, lambda: self._install_update(info))
+            QTimer.singleShot(
+                5000, lambda: self._install_update(info, silent=silent)
+            )
             return
         self._update_install_active = True
+        self._update_install_silent = bool(silent)
+        if silent:
+            self._pending_update_info = None
+            self._refresh_pending_update_banner()
+            self._update_progress = None
+            worker = UpdateWorker("install", info=info, base_dir=self._base_dir())
+            worker.installed.connect(self._on_update_installed)
+            worker.failed.connect(self._on_update_failed)
+            worker.progress.connect(
+                lambda msg: log.debug("00:00-uppdatering: %s", msg)
+            )
+            worker.finished.connect(worker.deleteLater)
+            self._update_worker = worker
+            worker.start()
+            return
         progress = QProgressDialog(
             tr("update.downloading", latest=getattr(info, "latest_version", "")),
             None, 0, 0, self,
@@ -2295,6 +2369,13 @@ class MainWindow(QMainWindow):
             err_text = "\n".join(str(e) for e in errors[:8])
             if result.get("rolled_back"):
                 err_text += tr("update.rolled_back_note")
+            if getattr(self, "_update_install_silent", False):
+                # 00:00-regeln: aldrig modaler – logga och fortsätt tyst.
+                log.error("00:00-autouppdatering misslyckades: %s", err_text)
+                self._status(
+                    tr("update.install_failed", error=err_text), "warning"
+                )
+                return
             QMessageBox.warning(
                 self,
                 tr("update.title"),
@@ -2310,6 +2391,12 @@ class MainWindow(QMainWindow):
         # filändringar i samma versionsnummer.
         self._save_release_fingerprint(result.get("fingerprint"), str(result.get("commit_sha") or ""))
         self._last_installed_file_count = copied
+        if getattr(self, "_update_install_silent", False):
+            log.info(
+                "00:00-autouppdatering klar: %s fil(er) installerade, backup rensad",
+                copied,
+            )
+        self._update_install_silent = False
         self._status(tr("update.installed_title"), "success")
         self._finish_update_restart()
 
@@ -2491,10 +2578,18 @@ class MainWindow(QMainWindow):
     def _on_update_failed(self, message: str) -> None:
         self._update_install_active = False
         was_install = self._update_progress is not None
+        silent_install = bool(getattr(self, "_update_install_silent", False))
         self._close_update_progress()
         self._restore_update_cursor()
         self._update_worker = None
-        if was_install:
+        if silent_install:
+            # 00:00-regeln: tyst felhantering, ingen modal dialog.
+            self._update_install_silent = False
+            log.error("00:00-autouppdatering misslyckades: %s", message)
+            self._status(
+                tr("update.install_failed", error=str(message)), "warning"
+            )
+        elif was_install:
             QMessageBox.warning(
                 self, tr("update.title"),
                 tr("update.install_failed", error=str(message)),
@@ -6316,6 +6411,11 @@ class MainWindow(QMainWindow):
 
         layout.addWidget(
             self._make_settings_checkbox("auto_update_check", tr("update.auto_check"))
+        )
+        layout.addWidget(
+            self._make_settings_checkbox(
+                "auto_midnight_update", tr("update.auto_midnight")
+            )
         )
 
         self._lbl_last_check = QLabel("")

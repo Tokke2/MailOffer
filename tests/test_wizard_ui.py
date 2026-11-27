@@ -441,6 +441,70 @@ class TestUpdateDeferralUi(unittest.TestCase):
             prompt.assert_not_called()
             notify.assert_not_called()
 
+    def test_midnight_auto_update_installs_silently(self) -> None:
+        """00:00-regeln: hittad uppdatering installeras tyst, utan dialog."""
+        import datetime as dt
+
+        win = self._make_window()
+        calls: list = []
+        win._install_update = lambda info, silent=False: calls.append((info, silent))  # type: ignore[method-assign]
+        win._prompt_update_install = lambda info: calls.append("prompt")  # type: ignore[method-assign]
+        win._update_check_manual = False
+        win._update_check_auto_install = True
+        with mock.patch.object(
+            win, "_status"
+        ):
+            win._on_update_checked(self._info())
+        self.assertEqual(len(calls), 1)
+        self.assertEqual(calls[0][1], True)
+        self.assertFalse(win._update_check_auto_install)
+
+    def test_midnight_schedule_sets_daily_date_and_auto_install(self) -> None:
+        win = self._make_window()
+        win.settings.set("auto_update_check", True)
+        win.settings.set("auto_midnight_update", True)
+        win.settings.set("last_midnight_auto_update_date", "")
+        checked: list = []
+        win._check_updates = lambda manual=True, auto_install=False: checked.append(  # type: ignore[method-assign]
+            (manual, auto_install)
+        )
+        win._maybe_auto_check_update()
+        self.assertEqual(checked, [(False, True)])
+        # Samma dygn → ingen ny nattkörning, 12-timmarsregeln tar över.
+        win._maybe_auto_check_update()
+        self.assertEqual(len(checked), 1)
+        self.assertTrue(win.settings.get("last_midnight_auto_update_date"))
+
+    def test_midnight_auto_update_can_be_disabled(self) -> None:
+        win = self._make_window()
+        win.settings.set("auto_update_check", True)
+        win.settings.set("auto_midnight_update", False)
+        win.settings.set("last_update_check", "")
+        checked: list = []
+        win._check_updates = lambda manual=True, auto_install=False: checked.append(  # type: ignore[method-assign]
+            (manual, auto_install)
+        )
+        win._maybe_auto_check_update()
+        self.assertEqual(checked, [(False, False)])
+
+    def test_midnight_install_failure_stays_modal_free(self) -> None:
+        win = self._make_window()
+        import ui.main_window as main_mod
+
+        win._update_install_silent = True
+        with mock.patch.object(win, "_status") as status, mock.patch.object(
+            main_mod.QMessageBox, "warning", side_effect=AssertionError("modal")
+        ):
+            win._on_update_failed("nätverkstimeout")
+        status.assert_called_once()
+        self.assertFalse(win._update_install_silent)
+
+    def test_settings_has_midnight_auto_update_checkbox(self) -> None:
+        win = self._make_window()
+        checkbox = win._settings_widgets.get("auto_midnight_update")
+        self.assertIsNotNone(checkbox)
+        self.assertTrue(checkbox.isChecked())
+
     def test_silent_restart_saves_and_restores_compose_state(self):
         win = self._make_window()
         win._free_edit.setPlainText("Unsent text")

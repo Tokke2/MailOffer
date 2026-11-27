@@ -206,7 +206,9 @@ def get_defaults() -> Dict[str, Any]:
         # (24), defaults-merge täcker gamla filer precis som tidigare
         # nycklar (request_receipts m.fl.).
         "auto_update_check": True,
+        "auto_midnight_update": True,
         "last_update_check": "",
+        "last_midnight_auto_update_date": "",
         "installed_release_fingerprint": "",
         "installed_release_commit": "",
 
@@ -573,6 +575,8 @@ class SettingsManager:
             "request_receipts",
             # v5.4 – autosökning av GitHub-uppdateringar
             "auto_update_check",
+            # 00:00-autouppdatering varje dag (installerar tyst om ny finns)
+            "auto_midnight_update",
         ]
         for key in bool_fields:
             try:
@@ -715,6 +719,7 @@ class SettingsManager:
             "default_template",
             # v5.4 – GitHub-uppdatering + donation
             "last_update_check",
+            "last_midnight_auto_update_date",
             "installed_release_fingerprint",
             "installed_release_commit",
             "donation_url",

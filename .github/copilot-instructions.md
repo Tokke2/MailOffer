@@ -1,8 +1,11 @@
 Läs och följ alla permanenta hårda regler i `AGENTS.md` och `docs/forslagslogg.md`.
 - Om användaren skriver `- hård regel` eller `regel`: skriv alltid in regeln i `AGENTS.md` och pusha till GitHub.
-- Endast EN aktiv branch (`arena/447b9635-mailoffer`), jobba ALDRIG mot `main`/`master` och ALDRIG merga.
+- Endast EN aktiv/standardbranch (`arena/447b9635-mailoffer`), även efter byte av chatt. Jobba ALDRIG mot `main`/`master`, särskilt inte vid appuppdateringar.
+- ALDRIG merga (`git merge`, `gh pr merge`) och ALDRIG skapa Pull Request (`gh pr create`) – allt arbete sker direkt på den aktiva branchen.
 - Uppdatera ALLTID `BUILD_ID` i `core/version.py` + GitHub Release (`v1.0.0`, `make_latest="true"` via `tools/sync_latest_release.py`) vid varje kodförändring (appen jämför filer via `/releases/latest`).
+- Autouppdatering kl. 00:00 varje dag: finns ny release installeras den tyst utan dialoger, backupen tas bort vid lyckad installation och appen startar om tyst (`auto_midnight_update`, `should_midnight_auto_update`).
 - REQ-K4: inga tysta beroende- eller gränssnittsbrott, rör aldrig användardata, och alla tester + CI ska vara gröna innan klar.
 - Inget terminalfönster varken vid start eller skanning (`CREATE_NO_WINDOW`) och starta alltid minimerat.
 - Ta bort uppdateringsbackup vid lyckad uppdatering; arkivera gårdagens loggar och radera arkiv efter 7 dagar; ta bort åtgärdade fel ur aktiv `logs/errors.log`.
-- Var 10:e chattmeddelande: skriv alltid ut 10 helt nya, ej återbrukade förslag direkt i chatten och logga dem i `docs/forslagslogg.md`.
+- `::ruta::`-väljaren finns endast i appar som hade den i `ttk`-versionen (E-postofferten hade den) – tvinga aldrig på appar som saknat den.
+- Var 10:e chattmeddelande: skriv alltid ut 10 helt nya, ej återbrukade förslag direkt i chatten och logga dem i `docs/forslagslogg.md`. 25-listor med nya konkurrentförslag skrivs alltid direkt i chatten och sparas i `docs/25-produktforslag.md`.

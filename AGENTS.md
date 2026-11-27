@@ -54,6 +54,21 @@ Denna fil ligger i repots rot som gemensam sanningskälla för alla kodagenter o
 - **Minnes- och energisnål drift**: grova bakgrundstimers (`VeryCoarseTimer`), nedsaktad bakgrundspollning när fönstret är dolt/minimerat (`ui/idle_polling.py`) och begränsade LRU-ikoncachar med automatisk bakgrundstrimning.
 - **Upphovsrätt & donation**: `Skapad av Rickard Längkvist` / `© 2026 Rickard Längkvist` samt låsta donationsmottagare i `core/donate.py` får aldrig ändras.
 
-## 9. HÅRD REGEL – Förslagslistor skrivs ALLTID ut i chatten (10 nya var 10:e meddelande + 25 unika konkurrentförslag)
+## 9. HÅRD REGEL – ALDRIG merga eller skapa Pull Request (`PR`)
+- Kör **aldrig** `git merge`, `gh pr merge`, squash/rebase-merge eller `gh pr create`. Arbetet sker direkt på den aktiva branchen och publiceras via release-synken (`tools/sync_latest_release.py`) – **inga PR:er, ingen merge**.
+
+## 10. HÅRD REGEL – EN standardbranch som gäller även efter chattbyte
+- Repot ska ha **endast en aktiv/standardbranch** (`arena/447b9635-mailoffer`). Vid ny chatt eller ny session ska arbetet **återupptas på exakt denna branch** – aldrig skapa en ny sidobranch per chatt och aldrig arbeta mot `main`.
+- Om `main` finns kvar som skyddad standardbranch i GitHub-inställningarna (Arena-token saknar admin-scope) får den **aldrig användas för kod, uppdateringar eller release**; all release- och uppdateringslogik pekar på den aktiva branchen.
+
+## 11. HÅRD REGEL – Autouppdatering kl. 00:00 varje dag om uppdatering finns
+- Appen kör en daglig **00:00-autouppdatering**: första kontrollen efter midnatt (`should_midnight_auto_update` i `core/github_update.py`, sparat datum i `last_midnight_auto_update_date`) söker efter ny release och **installerar den automatiskt och tyst** – ingen nedladdningsdialog, inga modala varningsrutor.
+- Vid lyckad installation: `cleanup_pre_update_backups` tar bort backupen, arbetsläget sparas i `update-session.json` och appen startar om tyst (minimerat). Misslyckas nattuppdateringen loggas felet **utan dialog** och appen fortsätter oförändrad.
+- Kan stängas av i *Inställningar → 🔄 Uppdateringar* (`auto_midnight_update`, standard **på**); övriga tider gäller fortsatt 12-timmarsregeln som bara **anmäler** en uppdatering.
+
+## 12. HÅRD REGEL – `::ruta::`-val endast i appar som hade det i `ttk`-versionen
+- `::ruta::`-väljaren (13 glastyper) ska finnas i **alla appar som hade `::ruta::` i sin `ttk`-version** – E-postofferten hade det, så väljaren ska finnas både i sändflödets Steg 1 och i Mall-wizarden. Appar som aldrig haft `::ruta::` ska **inte** få väljaren påtvingad.
+
+## 13. HÅRD REGEL – Förslagslistor skrivs ALLTID ut i chatten (10 nya var 10:e meddelande + 25 unika konkurrentförslag)
 - Efter **var 10:e chattmeddelande** ska en ny lista på **10 helt nya förbättringsförslag** (aldrig återbrukade från tidigare omgångar i `docs/forslagslogg.md`, `docs/25-produktforslag.md` eller `docs/VAD-SAKNAS.md`) **alltid skrivas ut direkt i chatten** och loggas i `docs/forslagslogg.md`.
 - Likaså ska begärda 25-listor med nya funktioner som konkurrenter saknar och användare efterfrågar **alltid skrivas ut i chatten** och bokföras så att de aldrig återbrukas senare.

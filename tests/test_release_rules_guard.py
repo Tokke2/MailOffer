@@ -43,12 +43,28 @@ class ReleaseAndPersistentRulesTests(unittest.TestCase):
             "setSectionsMovable",
             "docs/forslagslogg.md",
             "10 helt nya förbättringsförslag",
+            "ALDRIG merga eller skapa Pull Request",
+            "EN standardbranch",
+            "00:00-autouppdatering",
+            "should_midnight_auto_update",
+            "auto_midnight_update",
         ):
             self.assertIn(required_phrase, agents_text)
+
+        copilot_text = (ROOT / ".github/copilot-instructions.md").read_text(
+            encoding="utf-8"
+        )
+        for phrase in ("gh pr create", "00:00", "auto_midnight_update", "::ruta::"):
+            self.assertIn(phrase, copilot_text)
+        claude_text = (ROOT / "CLAUDE.md").read_text(encoding="utf-8")
+        for phrase in ("ALDRIG merga", "00:00", "standardbranch", "::ruta::"):
+            self.assertIn(phrase, claude_text)
 
         forslag_25 = (ROOT / "docs/25-produktforslag.md").read_text(encoding="utf-8")
         self.assertIn("N01", forslag_25)
         self.assertIn("N50", forslag_25)
+        self.assertIn("N75", forslag_25)
+        self.assertIn("Omgång 5", forslag_25)
 
         vad_saknas = (ROOT / "docs/VAD-SAKNAS.md").read_text(encoding="utf-8")
         self.assertNotIn("mergats till `main`", vad_saknas)

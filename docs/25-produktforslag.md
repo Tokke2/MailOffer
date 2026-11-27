@@ -158,3 +158,36 @@ Helt nya förslag utan återbruk från Omgång 1–3 ovan eller `#F01`–`#F10` 
 | N50 | **Tangentbordsstyrt ”Snabbläge” (fyll i Mall → Modell → Regnr → Ruta → Enter → Förhandsgranska)** | Låter vana mottagare/inköpare mata in en komplett förfrågan på under 15 sekunder helt utan att flytta handen till musen | Hög |
 
 
+## Omgång 5 (`#N51`–`#N75`): 25 helt nya funktioner som konkurrenter saknar och användare efterfrågar
+
+Helt nya förslag utan återbruk från Omgång 1–4 ovan eller `#F01`–`#F10` i `docs/forslagslogg.md`.
+
+| # | Nytt förslag | Varför konkurrenter saknar det & användarnytta | Prioritet |
+|---|---|---|---|
+| N51 | **Offertaccept med ett klick + artigt avböjande till övriga leverantörer i samma ärende** | När kunden tackat ja skickas orderbekräftelse till vald leverantör och ett hövligt, språkanpassat avböjande till de andra – med samma ärendenummer i alla mejl. Ingen mejlklient kan hålla ihop den tråden | Hög |
+| N52 | **Samfraktgruppering: slå ihop flera öppna ärenden till en leverantörsförfrågan med delposter** | Fyra rutor till samma grossist blir ett mejl med fyra numrerade rader och en gemensam fraktberäkning i stället för fyra separata portokostnader | Hög |
+| N53 | **Leverantörskvalitetspoäng lokalt (svarstid, prismarginal, reklamationsfrekvens)** | Visas i kontaktkortet och vid mottagarval: "svarar i snitt 3 h, 2 reklamationer i år" – helt ur den egna historiken, utan molntjänst | Hög |
+| N54 | **Prisförslagskalkylator med påslag per glastyp och kund samt marginalvakt** | Räknar ut kundpris från leverantörens inköpspris med valt påslag och varnar om marginalen blir negativ innan offerten skickas | Hög |
+| N55 | **Import av leverantörsprislista (CSV) med automatisk prisjämförelse i offertförslaget** | Läser in grossistens prislista en gång och visar direkt i ärendet vilken leverantör som är billigast för just den rutan | Hög |
+| N56 | **SHA-256-spårbarhet per bilaga i ärendet** | Varje skickad fil får ett fingeravtryck i historiken så man i efterhand kan bevisa exakt vilken ritning eller bild leverantören fick – samma princip som appens uppdaterare använder | Medel |
+| N57 | **Utskrift av vindruteetikett med QR-kod (ärendenr, regnr, glastyp)** | Lagersvängen får en etikett att sätta på rutan så att inkommen glass matchas mot rätt mejlärende utan att läsa papperslistor | Medel |
+| N58 | **OCR av glasstämpel från kamera eller mobilfoto direkt in i `::eurocode::`** | Fotografera stämpeln på den trasiga rutan och få märke, tillverkare och typkod ifyllt lokalt – utan handskrift eller sifferletande | Hög |
+| N59 | **OCR av registreringsbevis/COC-dokument för VIN och första registreringsdatum** | Fångar upp fordon med importerade eller otydliga papper där VIN annars skrivs fel och rätt ruta beställs för sent | Medel |
+| N60 | **Kalibreringsintyg som bilaga per fordon (ADAS-kamera/radar)** | Färdig intygsmall med VIN, glastyp, kameratyp och datum som bifogas kund och försäkring efter byte – krav som allt fler bilar ställer idag | Hög |
+| N61 | **"Kända fallgropar per modell"-varning med källor (kamera-/regnsensorvarianter, brytår)** | Varnar innan beställning: "samma modellnamn har två olika fästen före/efter visst årtal" – kunskap som annars bara sitter i den erfarne mekanikerns huvud | Hög |
+| N62 | **Villkorliga mallblock (om leveransort utomlands → exportvillkor, om glastyp = bakruta → värmeslinga)** | Mallen anpassar sig själv efter ärendets uppgifter i stället för att kräva fem olika varianter av samma text | Hög |
+| N63 | **Utökat språkstöd (DE/PL/LT) med granskningsläge och ordlista per språk** | Svenska glasverkstäder handlar allt oftare i Tyskland och Polen; appen visar både original och granskad översättning så inget tekniskt fackuttryck blir fel | Medel |
+| N64 | **Schemalagd krypterad säkerhetskopia av all användardata med återställningstest** | Kopierar profiler, mallar, kontakter, historik och kolumnordning på schema och verifierar att kopian går att läsa tillbaka – inte bara att filen skapades | Hög |
+| N65 | **Nattlig underhållskörning kl. 03:00 utan dialoger (loggarkiv, cache, backup, index)** | Tungt underhåll flyttas till natten och körs tyst, så att appen är snabb och sval under arbetsdagen och aldrig avbryter med rutor | Medel |
+| N66 | **Prestandapanel i Inställningar: minne, CPU och energianvändning per funktion** | Visar svart på vitt vilka vyer eller timers som drar resurser, så att appen kan hållas snabb även på äldre verkstadsdatorer | Medel |
+| N67 | **"Föreslå alternativ leverantör" när förstahandsvalet inte har rutan** | Letar i den lokala historiken efter vilka leverantörer som tidigare levererat samma glasnummer och föreslår dem med ett färdigt mejlutkast | Hög |
+| N68 | **Automatisk HEIC/HEIF-konvertering vid bilageval** | iPhone-bilder som Windows-mottagaren inte kan öppna konverteras till skarp JPEG först när de bifogas – originalfilerna lämnas orörda | Medel |
+| N69 | **Kvalitetsvals-förfrågan som strukturerat block (OEM / OES / begagnat / pirat)** | Leverantören svarar på exakt samma fyra kvalitetsnivåer i alla ärenden, vilket gör offerterna jämförbara i stället för att blandas i löptext | Hög |
+| N70 | **EXIF-/GPS-städning av foton före sändning** | Tar bort positionsdata och kamerainformation ur kundens bilder innan de går till leverantör eller försäkring – integritet utan att bilden försämras | Medel |
+| N71 | **Anonymiserad prisjämförelse-PDF (tre leverantörer) som bilaga till kundofferten** | Kunden får ett prydligt underlag som visar att priset är marknadsprövat, med leverantörsnamnen ersatta av "Leverantör A/B/C" | Medel |
+| N72 | **Stenskott vs byte-beslutstöd enligt branschregler (storlek, placering, inom synfält)** | Frågar efter skadans storlek och placering och föreslår lagning eller byte med motivering – färre feldiagnoser och färre returer | Hög |
+| N73 | **Försäkrings-/skadenummer med lokal validering och automatisk självriskrad** | Kontrollerar formatet på skadenumret och lägger in rätt självrisktext i både SV- och EN-versionen av offerten | Hög |
+| N74 | **Garantivillkor per glastyp som färdigt flerspråkigt block** | Väljer rätt garanti- och reklamationstext för vindruta, bakruta, sidoruta eller lagning och infogar den på mottagarens språk | Medel |
+| N75 | **Lokalt "i lager"-status per glasnummer med reservation och varning vid dubbelbokning** | Markerar rutan som reserverad när förfrågan går ut och varnar om samma glasnummer bokas igen i ett annat ärende samma dag | Hög |
+
+---

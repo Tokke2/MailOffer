@@ -140,3 +140,29 @@ class LogArchiveTests(unittest.TestCase):
         self.assertGreaterEqual(removed, 1)
         self.assertFalse(very_old.exists())
 
+
+class MidnightUpdateSettingsTests(unittest.TestCase):
+    """00:00-autouppdateringen ska vara på som standard och valideras som bool."""
+
+    def test_defaults_and_bool_validation(self) -> None:
+        import tempfile
+        from pathlib import Path
+
+        from core.settings_manager import SettingsManager
+
+        with tempfile.TemporaryDirectory() as td:
+            # Portabelt läge → inställningsfilen hamnar i temp-mappen.
+            (Path(td) / ".portable").touch()
+            settings = SettingsManager(Path(td))
+            self.assertTrue(settings.get("auto_midnight_update", True))
+            self.assertEqual(
+                str(settings.get("last_midnight_auto_update_date", "")), ""
+            )
+            settings.set("auto_midnight_update", "nej")
+            settings.set("last_midnight_auto_update_date", "2026-10-19")
+            settings.save()
+            reloaded = SettingsManager(Path(td))
+            self.assertIsInstance(reloaded.get("auto_midnight_update"), bool)
+            self.assertEqual(
+                reloaded.get("last_midnight_auto_update_date"), "2026-10-19"
+            )
