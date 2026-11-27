@@ -443,8 +443,6 @@ class TestUpdateDeferralUi(unittest.TestCase):
 
     def test_midnight_auto_update_installs_silently(self) -> None:
         """00:00-regeln: hittad uppdatering installeras tyst, utan dialog."""
-        import datetime as dt
-
         win = self._make_window()
         calls: list = []
         win._install_update = lambda info, silent=False: calls.append((info, silent))  # type: ignore[method-assign]
@@ -460,19 +458,24 @@ class TestUpdateDeferralUi(unittest.TestCase):
         self.assertFalse(win._update_check_auto_install)
 
     def test_midnight_schedule_sets_daily_date_and_auto_install(self) -> None:
+        from core.github_update import now_iso
+
         win = self._make_window()
         win.settings.set("auto_update_check", True)
         win.settings.set("auto_midnight_update", True)
         win.settings.set("last_midnight_auto_update_date", "")
+        win.settings.set("last_update_check", now_iso())  # 12h-regeln pausad
         checked: list = []
         win._check_updates = lambda manual=True, auto_install=False: checked.append(  # type: ignore[method-assign]
             (manual, auto_install)
         )
         win._maybe_auto_check_update()
         self.assertEqual(checked, [(False, True)])
-        # Samma dygn → ingen ny nattkörning, 12-timmarsregeln tar över.
+        # Samma dygn → ingen ny nattkörning; 12-timmarsregeln tar över
+        # och får aldrig sätta auto_install=True.
         win._maybe_auto_check_update()
         self.assertEqual(len(checked), 1)
+        self.assertFalse(any(flag for _manual, flag in checked))
         self.assertTrue(win.settings.get("last_midnight_auto_update_date"))
 
     def test_midnight_auto_update_can_be_disabled(self) -> None:
