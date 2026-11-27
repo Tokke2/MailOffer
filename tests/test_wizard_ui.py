@@ -474,8 +474,8 @@ class TestUpdateDeferralUi(unittest.TestCase):
         # Samma dygn → ingen ny nattkörning; 12-timmarsregeln tar över
         # och får aldrig sätta auto_install=True.
         win._maybe_auto_check_update()
-        self.assertEqual(len(checked), 1)
-        self.assertFalse(any(flag for _manual, flag in checked))
+        # Varken nattkörning eller 12-timmarskörning ska starta nu.
+        self.assertEqual(checked, [(False, True)])
         self.assertTrue(win.settings.get("last_midnight_auto_update_date"))
 
     def test_midnight_auto_update_can_be_disabled(self) -> None:
